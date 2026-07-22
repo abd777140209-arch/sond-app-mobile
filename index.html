@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+    <title>نظام سند المحاسبي الذكي</title>
+    
+    <!-- PWA Manifest & Icons -->
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/pwa-192.png" />
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="background-color" content="#ffffff" />
+    <meta name="description" content="نظام الأندرويد فون الذكي المحاسبي والسحابي إدارة المبيعات والمخزون" />
+    
+    <!-- iOS / Safari Mobile Specs -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="سُند" />
+    <meta name="application-name" content="نظام سُند الذكي" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Register Service Worker for PWA & PWABuilder Readiness -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then((registration) => {
+              console.log('سُند PWA Service Worker Registered:', registration.scope);
+            })
+            .catch((error) => {
+              console.error('Service Worker Registration Failed:', error);
+            });
+        });
+      }
+    </script>
+  </body>
+</html>
+

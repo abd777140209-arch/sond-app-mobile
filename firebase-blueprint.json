@@ -1,0 +1,160 @@
+{
+  "entities": {
+    "CloudLicense": {
+      "title": "Cloud License",
+      "description": "SaaS License for a client store",
+      "type": "object",
+      "properties": {
+        "key": { "type": "string" },
+        "hwid": { "type": "string" },
+        "customerName": { "type": "string" },
+        "expiresAt": { "type": "string" },
+        "type": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["key", "hwid", "customerName", "expiresAt", "type", "status"]
+    },
+    "SystemSettings": {
+      "title": "System Settings",
+      "description": "Store configuration, currency, address, and pin settings",
+      "type": "object",
+      "properties": {
+        "storeName": { "type": "string" },
+        "currency": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "pinCode": { "type": "string" },
+        "isPinEnabled": { "type": "boolean" }
+      },
+      "required": ["storeName", "currency", "pinCode", "isPinEnabled"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Inventory product or maintenance service detail",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "barcode": { "type": "string" },
+        "costPrice": { "type": "number" },
+        "sellingPrice": { "type": "number" },
+        "stock": { "type": "number" },
+        "minStock": { "type": "number" },
+        "category": { "type": "string" }
+      },
+      "required": ["id", "name", "barcode", "costPrice", "sellingPrice", "stock", "minStock"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Customer contact and credit balance info",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "totalDebt": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "phone", "totalDebt", "createdAt"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "POS sales invoice details including cash and credit sales",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "items": { "type": "array" },
+        "totalAmount": { "type": "number" },
+        "discount": { "type": "number" },
+        "finalAmount": { "type": "number" },
+        "type": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "invoiceNumber", "customerName", "items", "totalAmount", "discount", "finalAmount", "type", "date"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Settle/Pay debt records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string" },
+        "note": { "type": "string" }
+      },
+      "required": ["id", "customerId", "customerName", "amount", "date"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "General accounting ledger entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["id", "type", "amount", "date", "description"]
+    },
+    "MaintenanceOrder": {
+      "title": "Maintenance Order",
+      "description": "Phone maintenance job ticket",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderNumber": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "deviceName": { "type": "string" },
+        "issueDescription": { "type": "string" },
+        "cost": { "type": "number" },
+        "status": { "type": "string" },
+        "dateReceived": { "type": "string" },
+        "dateDelivered": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "orderNumber", "customerName", "customerPhone", "deviceName", "issueDescription", "cost", "status", "dateReceived"]
+    }
+  },
+  "firestore": {
+    "/licenses/{licenseId}": {
+      "schema": "CloudLicense",
+      "description": "Central SaaS registration system for store validation"
+    },
+    "/stores/{licenseKey}/config/settings": {
+      "schema": "SystemSettings",
+      "description": "Custom store configuration settings"
+    },
+    "/stores/{licenseKey}/products/{productId}": {
+      "schema": "Product",
+      "description": "Products list belonging to the store"
+    },
+    "/stores/{licenseKey}/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Customers list and debt records"
+    },
+    "/stores/{licenseKey}/invoices/{invoiceId}": {
+      "schema": "Invoice",
+      "description": "Invoices and receipts belonging to the store"
+    },
+    "/stores/{licenseKey}/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Debt settlement payment records"
+    },
+    "/stores/{licenseKey}/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Financial ledger transactions of the store"
+    },
+    "/stores/{licenseKey}/maintenanceOrders/{orderId}": {
+      "schema": "MaintenanceOrder",
+      "description": "Maintenance job tickets in the store"
+    }
+  }
+}

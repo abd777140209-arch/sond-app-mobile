@@ -1,0 +1,69 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isLicenseValid(licenseKey) {
+      return exists(/databases/$(database)/documents/licenses/$(licenseKey)) &&
+             (get(/databases/$(database)/documents/licenses/$(licenseKey)).data.status == "active" ||
+              get(/databases/$(database)/documents/licenses/$(licenseKey)).data.status == "trial");
+    }
+
+    // Central Licenses collection
+    match /licenses/{licenseId} {
+      allow get: if isValidId(licenseId);
+      allow update: if isValidId(licenseId) && 
+                       (resource.data.hwid == "" || resource.data.hwid == "UNBOUND" || resource.data.hwid == request.resource.data.hwid) &&
+                       request.resource.data.key == resource.data.key;
+      allow create, delete: if false;
+    }
+
+    // Store Collections (Multi-tenant segmented by licenseKey)
+    match /stores/{licenseKey} {
+      
+      // Settings current document
+      match /config/settings {
+        allow read, write: if isValidId(licenseKey) && isLicenseValid(licenseKey);
+      }
+
+      // Products collection
+      match /products/{productId} {
+        allow read, write: if isValidId(licenseKey) && isValidId(productId) && isLicenseValid(licenseKey);
+      }
+
+      // Customers collection
+      match /customers/{customerId} {
+        allow read, write: if isValidId(licenseKey) && isValidId(customerId) && isLicenseValid(licenseKey);
+      }
+
+      // Invoices collection
+      match /invoices/{invoiceId} {
+        allow read, write: if isValidId(licenseKey) && isValidId(invoiceId) && isLicenseValid(licenseKey);
+      }
+
+      // Payments collection
+      match /payments/{paymentId} {
+        allow read, write: if isValidId(licenseKey) && isValidId(paymentId) && isLicenseValid(licenseKey);
+      }
+
+      // Transactions collection
+      match /transactions/{transactionId} {
+        allow read, write: if isValidId(licenseKey) && isValidId(transactionId) && isLicenseValid(licenseKey);
+      }
+
+      // Maintenance orders collection
+      match /maintenanceOrders/{orderId} {
+        allow read, write: if isValidId(licenseKey) && isValidId(orderId) && isLicenseValid(licenseKey);
+      }
+    }
+  }
+}
