@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="50%" stop-color="#090e17" />
+      <stop offset="100%" stop-color="#04060b" />
+    </linearGradient>
+    <linearGradient id="goldGrad512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f3e7c4" />
+      <stop offset="50%" stop-color="#C5A862" />
+      <stop offset="100%" stop-color="#9a7b38" />
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#bgGrad512)" />
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="url(#goldGrad512)" stroke-width="3" opacity="0.5" />
+  <circle cx="256" cy="256" r="180" fill="none" stroke="url(#goldGrad512)" stroke-width="4" stroke-dasharray="12 8" opacity="0.3" />
+  <path d="M256 96 L368 152 V264 C368 344 256 408 256 408 C256 408 144 344 144 264 V152 Z" fill="none" stroke="url(#goldGrad512)" stroke-width="12" stroke-linejoin="round" />
+  <text x="256" y="285" font-family="'Cairo', 'Tajawal', sans-serif, Arial" font-size="140" font-weight="900" fill="url(#goldGrad512)" text-anchor="middle" dominant-baseline="central">سُند</text>
+  <circle cx="256" cy="140" r="8" fill="url(#goldGrad512)" />
+</svg>
