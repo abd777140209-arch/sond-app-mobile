@@ -39,7 +39,7 @@ jobs:
       - name: Build Android APK
         run: |
           cd android
-          gradle assembleDebug --no-daemon -x test
+          gradle assembleDebug --no-daemon --stacktrace -x test
       - uses: actions/upload-artifact@v4
         with:
           name: sanad-app-apk
