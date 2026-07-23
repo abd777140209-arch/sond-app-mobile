@@ -12,6 +12,7 @@ export interface Product {
   stock: number;
   minStock: number;
   category?: string; // e.g. "أجهزة", "إكسسوارات", "صيانة", "أخرى"
+  isDeleted?: boolean;
 }
 
 export interface Customer {
@@ -20,6 +21,8 @@ export interface Customer {
   phone: string;
   totalDebt: number;
   createdAt: string;
+  isDeleted?: boolean;
+  isActive?: boolean;
 }
 
 export interface InvoiceItem {

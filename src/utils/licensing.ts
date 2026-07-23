@@ -14,6 +14,7 @@ export interface LicenseInfo {
   hwid: string;
   subscriptionType: 'monthly' | 'yearly' | 'lifetime' | 'trial';
   customerName?: string;
+  phone?: string;
 }
 
 // Simple XOR / Base64 obfuscation helper for securing local licenses (UTF-8 safe)

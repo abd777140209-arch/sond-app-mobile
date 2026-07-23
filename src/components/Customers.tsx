@@ -108,8 +108,11 @@ export default function Customers({
     return `https://api.whatsapp.com/send?phone=${finalPhone}&text=${encodeURIComponent(text)}`;
   };
 
-  // Filter customers
-  const filteredCustomers = customers.filter(c => {
+  // Filter active customers (exclude soft-deleted)
+  const activeCustomers = customers.filter(c => c.isDeleted !== true && c.isActive !== false);
+
+  // Filter customers for display
+  const filteredCustomers = activeCustomers.filter(c => {
     const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.phone.includes(searchQuery);
     const matchesFilter = filterType === 'all' || c.totalDebt > 0;
     return matchesSearch && matchesFilter;
@@ -199,7 +202,7 @@ export default function Customers({
                 className="w-full bg-[#16212E] border border-gray-800 text-xs rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#C5A862]"
               >
                 <option value="">-- اختر عميلاً للتسديد --</option>
-                {customers.filter(c => c.totalDebt > 0).map(c => (
+                {activeCustomers.filter(c => c.totalDebt > 0).map(c => (
                   <option key={c.id} value={c.id}>
                     {c.name} (مدين بـ: {c.totalDebt.toLocaleString()} {currency})
                   </option>

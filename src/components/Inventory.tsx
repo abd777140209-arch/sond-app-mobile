@@ -128,12 +128,15 @@ export default function Inventory({
     soundManager.playSuccessChime();
   };
 
-  // Stats summaries
-  const totalItems = products.length;
-  const totalStockCount = products.reduce((sum, p) => sum + p.stock, 0);
-  const lowStockCount = products.filter(p => p.stock <= p.minStock).length;
+  // Active products (exclude soft-deleted)
+  const activeProducts = products.filter(p => p.isDeleted !== true);
 
-  const filteredProducts = products.filter(p => {
+  // Stats summaries
+  const totalItems = activeProducts.length;
+  const totalStockCount = activeProducts.reduce((sum, p) => sum + p.stock, 0);
+  const lowStockCount = activeProducts.filter(p => p.stock <= p.minStock).length;
+
+  const filteredProducts = activeProducts.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.barcode.includes(searchQuery);
     const matchesLowStock = !filterLowStock || p.stock <= p.minStock;
     const matchesCategory = selectedCategoryFilter === 'الكل' || p.category === selectedCategoryFilter;

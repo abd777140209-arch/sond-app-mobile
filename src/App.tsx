@@ -204,6 +204,8 @@ export default function App() {
   // Logout/Deactivate current license
   const handleLogout = () => {
     soundManager.playWarningBeep();
+    // Set explicit logged-out flag to prevent silentCheck auto-login loop
+    localStorage.setItem('smart_accounting_logged_out', 'true');
     const updated: LicenseInfo = {
       licenseKey: '',
       status: 'unlicensed',
@@ -218,7 +220,8 @@ export default function App() {
     localStorage.removeItem('smart_accounting_license_v1');
     localStorage.removeItem('smart_accounting_license');
     localStorage.removeItem('smart_accounting_user');
-    window.location.reload();
+    localStorage.removeItem('smart_accounting_token');
+    setActiveTab('dashboard');
   };
 
   // Real-time silent cloud license activation/blocking check based on HWID
@@ -226,6 +229,10 @@ export default function App() {
     let interval: NodeJS.Timeout;
 
     const silentCheck = async () => {
+      // If user explicitly logged out, do NOT auto-login or auto-activate silently!
+      if (localStorage.getItem('smart_accounting_logged_out') === 'true') {
+        return;
+      }
       if (!license.hwid) return;
       try {
         const cloudLic = await findLicenseByHwid(license.hwid);
@@ -507,12 +514,19 @@ export default function App() {
     }
   };
 
-  // Action: Delete customer
+  // Action: Delete customer (Soft delete to protect financial history & reports)
   const handleDeleteCustomer = (customerId: string) => {
+    const cust = customers.find(c => c.id === customerId);
+    if (!cust) return;
+    const softDeleted: Customer = {
+      ...cust,
+      isDeleted: true,
+      isActive: false
+    };
     if (license.licenseKey) {
-      deleteStoreDocument(license.licenseKey, 'customers', customerId);
+      saveStoreDocument(license.licenseKey, 'customers', customerId, softDeleted);
     } else {
-      setCustomers(prev => prev.filter(c => c.id !== customerId));
+      setCustomers(prev => prev.map(c => c.id === customerId ? softDeleted : c));
     }
   };
 
@@ -578,12 +592,19 @@ export default function App() {
     }
   };
 
-  // Action: Delete product
+  // Action: Delete product (Soft delete to protect sales/purchases history & invoices)
   const handleDeleteProduct = (productId: string) => {
+    const prod = products.find(p => p.id === productId);
+    if (!prod) return;
+    const softDeleted: Product = {
+      ...prod,
+      isDeleted: true,
+      stock: 0
+    };
     if (license.licenseKey) {
-      deleteStoreDocument(license.licenseKey, 'products', productId);
+      saveStoreDocument(license.licenseKey, 'products', productId, softDeleted);
     } else {
-      setProducts(prev => prev.filter(p => p.id !== productId));
+      setProducts(prev => prev.map(p => p.id === productId ? softDeleted : p));
     }
   };
 
@@ -893,9 +914,16 @@ export default function App() {
             <Smartphone className="w-4 h-4 md:w-5 md:h-5 text-[#C5A862]" />
           </div>
           <div>
-            <h1 className="text-xs md:text-sm font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-[#F3E7C4] to-[#C5A862]">
-              {settings.storeName}
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xs md:text-sm font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-[#F3E7C4] to-[#C5A862]">
+                {license.customerName || settings.storeName || 'النشاط التجاري'}
+              </h1>
+              {license.phone && (
+                <span className="px-2 py-0.5 rounded-full text-[9px] bg-blue-950/60 border border-blue-500/30 text-blue-400 font-mono font-bold">
+                  📱 {license.phone}
+                </span>
+              )}
+            </div>
             <p className="hidden md:block text-[10px] text-gray-500 font-mono tracking-widest leading-none mt-0.5 select-none">
               DESKTOP SYSTEM v
               <span 

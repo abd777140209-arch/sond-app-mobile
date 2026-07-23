@@ -27,6 +27,10 @@ export default function POS({ products, customers, onCompleteSale, currency }: P
 
   const categoriesList = ['الكل', 'أجهزة', 'إكسسوارات', 'قطع صيانة', 'برمجيات', 'أخرى'];
 
+  // Filter out soft-deleted items
+  const activeProducts = products.filter(p => p.isDeleted !== true);
+  const activeCustomers = customers.filter(c => c.isDeleted !== true && c.isActive !== false);
+
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   // Auto focus barcode scanner input on mount
@@ -42,7 +46,7 @@ export default function POS({ products, customers, onCompleteSale, currency }: P
     const cleanBarcode = barcodeInput.trim();
     if (!cleanBarcode) return;
 
-    const matchedProduct = products.find(p => p.barcode === cleanBarcode);
+    const matchedProduct = activeProducts.find(p => p.barcode === cleanBarcode);
     if (matchedProduct) {
       addProductToCart(matchedProduct);
       setBarcodeInput('');
@@ -169,7 +173,7 @@ export default function POS({ products, customers, onCompleteSale, currency }: P
   };
 
   // Filter products for quick selection grid
-  const filteredProducts = products.filter(p => {
+  const filteredProducts = activeProducts.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.barcode.includes(searchQuery);
     const matchesCategory = selectedCategory === 'الكل' || p.category === selectedCategory;
     return matchesSearch && matchesCategory;
@@ -426,7 +430,7 @@ export default function POS({ products, customers, onCompleteSale, currency }: P
                 className="w-full bg-[#16212E] border border-gray-800 text-xs rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#C5A862]"
               >
                 <option value="">-- عميل مجهول / بيع نقدي سفري --</option>
-                {customers.map(c => (
+                {activeCustomers.map(c => (
                   <option key={c.id} value={c.id}>
                     {c.name} {c.totalDebt > 0 ? `(عليه دين: ${c.totalDebt.toLocaleString()} ${currency})` : ''}
                   </option>

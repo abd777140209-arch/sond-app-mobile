@@ -48,7 +48,7 @@ export async function saveStoreSettings(licenseKey: string, settings: any): Prom
   }
 }
 
-// Real-time synchronization helper for collections with auto-seeding
+// Real-time synchronization helper for collections with auto-seeding on first creation only
 export function syncStoreCollection<T extends { id: string }>(
   licenseKey: string,
   collectionName: string,
@@ -62,20 +62,27 @@ export function syncStoreCollection<T extends { id: string }>(
 
   const colRef = collection(db, 'stores', licenseKey, collectionName);
   const path = `stores/${licenseKey}/${collectionName}`;
+  const seedFlagKey = `store_seeded_${licenseKey}_${collectionName}`;
 
   // Set up real-time onSnapshot listener
   const unsubscribe = onSnapshot(colRef, (snapshot) => {
-    // If the collection is completely empty, populate it with the default seed data
-    if (snapshot.empty && defaultSeed.length > 0) {
-      console.log(`Seeding collection '${collectionName}' for store '${licenseKey}'...`);
-      defaultSeed.forEach((item) => {
-        setDoc(doc(colRef, item.id), item).catch((err) => {
-          console.error(`Failed to upload seed item for ${collectionName}:`, err);
+    if (snapshot.empty) {
+      const alreadySeeded = localStorage.getItem(seedFlagKey);
+      if (!alreadySeeded && defaultSeed.length > 0) {
+        console.log(`Initial seed for collection '${collectionName}' for store '${licenseKey}'...`);
+        localStorage.setItem(seedFlagKey, 'true');
+        defaultSeed.forEach((item) => {
+          setDoc(doc(colRef, item.id), item).catch((err) => {
+            console.error(`Failed to upload seed item for ${collectionName}:`, err);
+          });
         });
-      });
-      // Trigger update with seed data immediately
-      onUpdate(defaultSeed);
+        onUpdate(defaultSeed);
+      } else {
+        // Reset or intentionally empty collection -> return empty list immediately!
+        onUpdate([]);
+      }
     } else {
+      localStorage.setItem(seedFlagKey, 'true');
       const items: T[] = [];
       snapshot.forEach((docSnap) => {
         items.push({ ...docSnap.data() } as T);

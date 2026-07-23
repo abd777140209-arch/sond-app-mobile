@@ -27,6 +27,7 @@ interface SaaSActivatorProps {
 
 export default function SaaSActivator({ license, setLicense, onActivationSuccess }: SaaSActivatorProps) {
   const [activationKeyInput, setActivationKeyInput] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
   const [customerNameInput, setCustomerNameInput] = useState('');
   
   // UX UI states
@@ -53,25 +54,33 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
     setStatusMessage({ text: '', type: null });
     
     const key = activationKeyInput.trim();
-    const customer = customerNameInput.trim() || 'عميل مرخص';
+    const phone = phoneInput.trim();
+    const storeName = customerNameInput.trim() || 'محل سند للخدمات المحاسبية';
+
+    if (!phone) {
+      soundManager.playWarningBeep();
+      setStatusMessage({ text: '⚠️ الرجاء إدخال رقم الهاتف أولاً للتأكيد والتوثيق!', type: 'error' });
+      return;
+    }
 
     if (!key) {
       soundManager.playWarningBeep();
-      setStatusMessage({ text: '⚠️ الرجاء إدخال مفتاح التفعيل أولاً!', type: 'error' });
+      setStatusMessage({ text: '⚠️ الرجاء إدخال رمز التفعيل (Activation Code / OTP) أولاً!', type: 'error' });
       return;
     }
 
     setLoading(true);
 
-    // Artificial delay to look like server verification handshake
     setTimeout(async () => {
       try {
+        // Remove logged out flag upon active login attempt
+        localStorage.removeItem('smart_accounting_logged_out');
+
         const response = await checkLicenseOnCloud(key, license.hwid);
         
         if (response.success && response.data) {
-          // If the key is unbound on the cloud (empty hwid or TRIAL), we MUST bind it now to this user's HWID!
           if (!response.data.hwid || isUnboundHwid(response.data.hwid)) {
-            const bindResult = await activateLicenseOnCloud(key, license.hwid, customer || response.data.customerName);
+            const bindResult = await activateLicenseOnCloud(key, license.hwid, storeName);
             if (!bindResult.success) {
               soundManager.playWarningBeep();
               setStatusMessage({ text: '❌ فشل ربط مفتاح التفعيل بقاعدة البيانات السحابية. يرجى المحاولة لاحقاً.', type: 'error' });
@@ -87,18 +96,18 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
             expiresAt: response.data.expiresAt,
             hwid: license.hwid,
             subscriptionType: response.data.type,
-            customerName: customer || response.data.customerName || 'عميل مرخص'
+            customerName: storeName,
+            phone: phone
           };
           saveLicenseLocally(activeLic);
           setLicense(activeLic);
           soundManager.playSuccessChime();
-          setStatusMessage({ text: `🎉 مبارك! تم تفعيل اشتراكك السحابي بنجاح للعميل (${customer || response.data.customerName})`, type: 'success' });
+          setStatusMessage({ text: `🎉 تم التوثيق بنجاح برقم الهاتف (${phone}) لنشاطك التجاري (${storeName})`, type: 'success' });
           onActivationSuccess(activeLic);
         } else {
           soundManager.playWarningBeep();
           if (response.message === 'KEY_NOT_FOUND') {
-            // Check if key exists but is unbound - try to activate/bind it
-            const activationResult = await activateLicenseOnCloud(key, license.hwid, customer);
+            const activationResult = await activateLicenseOnCloud(key, license.hwid, storeName);
             if (activationResult.success) {
               const recheck = await checkLicenseOnCloud(key, license.hwid);
               if (recheck.success && recheck.data) {
@@ -109,37 +118,38 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
                   expiresAt: recheck.data.expiresAt,
                   hwid: license.hwid,
                   subscriptionType: recheck.data.type,
-                  customerName: recheck.data.customerName
+                  customerName: storeName,
+                  phone: phone
                 };
                 saveLicenseLocally(activeLic);
                 setLicense(activeLic);
                 soundManager.playSuccessChime();
-                setStatusMessage({ text: `🎉 مبارك! تم تسجيل وبند جهازك بالمفتاح السحابي بنجاح!`, type: 'success' });
+                setStatusMessage({ text: `🎉 تم توثيق رقم الهاتف ودخول النظام بنجاح!`, type: 'success' });
                 onActivationSuccess(activeLic);
                 setLoading(false);
                 return;
               }
             }
-            setStatusMessage({ text: '❌ مفتاح تفعيل غير صحيح! يرجى التواصل مع المطور لتوليد مفتاح لجهازك.', type: 'error' });
+            setStatusMessage({ text: '❌ رمز التفعيل / OTP غير صحيح! يرجى التواصل مع المطور لتوليد كود التفعيل برقم هاتفك.', type: 'error' });
           } else if (response.message === 'HWID_MISMATCH') {
-            setStatusMessage({ text: '🔒 خطأ حماية: مفتاح التفعيل هذا مستخدم بالفعل على جهاز آخر ولا يمكن مشاركته!', type: 'error' });
+            setStatusMessage({ text: '🔒 خطأ حماية: رمز التفعيل مستخدم بالفعل على جهاز آخر ولا يمكن مشاركته!', type: 'error' });
           } else if (response.message === 'KEY_EXPIRED') {
-            setStatusMessage({ text: '⏳ انتهت صلاحية اشتراك هذا المفتاح! يرجى سداد الرسوم والتواصل مع المطور للتجديد.', type: 'error' });
+            setStatusMessage({ text: '⏳ انتهت صلاحية هذا الرمز! يرجى التواصل مع المطور للتجديد.', type: 'error' });
           } else if (response.message === 'KEY_SUSPENDED') {
-            setStatusMessage({ text: '🚫 تم تعليق هذا الاشتراك لأسباب فنية أو مالية من قبل الإدارة.', type: 'error' });
+            setStatusMessage({ text: '🚫 تم تعليق هذا الحساب من قبل الإدارة.', type: 'error' });
           } else if (response.message === 'ERROR') {
-            setStatusMessage({ text: '⚠️ فشل الاتصال بقاعدة البيانات السحابية (Firebase): يرجى التحقق من اتصال الإنترنت أو تفعيل متغيرات البيئة (.env) لـ Firebase على سيرفر Cloud Run.', type: 'error' });
+            setStatusMessage({ text: '⚠️ فشل الاتصال بقاعدة البيانات السحابية (Firebase). يرجى التحقق من الاتصال.', type: 'error' });
           } else {
-            setStatusMessage({ text: '❌ عذراً، مفتاح التفعيل غير صحيح أو غير متطابق مع سيرفر المطور!', type: 'error' });
+            setStatusMessage({ text: '❌ رمز التفعيل غير صحيح أو غير متطابق!', type: 'error' });
           }
         }
       } catch (err: any) {
         console.error(err);
-        setStatusMessage({ text: `❌ خطأ في عملية الاتصال بسيرفر المطور: ${err?.message || 'يرجى التحقق من اتصالك بالإنترنت وتكوين .env الخاص بالسيرفر بشكل سليم'}`, type: 'error' });
+        setStatusMessage({ text: `❌ خطأ أثناء الاتصال: ${err?.message || 'يرجى التحقق من اتصالك بالإنترنت'}`, type: 'error' });
       } finally {
         setLoading(false);
       }
-    }, 1500);
+    }, 1200);
   };
 
   if (license.status === 'expired') {
@@ -351,15 +361,28 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
             </div>
           </div>
 
-          {/* Box 2: Secure License Key Form */}
+          {/* Box 2: Phone Authentication & Activation Form */}
           <form onSubmit={handleActivateLicense} className="p-4 rounded-xl bg-[#0e131f] border border-gray-800 space-y-4">
             <h3 className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
-              <KeyRound className="w-4 h-4 text-green-400" /> إدخال كود التفعيل والربط:
+              <KeyRound className="w-4 h-4 text-green-400" /> تسجيل الدخول برقم الهاتف والرمز:
             </h3>
 
             <div className="space-y-3 text-xs">
               <div className="space-y-1">
-                <label className="text-[10px] text-gray-400 font-bold block">مفتاح التفعيل (Serial Key):</label>
+                <label className="text-[10px] text-gray-400 font-bold block">📱 رقم الهاتف (Phone Number):</label>
+                <input
+                  type="tel"
+                  required
+                  value={phoneInput}
+                  onChange={(e) => setPhoneInput(e.target.value)}
+                  placeholder="مثال: 777140209 أو +967777140209"
+                  dir="ltr"
+                  className="w-full bg-[#04060b] border border-gray-800 rounded-xl px-3 py-2 text-center text-xs font-bold font-mono tracking-widest text-blue-400 focus:outline-none focus:border-blue-400 placeholder-gray-700"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] text-gray-400 font-bold block">🔑 رمز التفعيل / OTP Code:</label>
                 <input
                   type="text"
                   required
@@ -372,12 +395,12 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] text-gray-400 font-bold block">اسم المحل أو الشركة المشغلة:</label>
+                <label className="text-[10px] text-gray-400 font-bold block">🏪 اسم المحل / النشاط التجاري:</label>
                 <input
                   type="text"
                   value={customerNameInput}
                   onChange={(e) => setCustomerNameInput(e.target.value)}
-                  placeholder="مثال: مركز سند للتجارة"
+                  placeholder="مثال: مركز سند للاتصالات والتجارة"
                   className="w-full bg-[#04060b] border border-gray-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C5A862]"
                 />
               </div>
@@ -389,11 +412,11 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
               >
                 {loading ? (
                   <>
-                    <RefreshCw className="w-4 h-4 animate-spin" /> جاري فحص الكود والتحقق...
+                    <RefreshCw className="w-4 h-4 animate-spin" /> جاري التوثيق وفحص الرمز...
                   </>
                 ) : (
                   <>
-                    تفعيل البرنامج وفك القفل ⚡
+                    تسجيل الدخول والتوثيق ⚡
                   </>
                 )}
               </button>
