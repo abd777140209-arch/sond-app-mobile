@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   LayoutDashboard, 
   ShoppingCart, 
@@ -92,6 +93,81 @@ export default function App() {
   // Active navigation tab
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [showDevPortal, setShowDevPortal] = useState<boolean>(false);
+  
+  // Mobile Touch Swipe Gesture States & Config
+  const [touchStart, setTouchStart] = useState<{ x: number; y: number; time: number } | null>(null);
+  const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
+  const [swipeHint, setSwipeHint] = useState<string | null>(null);
+
+  const ALL_TABS = ['dashboard', 'pos', 'inventory', 'customers', 'transactions', 'maintenance', 'settings'];
+
+  const TAB_LABELS: Record<string, string> = {
+    dashboard: 'الرئيسية',
+    pos: 'المبيعات',
+    inventory: 'المخزن',
+    customers: 'العملاء',
+    transactions: 'القيود',
+    maintenance: 'الصيانة',
+    settings: 'الإعدادات'
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    // Disable swipe when modal dialogs are active or touching controls/inputs
+    if (activeInvoice || showDevPortal) return;
+
+    const target = e.target as HTMLElement;
+    if (target.closest('input, textarea, select, button, canvas, .no-swipe, [role="dialog"], table, .overflow-x-auto')) {
+      setTouchStart(null);
+      return;
+    }
+
+    if (e.touches.length === 1) {
+      setTouchStart({
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        time: Date.now()
+      });
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStart) return;
+
+    const touchEnd = e.changedTouches[0];
+    const deltaX = touchEnd.clientX - touchStart.x;
+    const deltaY = touchEnd.clientY - touchStart.y;
+    const deltaTime = Date.now() - touchStart.time;
+
+    setTouchStart(null);
+
+    // Filter out vertical scroll & require clear horizontal swipe
+    if (deltaTime < 600 && Math.abs(deltaX) >= 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.4) {
+      const currentIndex = ALL_TABS.indexOf(activeTab);
+      if (currentIndex === -1) return;
+
+      if (deltaX < 0) {
+        // Swipe Left -> Move to Next Tab
+        if (currentIndex < ALL_TABS.length - 1) {
+          const nextTab = ALL_TABS[currentIndex + 1];
+          soundManager.playScanBeep();
+          setSwipeDirection('left');
+          setActiveTab(nextTab);
+          setSwipeHint(`التبويب التالي: ${TAB_LABELS[nextTab]} 👈`);
+          setTimeout(() => setSwipeHint(null), 1400);
+        }
+      } else {
+        // Swipe Right -> Move to Previous Tab
+        if (currentIndex > 0) {
+          const prevTab = ALL_TABS[currentIndex - 1];
+          soundManager.playScanBeep();
+          setSwipeDirection('right');
+          setActiveTab(prevTab);
+          setSwipeHint(`👉 التبويب السابق: ${TAB_LABELS[prevTab]}`);
+          setTimeout(() => setSwipeHint(null), 1400);
+        }
+      }
+    }
+  };
   
   // Simple client-side sub-route check for Developer Portal
   const [isDevRoute, setIsDevRoute] = useState(() => {
@@ -1058,81 +1134,110 @@ export default function App() {
         </aside>
 
         {/* 3. CORE SUB-VIEW HUB */}
-        <main id="desktop_sub_view_hub" className="flex-1 p-3 md:p-6 pb-20 md:pb-6 overflow-y-auto bg-[#070C12] relative">
-          
-          {activeTab === 'dashboard' && (
-            <Dashboard
-              products={products}
-              customers={customers}
-              invoices={invoices}
-              payments={payments}
-              transactions={transactions}
-              settings={settings}
-              setActiveTab={setActiveTab}
-            />
-          )}
+        <main 
+          id="desktop_sub_view_hub" 
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          className="flex-1 p-3 md:p-6 pb-20 md:pb-6 overflow-y-auto bg-[#070C12] relative"
+        >
+          {/* Floating Mobile Swipe Toast Hint */}
+          <AnimatePresence>
+            {swipeHint && (
+              <motion.div
+                initial={{ opacity: 0, y: -20, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -20, scale: 0.9 }}
+                className="md:hidden fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-[#122234]/95 border border-[#C5A862] text-[#F3E7C4] text-xs font-bold px-4 py-2 rounded-full shadow-2xl backdrop-blur-md pointer-events-none flex items-center gap-2"
+              >
+                <span>{swipeHint}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-          {activeTab === 'pos' && (
-            <POS
-              products={products}
-              customers={customers}
-              onCompleteSale={handleCompleteSale}
-              currency={settings.currency}
-            />
-          )}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, x: swipeDirection === 'left' ? 25 : swipeDirection === 'right' ? -25 : 0 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: swipeDirection === 'left' ? -25 : swipeDirection === 'right' ? 25 : 0 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="w-full h-full"
+            >
+              {activeTab === 'dashboard' && (
+                <Dashboard
+                  products={products}
+                  customers={customers}
+                  invoices={invoices}
+                  payments={payments}
+                  transactions={transactions}
+                  settings={settings}
+                  setActiveTab={setActiveTab}
+                />
+              )}
 
-          {activeTab === 'customers' && (
-            <Customers
-              customers={customers}
-              payments={payments}
-              onAddCustomer={handleAddCustomer}
-              onPayDebt={handlePayDebt}
-              onDeleteCustomer={handleDeleteCustomer}
-              currency={settings.currency}
-            />
-          )}
+              {activeTab === 'pos' && (
+                <POS
+                  products={products}
+                  customers={customers}
+                  onCompleteSale={handleCompleteSale}
+                  currency={settings.currency}
+                />
+              )}
 
-          {activeTab === 'inventory' && (
-            <Inventory
-              products={products}
-              onAddProduct={handleAddProduct}
-              onUpdateProduct={handleUpdateProduct}
-              onDeleteProduct={handleDeleteProduct}
-              currency={settings.currency}
-            />
-          )}
+              {activeTab === 'customers' && (
+                <Customers
+                  customers={customers}
+                  payments={payments}
+                  onAddCustomer={handleAddCustomer}
+                  onPayDebt={handlePayDebt}
+                  onDeleteCustomer={handleDeleteCustomer}
+                  currency={settings.currency}
+                />
+              )}
 
-          {activeTab === 'transactions' && (
-            <Transactions
-              transactions={transactions}
-              invoices={invoices}
-              onAddExpense={handleAddExpense}
-              onDeleteTransaction={handleDeleteTransaction}
-              onRefundInvoice={handleRefundInvoice}
-              onViewInvoice={setActiveInvoice}
-              currency={settings.currency}
-            />
-          )}
+              {activeTab === 'inventory' && (
+                <Inventory
+                  products={products}
+                  onAddProduct={handleAddProduct}
+                  onUpdateProduct={handleUpdateProduct}
+                  onDeleteProduct={handleDeleteProduct}
+                  currency={settings.currency}
+                />
+              )}
 
-          {activeTab === 'maintenance' && (
-            <Maintenance
-              orders={maintenanceOrders}
-              onAddOrder={handleAddMaintenanceOrder}
-              onUpdateStatus={handleUpdateMaintenanceStatus}
-              onDeleteOrder={handleDeleteMaintenanceOrder}
-              currency={settings.currency}
-            />
-          )}
+              {activeTab === 'transactions' && (
+                <Transactions
+                  transactions={transactions}
+                  invoices={invoices}
+                  onAddExpense={handleAddExpense}
+                  onDeleteTransaction={handleDeleteTransaction}
+                  onRefundInvoice={handleRefundInvoice}
+                  onViewInvoice={setActiveInvoice}
+                  currency={settings.currency}
+                />
+              )}
 
-          {activeTab === 'settings' && (
-            <Settings
-              settings={settings}
-              onSaveSettings={handleSaveSettings}
-              onBackupData={handleBackupData}
-              onRestoreData={handleRestoreData}
-              onResetDatabase={handleResetDatabase}
-            />
-          )}
+              {activeTab === 'maintenance' && (
+                <Maintenance
+                  orders={maintenanceOrders}
+                  onAddOrder={handleAddMaintenanceOrder}
+                  onUpdateStatus={handleUpdateMaintenanceStatus}
+                  onDeleteOrder={handleDeleteMaintenanceOrder}
+                  currency={settings.currency}
+                />
+              )}
+
+              {activeTab === 'settings' && (
+                <Settings
+                  settings={settings}
+                  onSaveSettings={handleSaveSettings}
+                  onBackupData={handleBackupData}
+                  onRestoreData={handleRestoreData}
+                  onResetDatabase={handleResetDatabase}
+                />
+              )}
+            </motion.div>
+          </AnimatePresence>
 
         </main>
 
@@ -1171,7 +1276,7 @@ export default function App() {
       )}
 
       {/* 4. MOBILE BOTTOM NAVIGATION BAR (Non-printed, Mobile view only) */}
-      <nav id="mobile_bottom_nav" className="no-print md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0B141F]/95 backdrop-blur-md border-t border-[#C5A862]/30 px-1 py-1.5 flex justify-around items-center shadow-[0_-5px_20px_rgba(0,0,0,0.6)] select-none">
+      <nav id="mobile_bottom_nav" className="no-print md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0B141F]/95 backdrop-blur-md border-t border-[#C5A862]/30 px-1 py-1 flex justify-around items-center shadow-[0_-5px_20px_rgba(0,0,0,0.6)] select-none overflow-x-auto scrollbar-none">
         
         {/* Dashboard */}
         <button
@@ -1179,14 +1284,19 @@ export default function App() {
             soundManager.playScanBeep();
             setActiveTab('dashboard');
           }}
-          className={`flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all ${
-            activeTab === 'dashboard'
-              ? 'text-[#C5A862] bg-[#1B2C3F]/80 font-bold scale-105'
-              : 'text-gray-400 hover:text-gray-200'
+          className={`relative flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all min-w-[46px] shrink-0 ${
+            activeTab === 'dashboard' ? 'text-[#C5A862] font-bold scale-105' : 'text-gray-400 hover:text-gray-200'
           }`}
         >
+          {activeTab === 'dashboard' && (
+            <motion.div
+              layoutId="mobileActiveTabBg"
+              className="absolute inset-0 bg-[#1B2C3F] border border-[#C5A862]/40 rounded-xl -z-10 shadow-sm"
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            />
+          )}
           <LayoutDashboard className="w-4 h-4 mb-0.5" />
-          <span className="text-[9px]">الرئيسية</span>
+          <span className="text-[8.5px]">الرئيسية</span>
         </button>
 
         {/* POS */}
@@ -1195,14 +1305,19 @@ export default function App() {
             soundManager.playScanBeep();
             setActiveTab('pos');
           }}
-          className={`flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all ${
-            activeTab === 'pos'
-              ? 'text-[#C5A862] bg-[#1B2C3F]/80 font-bold scale-105'
-              : 'text-gray-400 hover:text-gray-200'
+          className={`relative flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all min-w-[46px] shrink-0 ${
+            activeTab === 'pos' ? 'text-[#C5A862] font-bold scale-105' : 'text-gray-400 hover:text-gray-200'
           }`}
         >
+          {activeTab === 'pos' && (
+            <motion.div
+              layoutId="mobileActiveTabBg"
+              className="absolute inset-0 bg-[#1B2C3F] border border-[#C5A862]/40 rounded-xl -z-10 shadow-sm"
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            />
+          )}
           <ShoppingCart className="w-4 h-4 mb-0.5" />
-          <span className="text-[9px]">المبيعات</span>
+          <span className="text-[8.5px]">المبيعات</span>
         </button>
 
         {/* Inventory */}
@@ -1211,12 +1326,17 @@ export default function App() {
             soundManager.playScanBeep();
             setActiveTab('inventory');
           }}
-          className={`flex flex-col items-center justify-center py-1 px-1.5 rounded-xl relative transition-all ${
-            activeTab === 'inventory'
-              ? 'text-[#C5A862] bg-[#1B2C3F]/80 font-bold scale-105'
-              : 'text-gray-400 hover:text-gray-200'
+          className={`relative flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all min-w-[46px] shrink-0 ${
+            activeTab === 'inventory' ? 'text-[#C5A862] font-bold scale-105' : 'text-gray-400 hover:text-gray-200'
           }`}
         >
+          {activeTab === 'inventory' && (
+            <motion.div
+              layoutId="mobileActiveTabBg"
+              className="absolute inset-0 bg-[#1B2C3F] border border-[#C5A862]/40 rounded-xl -z-10 shadow-sm"
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            />
+          )}
           <div className="relative">
             <Package className="w-4 h-4 mb-0.5" />
             {lowStockCount > 0 && (
@@ -1225,7 +1345,7 @@ export default function App() {
               </span>
             )}
           </div>
-          <span className="text-[9px]">المخزن</span>
+          <span className="text-[8.5px]">المخزن</span>
         </button>
 
         {/* Customers */}
@@ -1234,14 +1354,40 @@ export default function App() {
             soundManager.playScanBeep();
             setActiveTab('customers');
           }}
-          className={`flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all ${
-            activeTab === 'customers'
-              ? 'text-[#C5A862] bg-[#1B2C3F]/80 font-bold scale-105'
-              : 'text-gray-400 hover:text-gray-200'
+          className={`relative flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all min-w-[46px] shrink-0 ${
+            activeTab === 'customers' ? 'text-[#C5A862] font-bold scale-105' : 'text-gray-400 hover:text-gray-200'
           }`}
         >
+          {activeTab === 'customers' && (
+            <motion.div
+              layoutId="mobileActiveTabBg"
+              className="absolute inset-0 bg-[#1B2C3F] border border-[#C5A862]/40 rounded-xl -z-10 shadow-sm"
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            />
+          )}
           <Users className="w-4 h-4 mb-0.5" />
-          <span className="text-[9px]">العملاء</span>
+          <span className="text-[8.5px]">العملاء</span>
+        </button>
+
+        {/* Transactions */}
+        <button
+          onClick={() => {
+            soundManager.playScanBeep();
+            setActiveTab('transactions');
+          }}
+          className={`relative flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all min-w-[46px] shrink-0 ${
+            activeTab === 'transactions' ? 'text-[#C5A862] font-bold scale-105' : 'text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          {activeTab === 'transactions' && (
+            <motion.div
+              layoutId="mobileActiveTabBg"
+              className="absolute inset-0 bg-[#1B2C3F] border border-[#C5A862]/40 rounded-xl -z-10 shadow-sm"
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            />
+          )}
+          <History className="w-4 h-4 mb-0.5" />
+          <span className="text-[8.5px]">القيود</span>
         </button>
 
         {/* Maintenance */}
@@ -1250,12 +1396,17 @@ export default function App() {
             soundManager.playScanBeep();
             setActiveTab('maintenance');
           }}
-          className={`flex flex-col items-center justify-center py-1 px-1.5 rounded-xl relative transition-all ${
-            activeTab === 'maintenance'
-              ? 'text-[#C5A862] bg-[#1B2C3F]/80 font-bold scale-105'
-              : 'text-gray-400 hover:text-gray-200'
+          className={`relative flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all min-w-[46px] shrink-0 ${
+            activeTab === 'maintenance' ? 'text-[#C5A862] font-bold scale-105' : 'text-gray-400 hover:text-gray-200'
           }`}
         >
+          {activeTab === 'maintenance' && (
+            <motion.div
+              layoutId="mobileActiveTabBg"
+              className="absolute inset-0 bg-[#1B2C3F] border border-[#C5A862]/40 rounded-xl -z-10 shadow-sm"
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            />
+          )}
           <div className="relative">
             <Wrench className="w-4 h-4 mb-0.5" />
             {maintenanceOrders.filter(o => o.status === 'received' || o.status === 'repairing').length > 0 && (
@@ -1264,7 +1415,7 @@ export default function App() {
               </span>
             )}
           </div>
-          <span className="text-[9px]">الصيانة</span>
+          <span className="text-[8.5px]">الصيانة</span>
         </button>
 
         {/* Settings */}
@@ -1273,14 +1424,19 @@ export default function App() {
             soundManager.playScanBeep();
             setActiveTab('settings');
           }}
-          className={`flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all ${
-            activeTab === 'settings'
-              ? 'text-[#C5A862] bg-[#1B2C3F]/80 font-bold scale-105'
-              : 'text-gray-400 hover:text-gray-200'
+          className={`relative flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all min-w-[46px] shrink-0 ${
+            activeTab === 'settings' ? 'text-[#C5A862] font-bold scale-105' : 'text-gray-400 hover:text-gray-200'
           }`}
         >
+          {activeTab === 'settings' && (
+            <motion.div
+              layoutId="mobileActiveTabBg"
+              className="absolute inset-0 bg-[#1B2C3F] border border-[#C5A862]/40 rounded-xl -z-10 shadow-sm"
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            />
+          )}
           <SettingsIcon className="w-4 h-4 mb-0.5" />
-          <span className="text-[9px]">الإعدادات</span>
+          <span className="text-[8.5px]">الإعدادات</span>
         </button>
 
       </nav>
