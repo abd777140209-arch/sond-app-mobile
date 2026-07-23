@@ -11,6 +11,7 @@ import {
   Users, 
   Package, 
   History, 
+  BarChart3,
   Settings as SettingsIcon, 
   Lock, 
   Clock, 
@@ -40,6 +41,7 @@ import Transactions from './components/Transactions';
 import Settings from './components/Settings';
 import InvoiceModal from './components/InvoiceModal';
 import Maintenance from './components/Maintenance';
+import ProfitReports from './components/ProfitReports';
 import SaaSActivator from './components/SaaSActivator';
 import DeveloperPortalModal from './components/DeveloperPortalModal';
 import { LicenseInfo, loadLicenseLocally, saveLicenseLocally } from './utils/licensing';
@@ -99,7 +101,7 @@ export default function App() {
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const [swipeHint, setSwipeHint] = useState<string | null>(null);
 
-  const ALL_TABS = ['dashboard', 'pos', 'inventory', 'customers', 'transactions', 'maintenance', 'settings'];
+  const ALL_TABS = ['dashboard', 'pos', 'inventory', 'customers', 'transactions', 'reports', 'maintenance', 'settings'];
 
   const TAB_LABELS: Record<string, string> = {
     dashboard: 'الرئيسية',
@@ -107,6 +109,7 @@ export default function App() {
     inventory: 'المخزن',
     customers: 'العملاء',
     transactions: 'القيود',
+    reports: 'التقارير والأرباح',
     maintenance: 'الصيانة',
     settings: 'الإعدادات'
   };
@@ -1090,6 +1093,23 @@ export default function App() {
               <span>القيود والتحصيلات</span>
             </button>
 
+            {/* Graphical Profit Reports tab */}
+            <button
+              id="tab_trigger_reports"
+              onClick={() => {
+                soundManager.playScanBeep();
+                setActiveTab('reports');
+              }}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer w-full text-right ${
+                activeTab === 'reports'
+                  ? 'bg-gradient-to-l from-[#1B2C3F] to-[#0F1924] text-[#C5A862] border-r-2 border-[#C5A862]'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#121E2C]/40'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4 shrink-0 text-[#C5A862]" />
+              <span>الأرباح والتقارير البيانية</span>
+            </button>
+
             {/* Maintenance & Programming tab */}
             <button
               id="tab_trigger_maintenance"
@@ -1241,6 +1261,16 @@ export default function App() {
                   onDeleteTransaction={handleDeleteTransaction}
                   onRefundInvoice={handleRefundInvoice}
                   onViewInvoice={setActiveInvoice}
+                  currency={settings.currency}
+                />
+              )}
+
+              {activeTab === 'reports' && (
+                <ProfitReports
+                  invoices={invoices}
+                  products={products}
+                  transactions={transactions}
+                  customers={customers}
                   currency={settings.currency}
                 />
               )}
@@ -1416,6 +1446,27 @@ export default function App() {
           )}
           <History className="w-4 h-4 mb-0.5" />
           <span className="text-[8.5px]">القيود</span>
+        </button>
+
+        {/* Reports */}
+        <button
+          onClick={() => {
+            soundManager.playScanBeep();
+            setActiveTab('reports');
+          }}
+          className={`relative flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all min-w-[46px] shrink-0 ${
+            activeTab === 'reports' ? 'text-[#C5A862] font-bold scale-105' : 'text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          {activeTab === 'reports' && (
+            <motion.div
+              layoutId="mobileActiveTabBg"
+              className="absolute inset-0 bg-[#1B2C3F] border border-[#C5A862]/40 rounded-xl -z-10 shadow-sm"
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            />
+          )}
+          <BarChart3 className="w-4 h-4 mb-0.5" />
+          <span className="text-[8.5px]">الأرباح</span>
         </button>
 
         {/* Maintenance */}

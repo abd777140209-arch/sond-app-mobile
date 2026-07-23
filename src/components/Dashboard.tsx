@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { TrendingUp, Users, Package, Wallet, ArrowDownLeft, AlertCircle, Award, Phone } from 'lucide-react';
+import { TrendingUp, Users, Package, Wallet, ArrowDownLeft, AlertCircle, Award, Phone, BarChart3, ArrowLeft } from 'lucide-react';
 import { Product, Customer, Invoice, Payment, Transaction, SystemSettings } from '../types';
 
 interface DashboardProps {
@@ -69,12 +69,28 @@ export default function Dashboard({
           </p>
         </div>
 
-        {/* Developer Credit Tag */}
-        <div className="flex items-center gap-3 bg-[#1A2838]/80 border border-[#C5A862]/20 px-4 py-2 rounded-xl text-xs">
-          <Award className="w-5 h-5 text-[#C5A862]" />
-          <div>
-            <div className="text-gray-300 font-semibold">تطوير: م. عبدالمجيد المحواشي</div>
-            <div className="text-gray-400 text-[10px]">Compose for Desktop Framework</div>
+        {/* Developer Credit Tag & Profit Report Shortcut Button */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <button
+            onClick={() => setActiveTab('reports')}
+            className="flex items-center justify-between gap-3 bg-gradient-to-r from-emerald-950/80 to-[#10221c] border border-emerald-500/40 hover:border-emerald-400 px-4 py-2.5 rounded-xl text-xs font-bold text-emerald-300 hover:text-emerald-200 transition-all cursor-pointer shadow-md group"
+          >
+            <div className="flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
+              <div className="text-right">
+                <div className="text-white">التقرير البياني للأرباح 📊</div>
+                <div className="text-[10px] text-emerald-400/80 font-normal">استعراض أرباح POS الرسومية باحترافية</div>
+              </div>
+            </div>
+            <ArrowLeft className="w-4 h-4 text-emerald-400 group-hover:-translate-x-1 transition-transform" />
+          </button>
+
+          <div className="flex items-center gap-3 bg-[#1A2838]/80 border border-[#C5A862]/20 px-4 py-2 rounded-xl text-xs">
+            <Award className="w-5 h-5 text-[#C5A862]" />
+            <div>
+              <div className="text-gray-300 font-semibold">تطوير: م. عبدالمجيد المحواشي</div>
+              <div className="text-gray-400 text-[10px]">Compose for Desktop Framework</div>
+            </div>
           </div>
         </div>
       </div>
