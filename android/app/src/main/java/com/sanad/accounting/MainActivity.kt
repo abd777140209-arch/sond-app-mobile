@@ -24,7 +24,7 @@ import androidx.core.content.ContextCompat
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
-    private val REMOTE_SERVER_URL = "https://service-3507.ai.studio"
+    private val REMOTE_SERVER_URL = "https://ais-dev-z5yeta6zliodlnrwazwoat-575351245128.europe-west2.run.app"
     private val PERMISSIONS_REQUEST_CODE = 1001
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -56,7 +56,9 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
                 super.onReceivedError(view, errorCode, description, failingUrl)
-                // Fallback to local asset if remote URL unavailable offline
+                if (failingUrl == REMOTE_SERVER_URL) {
+                    view?.loadUrl("file:///android_asset/public/index.html")
+                }
             }
         }
 
