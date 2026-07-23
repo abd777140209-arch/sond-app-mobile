@@ -87,4 +87,32 @@ export interface SystemSettings {
   phone: string;
   pinCode: string;
   isPinEnabled: boolean;
+  storeLogoUrl?: string;
+  exchangeRates?: {
+    YER: number;
+    SAR: number;
+    USD: number;
+  };
 }
+
+export interface Employee {
+  id: string;
+  name: string;
+  phone: string;
+  jobTitle: string;
+  monthlySalary: number;
+  totalAdvances: number;
+  hireDate: string;
+  isDeleted?: boolean;
+}
+
+export interface PayrollRecord {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  type: 'advance' | 'salary_payment';
+  amount: number;
+  date: string;
+  note: string;
+}
+

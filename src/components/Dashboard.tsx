@@ -15,6 +15,7 @@ interface DashboardProps {
   transactions: Transaction[];
   settings: SystemSettings;
   setActiveTab: (tab: string) => void;
+  isPrivacyMode?: boolean;
 }
 
 export default function Dashboard({
@@ -24,8 +25,23 @@ export default function Dashboard({
   payments,
   transactions,
   settings,
-  setActiveTab
+  setActiveTab,
+  isPrivacyMode = false
 }: DashboardProps) {
+
+  // Speech synthesis audio summary
+  const handleSpeakSummary = () => {
+    if (!('speechSynthesis' in window)) {
+      alert('ميزة التقرير الصوتي غير مدعومة في متصفحك الحالي.');
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const text = `مرحباً بك في نشاطك التجاري ${settings.storeName || 'سند'}. إجمالي المبيعات بلغ ${totalSales.toLocaleString()} ${settings.currency}. إجمالي ديون العملاء المتبقية ${totalDebts.toLocaleString()} ${settings.currency}. عدد الأصناف في المخزن ${activeProducts.length} صنف.`;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'ar-SA';
+    utterance.rate = 0.95;
+    window.speechSynthesis.speak(utterance);
+  };
 
   // Calculations
   const activeProducts = products.filter(p => p.isDeleted !== true);
@@ -50,10 +66,12 @@ export default function Dashboard({
   // High urgency debts (> 50,000 or top debtors)
   const highDebtCustomers = activeCustomers.filter(c => c.totalDebt >= 50000);
 
-  // Format currency
+  // Format currency with Privacy mode support
   const fmt = (num: number) => {
+    if (isPrivacyMode) return '**** ' + settings.currency;
     return num.toLocaleString() + ' ' + settings.currency;
   };
+
 
   const maxDebtorVal = topDebtors[0]?.totalDebt || 1;
 
@@ -81,6 +99,18 @@ export default function Dashboard({
         {/* Developer Credit & Profit Report Shortcut */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <button
+            onClick={handleSpeakSummary}
+            className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 text-white px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-blue-500/20"
+            title="استمع للملخص المالي صوتاً"
+          >
+            <span className="text-base">🔊</span>
+            <div className="text-right">
+              <div className="text-white">التقرير الصوتي</div>
+              <div className="text-[9px] text-blue-200">قراءة صوتية ذكية</div>
+            </div>
+          </button>
+
+          <button
             onClick={() => setActiveTab('reports')}
             className="flex items-center justify-between gap-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white px-4 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-emerald-500/20 group"
           >
@@ -93,6 +123,7 @@ export default function Dashboard({
             </div>
             <ArrowLeft className="w-4 h-4 text-white group-hover:-translate-x-1 transition-transform" />
           </button>
+
 
           <div className="flex items-center gap-3 bg-slate-50 dark:bg-[#1A2838]/80 border border-slate-200 dark:border-sky-800/40 px-4 py-2 rounded-2xl text-xs">
             <Award className="w-5 h-5 text-sky-600 dark:text-sky-400" />

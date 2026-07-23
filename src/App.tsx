@@ -18,10 +18,14 @@ import {
   Smartphone, 
   AlertCircle,
   Wrench,
-  LogOut
+  LogOut,
+  Eye,
+  EyeOff,
+  Download,
+  Briefcase
 } from 'lucide-react';
 
-import { Product, Customer, Invoice, Payment, Transaction, SystemSettings, MaintenanceOrder } from './types';
+import { Product, Customer, Invoice, Payment, Transaction, SystemSettings, MaintenanceOrder, Employee, PayrollRecord } from './types';
 import { soundManager } from './utils/sound';
 import { 
   DEFAULT_SETTINGS, 
@@ -42,10 +46,13 @@ import Settings from './components/Settings';
 import InvoiceModal from './components/InvoiceModal';
 import Maintenance from './components/Maintenance';
 import ProfitReports from './components/ProfitReports';
+import Employees from './components/Employees';
+import ApkDownloadModal from './components/ApkDownloadModal';
 import SaaSActivator from './components/SaaSActivator';
 import BiometricLockModal from './components/BiometricLockModal';
 import FloatingCalculator from './components/FloatingCalculator';
 import DeveloperPortalModal from './components/DeveloperPortalModal';
+
 import { LicenseInfo, loadLicenseLocally, saveLicenseLocally } from './utils/licensing';
 import { findLicenseByHwid } from './utils/firebase';
 import { requestAndroidStartupPermissions } from './utils/androidPermissions';
@@ -94,6 +101,43 @@ export default function App() {
     return data ? JSON.parse(data) : [];
   });
 
+  const [employees, setEmployees] = useState<Employee[]>(() => {
+    const data = localStorage.getItem('smart_accounting_employees');
+    return data ? JSON.parse(data) : [
+      {
+        id: 'emp-1',
+        name: 'محمد علي العنسي',
+        phone: '771234567',
+        jobTitle: 'كاشير مبيعات',
+        monthlySalary: 150000,
+        totalAdvances: 20000,
+        hireDate: '2026-01-15'
+      },
+      {
+        id: 'emp-2',
+        name: 'سليم حسن الريمي',
+        phone: '733456789',
+        jobTitle: 'فني صيانة وتصليح',
+        monthlySalary: 200000,
+        totalAdvances: 0,
+        hireDate: '2026-02-01'
+      }
+    ];
+  });
+
+  const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>(() => {
+    const data = localStorage.getItem('smart_accounting_payroll');
+    return data ? JSON.parse(data) : [];
+  });
+
+  // Global Privacy Mode (👁️ hides amounts & profits with ***)
+  const [isPrivacyMode, setIsPrivacyMode] = useState<boolean>(() => {
+    return localStorage.getItem('smart_accounting_privacy_mode') === 'true';
+  });
+
+  // APK Download Modal
+  const [showApkModal, setShowApkModal] = useState<boolean>(false);
+
   // Active navigation tab
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [showDevPortal, setShowDevPortal] = useState<boolean>(false);
@@ -103,18 +147,20 @@ export default function App() {
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const [swipeHint, setSwipeHint] = useState<string | null>(null);
 
-  const ALL_TABS = ['dashboard', 'pos', 'inventory', 'customers', 'transactions', 'reports', 'maintenance', 'settings'];
+  const ALL_TABS = ['dashboard', 'pos', 'inventory', 'customers', 'employees', 'transactions', 'reports', 'maintenance', 'settings'];
 
   const TAB_LABELS: Record<string, string> = {
     dashboard: 'الرئيسية',
     pos: 'المبيعات',
     inventory: 'المخزن',
     customers: 'العملاء',
+    employees: 'العمال والرواتب',
     transactions: 'القيود',
     reports: 'التقارير والأرباح',
     maintenance: 'الصيانة',
     settings: 'الإعدادات'
   };
+
 
   const handleTouchStart = (e: React.TouchEvent) => {
     // Disable swipe when modal dialogs are active or touching controls/inputs
@@ -372,6 +418,22 @@ export default function App() {
     }
   }, [maintenanceOrders, license.licenseKey]);
 
+  useEffect(() => {
+    if (!license.licenseKey) {
+      localStorage.setItem('smart_accounting_employees', JSON.stringify(employees));
+    }
+  }, [employees, license.licenseKey]);
+
+  useEffect(() => {
+    if (!license.licenseKey) {
+      localStorage.setItem('smart_accounting_payroll', JSON.stringify(payrollRecords));
+    }
+  }, [payrollRecords, license.licenseKey]);
+
+  useEffect(() => {
+    localStorage.setItem('smart_accounting_privacy_mode', String(isPrivacyMode));
+  }, [isPrivacyMode]);
+
   // Real-time Firestore synchronization effect (with automatic offline persistence support)
   useEffect(() => {
     if (!license.licenseKey || !isActivated) {
@@ -388,6 +450,8 @@ export default function App() {
     const unsubPayments = syncStoreCollection<Payment>(license.licenseKey, 'payments', setPayments, SEED_PAYMENTS);
     const unsubTransactions = syncStoreCollection<Transaction>(license.licenseKey, 'transactions', setTransactions, SEED_TRANSACTIONS);
     const unsubMaintenance = syncStoreCollection<MaintenanceOrder>(license.licenseKey, 'maintenanceOrders', setMaintenanceOrders, []);
+    const unsubEmployees = syncStoreCollection<Employee>(license.licenseKey, 'employees', setEmployees, []);
+    const unsubPayroll = syncStoreCollection<PayrollRecord>(license.licenseKey, 'payrollRecords', setPayrollRecords, []);
 
     return () => {
       console.log(`[Sync] Terminating real-time cloud sync for store: ${license.licenseKey}`);
@@ -398,8 +462,11 @@ export default function App() {
       unsubPayments();
       unsubTransactions();
       unsubMaintenance();
+      unsubEmployees();
+      unsubPayroll();
     };
   }, [license.licenseKey, isActivated]);
+
 
   // Clock ticker effect
   useEffect(() => {
@@ -721,6 +788,115 @@ export default function App() {
     }
   };
 
+  // Action: Add Employee
+  const handleAddEmployee = (empData: Omit<Employee, 'id' | 'totalAdvances' | 'hireDate'>) => {
+    const newEmp: Employee = {
+      ...empData,
+      id: `emp-${Date.now()}`,
+      totalAdvances: 0,
+      hireDate: new Date().toISOString()
+    };
+    if (license.licenseKey) {
+      saveStoreDocument(license.licenseKey, 'employees', newEmp.id, newEmp);
+    } else {
+      setEmployees(prev => [...prev, newEmp]);
+    }
+  };
+
+  // Action: Record Advance for Employee
+  const handleRecordAdvance = (employeeId: string, amount: number, note: string) => {
+    const emp = employees.find(e => e.id === employeeId);
+    if (!emp) return;
+
+    const updatedEmp: Employee = {
+      ...emp,
+      totalAdvances: emp.totalAdvances + amount
+    };
+
+    const recId = `payr-${Date.now()}`;
+    const newRecord: PayrollRecord = {
+      id: recId,
+      employeeId,
+      employeeName: emp.name,
+      type: 'advance',
+      amount,
+      date: new Date().toISOString(),
+      note
+    };
+
+    const newTx: Transaction = {
+      id: `t-${Date.now()}`,
+      type: 'expense',
+      amount,
+      date: new Date().toISOString(),
+      description: `سلفة للموظف ${emp.name}: ${note}`
+    };
+
+    if (license.licenseKey) {
+      saveStoreDocument(license.licenseKey, 'employees', employeeId, updatedEmp);
+      saveStoreDocument(license.licenseKey, 'payrollRecords', recId, newRecord);
+      saveStoreDocument(license.licenseKey, 'transactions', newTx.id, newTx);
+    } else {
+      setEmployees(prev => prev.map(e => e.id === employeeId ? updatedEmp : e));
+      setPayrollRecords(prev => [...prev, newRecord]);
+      setTransactions(prev => [...prev, newTx]);
+    }
+  };
+
+  // Action: Pay Salary to Employee
+  const handlePaySalary = (employeeId: string, amount: number, note: string) => {
+    const emp = employees.find(e => e.id === employeeId);
+    if (!emp) return;
+
+    const updatedEmp: Employee = {
+      ...emp,
+      totalAdvances: Math.max(0, emp.totalAdvances - amount)
+    };
+
+    const recId = `payr-${Date.now()}`;
+    const newRecord: PayrollRecord = {
+      id: recId,
+      employeeId,
+      employeeName: emp.name,
+      type: 'salary_payment',
+      amount,
+      date: new Date().toISOString(),
+      note
+    };
+
+    const newTx: Transaction = {
+      id: `t-${Date.now()}`,
+      type: 'expense',
+      amount,
+      date: new Date().toISOString(),
+      description: `صرف راتب للموظف ${emp.name}: ${note}`
+    };
+
+    if (license.licenseKey) {
+      saveStoreDocument(license.licenseKey, 'employees', employeeId, updatedEmp);
+      saveStoreDocument(license.licenseKey, 'payrollRecords', recId, newRecord);
+      saveStoreDocument(license.licenseKey, 'transactions', newTx.id, newTx);
+    } else {
+      setEmployees(prev => prev.map(e => e.id === employeeId ? updatedEmp : e));
+      setPayrollRecords(prev => [...prev, newRecord]);
+      setTransactions(prev => [...prev, newTx]);
+    }
+  };
+
+  // Action: Delete Employee (soft delete)
+  const handleDeleteEmployee = (employeeId: string) => {
+    const emp = employees.find(e => e.id === employeeId);
+    if (!emp) return;
+
+    const softDeleted: Employee = { ...emp, isDeleted: true };
+    if (license.licenseKey) {
+      saveStoreDocument(license.licenseKey, 'employees', employeeId, softDeleted);
+    } else {
+      setEmployees(prev => prev.map(e => e.id === employeeId ? softDeleted : e));
+    }
+  };
+
+
   // Action: Refund / Return POS Invoice
   const handleRefundInvoice = (invoiceId: string) => {
     const invoice = invoices.find(inv => inv.id === invoiceId);
@@ -970,6 +1146,33 @@ export default function App() {
         {/* Quick lock and diagnostic sound check buttons */}
         <div className="flex items-center gap-2 md:gap-3">
           
+          {/* APK Download Button */}
+          <button
+            onClick={() => setShowApkModal(true)}
+            className="p-1.5 md:p-2 rounded-xl bg-gradient-to-r from-[#C5A862] to-[#A38641] hover:from-[#d4b771] hover:to-[#b3954f] text-black font-bold transition cursor-pointer text-[11px] md:text-xs flex items-center gap-1 shadow-md"
+            title="تنزيل تطبيق أندرويد APK"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">تنزيل التطبيق (APK)</span>
+          </button>
+
+          {/* Privacy mode toggle */}
+          <button
+            onClick={() => {
+              soundManager.playScanBeep();
+              setIsPrivacyMode(!isPrivacyMode);
+            }}
+            className={`p-1.5 md:p-2 rounded-xl border transition cursor-pointer text-[11px] md:text-xs flex items-center gap-1 ${
+              isPrivacyMode
+                ? 'bg-amber-950/60 border-amber-500/60 text-amber-300'
+                : 'bg-slate-800/40 border-gray-800 text-gray-400 hover:text-white'
+            }`}
+            title={isPrivacyMode ? 'إظهار المبالغ والخصومات' : 'إخفاء المبالغ المالية (وضع الخصوصية)'}
+          >
+            {isPrivacyMode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">{isPrivacyMode ? 'مخفي 👁️‍🗨️' : 'خصوصية 👁️'}</span>
+          </button>
+
           {/* Diagnostic beep test */}
           <button
             id="sound_test_btn"
@@ -977,7 +1180,7 @@ export default function App() {
             className="p-1.5 md:p-2 rounded-xl bg-slate-800/40 border border-gray-800 hover:border-[#C5A862]/40 text-gray-400 hover:text-[#C5A862] transition cursor-pointer text-[11px] md:text-xs flex items-center gap-1"
             title="فحص صوت الباركود"
           >
-            🔊 <span className="hidden sm:inline">فحص الصوت</span>
+            🔊 <span className="hidden sm:inline">صوت</span>
           </button>
 
           {/* Logout button */}
@@ -996,6 +1199,7 @@ export default function App() {
           </button>
 
         </div>
+
 
       </header>
 
@@ -1059,6 +1263,24 @@ export default function App() {
               <Users className="w-4 h-4 shrink-0" />
               <span>العملاء والديون (الذمم)</span>
             </button>
+
+            {/* Employees tab */}
+            <button
+              id="tab_trigger_employees"
+              onClick={() => {
+                soundManager.playScanBeep();
+                setActiveTab('employees');
+              }}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer w-full text-right ${
+                activeTab === 'employees'
+                  ? 'bg-gradient-to-l from-[#1B2C3F] to-[#0F1924] text-[#C5A862] border-r-2 border-[#C5A862]'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#121E2C]/40'
+              }`}
+            >
+              <Briefcase className="w-4 h-4 shrink-0 text-[#C5A862]" />
+              <span>قسم العمال والرواتب</span>
+            </button>
+
 
             {/* Inventory tab */}
             <button
@@ -1251,6 +1473,19 @@ export default function App() {
                 />
               )}
 
+              {activeTab === 'employees' && (
+                <Employees
+                  employees={employees}
+                  payrollRecords={payrollRecords}
+                  onAddEmployee={handleAddEmployee}
+                  onRecordAdvance={handleRecordAdvance}
+                  onPaySalary={handlePaySalary}
+                  onDeleteEmployee={handleDeleteEmployee}
+                  currency={settings.currency}
+                />
+              )}
+
+
               {activeTab === 'inventory' && (
                 <Inventory
                   products={products}
@@ -1318,6 +1553,14 @@ export default function App() {
           customers={customers}
         />
       )}
+
+      {/* APK Mobile App Download Modal */}
+      <ApkDownloadModal
+        isOpen={showApkModal}
+        onClose={() => setShowApkModal(false)}
+        storeName={settings.storeName}
+      />
+
 
       {(showDevPortal || isDevRoute) && (
         <DeveloperPortalModal
@@ -1434,6 +1677,28 @@ export default function App() {
           <Users className="w-4 h-4 mb-0.5" />
           <span className="text-[8.5px]">العملاء</span>
         </button>
+
+        {/* Employees */}
+        <button
+          onClick={() => {
+            soundManager.playScanBeep();
+            setActiveTab('employees');
+          }}
+          className={`relative flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all min-w-[46px] shrink-0 ${
+            activeTab === 'employees' ? 'text-[#C5A862] font-bold scale-105' : 'text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          {activeTab === 'employees' && (
+            <motion.div
+              layoutId="mobileActiveTabBg"
+              className="absolute inset-0 bg-[#1B2C3F] border border-[#C5A862]/40 rounded-xl -z-10 shadow-sm"
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            />
+          )}
+          <Briefcase className="w-4 h-4 mb-0.5" />
+          <span className="text-[8.5px]">العمال</span>
+        </button>
+
 
         {/* Transactions */}
         <button
