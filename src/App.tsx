@@ -43,6 +43,8 @@ import InvoiceModal from './components/InvoiceModal';
 import Maintenance from './components/Maintenance';
 import ProfitReports from './components/ProfitReports';
 import SaaSActivator from './components/SaaSActivator';
+import BiometricLockModal from './components/BiometricLockModal';
+import FloatingCalculator from './components/FloatingCalculator';
 import DeveloperPortalModal from './components/DeveloperPortalModal';
 import { LicenseInfo, loadLicenseLocally, saveLicenseLocally } from './utils/licensing';
 import { findLicenseByHwid } from './utils/firebase';
@@ -188,11 +190,7 @@ export default function App() {
     window.addEventListener('popstate', handleLocationChange);
     window.addEventListener('hashchange', handleLocationChange);
 
-    // Request Android & Web startup permissions (Notifications, Camera, Storage, Vibration)
-    requestAndroidStartupPermissions().catch((err) => {
-      console.warn('Android startup permissions check handled:', err);
-    });
-
+    // Startup initialization (Permissions are now strictly requested on-demand when user clicks camera/action buttons)
     return () => {
       window.removeEventListener('popstate', handleLocationChange);
       window.removeEventListener('hashchange', handleLocationChange);
@@ -203,6 +201,9 @@ export default function App() {
   const [license, setLicense] = useState<LicenseInfo>(() => loadLicenseLocally());
 
   const isActivated = license.status === 'active' || license.status === 'trial';
+  const [isBiometricLocked, setIsBiometricLocked] = useState<boolean>(() => {
+    return localStorage.getItem('sond_biometrics_enabled') === 'true';
+  });
 
   // Logout/Deactivate current license
   const handleLogout = () => {
@@ -889,7 +890,7 @@ export default function App() {
     );
   }
 
-  // SaaS Activation Gate
+  // SaaS Activation Gate (Initial Route: Phone Number + Activation Code Screen)
   if (!isActivated) {
     return (
       <SaaSActivator 
@@ -897,13 +898,32 @@ export default function App() {
         setLicense={setLicense}
         onActivationSuccess={(updatedLicense) => {
           setLicense(updatedLicense);
+          if (updatedLicense.customerName) {
+            setSettings(prev => {
+              const updated = { ...prev, storeName: updatedLicense.customerName };
+              localStorage.setItem('smart_accounting_settings', JSON.stringify(updated));
+              return updated;
+            });
+          }
         }} 
       />
     );
   }
 
+  // Quick Biometric / Fingerprint & PIN Lock Screen
+  if (isBiometricLocked) {
+    return (
+      <BiometricLockModal
+        storeName={license.customerName || settings.storeName || 'نظام سند المحاسبي'}
+        phone={license.phone || settings.phone || ''}
+        pinCode={settings.pinCode}
+        onUnlock={() => setIsBiometricLocked(false)}
+      />
+    );
+  }
+
   // Count low stocks for dynamic red badge on sidemenu
-  const lowStockCount = products.filter(p => p.stock <= p.minStock).length;
+  const lowStockCount = products.filter(p => p.stock <= p.minStock && p.isDeleted !== true).length;
 
   return (
     <div id="application_root_container" className="min-h-screen bg-[#070C12] text-slate-100 flex flex-col">
@@ -911,45 +931,33 @@ export default function App() {
       {/* 1. TOP ACCESS BAR (Non-printed) */}
       <header id="desktop_topbar" className="no-print h-14 md:h-16 bg-[#0B141F] border-b border-[#C5A862]/30 px-3 md:px-6 flex justify-between items-center z-40 shadow-md">
         
-        {/* System Branding & Icon */}
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 md:p-2 rounded-xl bg-gradient-to-br from-[#1E2E44] to-[#121E2E] border border-[#C5A862]/40 shadow-inner">
+        {/* System Branding & Store / Customer Info */}
+        <div className="flex items-center gap-2.5">
+          <div className="p-1.5 md:p-2 rounded-xl bg-gradient-to-br from-[#1E2E44] to-[#121E2E] border border-[#C5A862]/40 shadow-inner shrink-0">
             <Smartphone className="w-4 h-4 md:w-5 md:h-5 text-[#C5A862]" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xs md:text-sm font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-[#F3E7C4] to-[#C5A862]">
-                {license.customerName || settings.storeName || 'النشاط التجاري'}
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xs md:text-sm font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-[#F3E7C4] to-[#C5A862] flex items-center gap-1">
+                <span className="text-[#C5A862]">🏪</span> {license.customerName || settings.storeName || 'النشاط التجاري'}
               </h1>
               {license.phone && (
-                <span className="px-2 py-0.5 rounded-full text-[9px] bg-blue-950/60 border border-blue-500/30 text-blue-400 font-mono font-bold">
-                  📱 {license.phone}
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-blue-950/80 border border-blue-500/40 text-blue-300 font-mono font-bold flex items-center gap-1 shadow-sm">
+                  <span>📱</span> {license.phone}
                 </span>
               )}
             </div>
-            <p className="hidden md:block text-[10px] text-gray-500 font-mono tracking-widest leading-none mt-0.5 select-none">
-              DESKTOP SYSTEM v
-              <span 
-                id="secret_dev_trigger"
-                onClick={() => {
-                  soundManager.playScanBeep();
-                  setShowDevPortal(true);
-                }}
-                className="cursor-default hover:text-[#C5A862]/80 transition-colors duration-150 font-bold px-0.5"
-                title="v2.4"
-              >
-                2
-              </span>
-              .4
+            <p className="hidden md:block text-[10px] text-gray-400 font-mono tracking-widest leading-none mt-0.5 select-none">
+              نظام سند المحاسبي • موثق برقم الهاتف
             </p>
           </div>
         </div>
 
         {/* Cloud Sync Status Badge */}
         {license.licenseKey && isActivated && (
-          <div className="flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-800/40 px-2.5 py-1 md:px-4 md:py-1.5 rounded-xl text-[10px] md:text-xs text-emerald-400 font-medium select-none">
+          <div className="flex items-center gap-1.5 bg-emerald-950/60 border border-emerald-800/50 px-2.5 py-1 md:px-4 md:py-1.5 rounded-xl text-[10px] md:text-xs text-emerald-300 font-bold select-none shadow-sm">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-            <span>سحابي</span>
+            <span>متصل سحابياً ⚡</span>
           </div>
         )}
 
@@ -1525,6 +1533,9 @@ export default function App() {
         <span>نظام سند الذكي المحاسبي • نسخة الهواتف والكمبيوتر</span>
         <span>برمجة وتطوير: عبدالمجيد المحواشي (الجمهورية اليمنية) © 2026</span>
       </footer>
+
+      {/* Floating Calculator Widget */}
+      <FloatingCalculator />
 
     </div>
   );

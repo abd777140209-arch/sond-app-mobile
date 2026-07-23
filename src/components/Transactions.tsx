@@ -17,7 +17,9 @@ import {
   FileText, 
   RefreshCw, 
   Printer, 
-  Undo2 
+  Undo2,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { Transaction, Invoice } from '../types';
 import { soundManager } from '../utils/sound';
@@ -78,43 +80,27 @@ export default function Transactions({
     let csv = '\ufeff'; // UTF-8 BOM
     csv += 'المعرف,التاريخ والوقت,نوع القيد,البيان والوصف,المبلغ\n';
 
-    transactions.forEach(t => {
-      let typeAr = 'مصروف';
-      if (t.type === 'sale') typeAr = 'مبيعات فاتورة';
-      else if (t.type === 'payment') typeAr = 'سند قبض ديون';
-      else if (t.type === 'refund') typeAr = 'مرتجع مبيعات';
-      else if (t.type === 'maintenance_income') typeAr = 'إيراد صيانة';
+    filteredTransactions.forEach(t => {
+      const typeLabel = 
+        t.type === 'sale' ? 'مبيعات' :
+        t.type === 'payment' ? 'تحصيل دين' :
+        t.type === 'expense' ? 'مصروفات' :
+        t.type === 'refund' ? 'مرتجع' : 'صيانة';
 
-      csv += `"${t.id}","${new Date(t.date).toLocaleString('ar-YE')}","${typeAr}","${t.description}",${t.amount}\n`;
+      csv += `"${t.id}","${new Date(t.date).toLocaleString('ar-YE')}","${typeLabel}","${t.description.replace(/"/g, '""')}","${t.amount}"\n`;
     });
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = url;
-    link.download = `transactions_ledger_export.csv`;
+    link.setAttribute('href', url);
+    link.setAttribute('download', `كشف_الحركات_المالية_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(link);
   };
 
-  // Filtered transactions
-  const filteredTransactions = transactions.filter(t => {
-    const matchesSearch = t.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = filterType === 'all' || t.type === filterType;
-    return matchesSearch && matchesType;
-  });
-
-  // Filtered invoices
-  const filteredInvoices = invoices.filter(inv => {
-    const query = searchQuery.toLowerCase();
-    return (
-      inv.invoiceNumber.toLowerCase().includes(query) ||
-      inv.customerName.toLowerCase().includes(query) ||
-      inv.items.some(item => item.name.toLowerCase().includes(query))
-    );
-  });
-
-  // Calculate totals
+  // Calculations
   const totalSales = transactions.filter(t => t.type === 'sale').reduce((sum, t) => sum + t.amount, 0);
   const totalPayments = transactions.filter(t => t.type === 'payment').reduce((sum, t) => sum + t.amount, 0);
   const totalExpenses = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
@@ -126,55 +112,72 @@ export default function Transactions({
 
   const fmt = (num: number) => num.toLocaleString() + ' ' + currency;
 
+  // Filter transactions
+  const filteredTransactions = transactions.filter(t => {
+    const matchesSearch = t.description.toLowerCase().includes(searchQuery.toLowerCase()) || t.id.includes(searchQuery);
+    const matchesType = filterType === 'all' || t.type === filterType;
+    return matchesSearch && matchesType;
+  });
+
+  // Filter invoices
+  const filteredInvoices = invoices.filter(inv => {
+    return inv.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase()) || 
+           inv.customerName.toLowerCase().includes(searchQuery.toLowerCase());
+  });
+
   return (
     <div id="transactions_tab_view" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       
-      {/* LEFT: Stats & Expenses Form (5 columns) */}
+      {/* LEFT: Stats & Expenses Form (4 columns) */}
       <div className="lg:col-span-4 space-y-6">
         
-        {/* Net Cash Flow Summary card */}
-        <div className="p-5 rounded-2xl bg-[#0F1824] border border-[#C5A862]/10 shadow-lg space-y-4">
-          <h3 className="text-xs font-bold text-gray-300">موجز الحركة المالية والصندوق</h3>
+        {/* Net Cash Flow Summary Card */}
+        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+          <h3 className="text-xs font-bold text-slate-700">موجز الحركة المالية والصندوق</h3>
           
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="p-3 rounded-xl bg-green-500/5 border border-green-500/15">
-              <div className="text-gray-400 text-[10px]">إجمالي المقبوضات وصيانة</div>
-              <div className="font-bold text-green-400 mt-1 font-mono">{fmt(totalSales + totalPayments + totalMaintenance)}</div>
+          <div className="grid grid-cols-2 gap-2.5 text-xs">
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+              <div className="text-slate-500 text-[10px]">المقبوضات والصيانة</div>
+              <div className="font-black text-emerald-600 mt-1 font-mono">{fmt(totalSales + totalPayments + totalMaintenance)}</div>
             </div>
-            <div className="p-3 rounded-xl bg-red-500/5 border border-red-500/15">
-              <div className="text-gray-400 text-[10px]">إجمالي مصاريف ومرتجع</div>
-              <div className="font-bold text-red-400 mt-1 font-mono">{fmt(totalExpenses + totalRefunds)}</div>
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-100">
+              <div className="text-slate-500 text-[10px]">المصاريف والمرتجع</div>
+              <div className="font-black text-rose-600 mt-1 font-mono">{fmt(totalExpenses + totalRefunds)}</div>
             </div>
           </div>
 
-          <div className="p-4 rounded-xl bg-gradient-to-br from-[#122030] to-[#0D1520] border border-[#C5A862]/30 flex justify-between items-center">
+          <div className="p-4 rounded-xl bg-slate-900 text-white flex justify-between items-center shadow-inner">
             <div className="space-y-0.5">
-              <span className="text-[10px] text-gray-400 font-semibold block">صافي السيولة النقدية بالصندوق:</span>
-              <span className="text-lg font-bold text-white font-mono">{fmt(netCashFlow)}</span>
+              <span className="text-[10px] text-slate-400 font-bold block">صافي السيولة بالصندوق:</span>
+              <span className="text-lg font-black text-emerald-400 font-mono dir-ltr">{fmt(netCashFlow)}</span>
             </div>
-            <div className="p-2.5 rounded-xl bg-green-500/10 text-green-400">
+            <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400">
               <Wallet className="w-5 h-5" />
             </div>
           </div>
         </div>
 
-        {/* Record Expense Form */}
-        <div className="p-5 rounded-2xl bg-[#0F1824] border border-[#C5A862]/20 shadow-lg">
-          <h3 className="text-sm font-bold text-[#F3E7C4] flex items-center gap-2 mb-1.5">
-            <Plus className="w-5 h-5 text-red-400" />
-            تسجيل مصروف يومي أو تشغيلي
-          </h3>
-          <p className="text-[11px] text-gray-400 mb-4">قيد المصاريف الكهربائية، الإيجارات، الأجور، والقطع من الصندوق اليومي.</p>
+        {/* Record Expense Form Card */}
+        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+          <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+            <div className="p-2 rounded-xl bg-rose-50 text-rose-600">
+              <Plus className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">تسجيل مصروف جديد</h3>
+              <p className="text-[11px] text-slate-400">قيد المصاريف اليومية والتشغيلية</p>
+            </div>
+          </div>
 
           {expenseError && (
-            <div className="p-2 mb-3 rounded-lg bg-red-950/40 border border-red-500/30 text-red-300 text-[11px] font-semibold">
-              {expenseError}
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" /> {expenseError}
             </div>
           )}
 
-          <form onSubmit={handleExpenseSubmit} className="space-y-3 text-xs">
+          <form onSubmit={handleExpenseSubmit} className="space-y-3.5">
             <div className="space-y-1">
-              <label className="text-[10px] text-gray-400 font-bold">مبلغ المصروف نقدياً:</label>
+              <label className="text-xs font-bold text-slate-700">مبلغ المصروف نقدياً:</label>
               <input
                 id="expense_amount_input"
                 type="number"
@@ -183,331 +186,140 @@ export default function Transactions({
                 value={expenseAmount || ''}
                 onChange={(e) => setExpenseAmount(Math.max(0, parseFloat(e.target.value) || 0))}
                 placeholder="مثال: 5000"
-                className="w-full bg-[#16212E] border border-gray-800 text-xs font-bold font-mono rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#C5A862]"
+                className="w-full bg-slate-50 border border-slate-200 text-xs font-bold font-mono rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] text-gray-400 font-bold">البيان والشرح (السبب التفصيلي):</label>
+              <label className="text-xs font-bold text-slate-700">البيان والشرح التفصيلي:</label>
               <input
                 id="expense_desc_input"
                 type="text"
                 required
                 value={expenseDesc}
                 onChange={(e) => setExpenseDesc(e.target.value)}
-                placeholder="مثال: سداد فاتورة كهرباء المحل لشهر يوليو..."
-                className="w-full bg-[#16212E] border border-gray-800 text-xs rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#C5A862]"
+                placeholder="مثال: سداد فاتورة كهرباء المحل..."
+                className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
               />
             </div>
 
             <button
               id="submit_expense_btn"
               type="submit"
-              className="w-full py-2.5 rounded-xl text-xs font-bold bg-red-950/60 border border-red-500/50 hover:bg-red-500 text-red-200 hover:text-black transition duration-200 cursor-pointer text-center"
+              className="w-full py-3 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-500/20 transition cursor-pointer flex items-center justify-center gap-2"
             >
-              تسجيل وترحيل بند المصاريف ⚡
+              <CheckCircle2 className="w-4 h-4" />
+              <span>ترحيل بند المصاريف نقدياً</span>
             </button>
           </form>
         </div>
 
       </div>
 
-      {/* RIGHT: Ledger and historical archive (8 columns) */}
+      {/* RIGHT: Ledger & Historical Archive (8 columns) */}
       <div className="lg:col-span-8 space-y-4">
         
-        {/* Sub Navigation tabs */}
-        <div className="flex bg-[#121D2A] p-1 border border-gray-800 rounded-xl max-w-sm">
+        {/* Navigation Sub-Tabs & Export */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div className="flex bg-slate-100 p-1 border border-slate-200 rounded-xl text-xs font-bold">
+            <button
+              onClick={() => setSubTab('ledger')}
+              className={`px-4 py-2 rounded-lg transition ${
+                subTab === 'ledger' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              سجل دفتر الحركات المالية ({transactions.length})
+            </button>
+            <button
+              onClick={() => setSubTab('invoices')}
+              className={`px-4 py-2 rounded-lg transition ${
+                subTab === 'invoices' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              أرشيف الفواتير المكتملة ({invoices.length})
+            </button>
+          </div>
+
           <button
-            onClick={() => {
-              soundManager.playScanBeep();
-              setSubTab('ledger');
-            }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-              subTab === 'ledger' 
-                ? 'bg-[#C5A862] text-black shadow-md' 
-                : 'text-gray-400 hover:text-gray-200'
-            }`}
+            onClick={handleExportCSV}
+            className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-slate-200"
           >
-            <Wallet className="w-4 h-4" /> دفتر الحركات والقيود
-          </button>
-          <button
-            onClick={() => {
-              soundManager.playScanBeep();
-              setSubTab('invoices');
-            }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-              subTab === 'invoices' 
-                ? 'bg-[#C5A862] text-black shadow-md' 
-                : 'text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            <FileText className="w-4 h-4" /> أرشيف الفواتير الصادرة
+            <Download className="w-4 h-4 text-blue-600" />
+            <span>تصدير CSV</span>
           </button>
         </div>
 
-        {/* Tab 1: Ledger view */}
-        {subTab === 'ledger' && (
-          <div className="p-5 rounded-2xl bg-[#0F1824] border border-[#C5A862]/10 shadow-lg animate-fadeIn">
-            
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-              <div>
-                <h3 className="text-sm font-bold text-[#F3E7C4]">حركة قيود اليومية التفصيلية</h3>
-                <p className="text-[11px] text-gray-400">تدقيق إجمالي الحركات المسجلة بالصندوق: {transactions.length} حركات</p>
-              </div>
+        {/* Search Input */}
+        <div className="relative">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="ابحث بالبيان، الوصف، أو رقم الفاتورة..."
+            className="w-full pr-10 pl-4 py-2.5 text-xs rounded-xl bg-white border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition"
+          />
+          <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        </div>
 
-              {/* Transactions Type filter buttons */}
-              <div className="flex bg-[#16212E] border border-gray-800 rounded-xl p-0.5 text-[9px] font-bold">
-                <button
-                  onClick={() => setFilterType('all')}
-                  className={`px-2 py-1 rounded cursor-pointer ${filterType === 'all' ? 'bg-[#C5A862] text-black' : 'text-gray-400 hover:text-white'}`}
-                >
-                  الكل
-                </button>
-                <button
-                  onClick={() => setFilterType('sale')}
-                  className={`px-2 py-1 rounded cursor-pointer ${filterType === 'sale' ? 'bg-green-600/20 text-green-400 border border-green-500/20' : 'text-gray-400 hover:text-white'}`}
-                >
-                  مبيعات
-                </button>
-                <button
-                  onClick={() => setFilterType('payment')}
-                  className={`px-2 py-1 rounded cursor-pointer ${filterType === 'payment' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/20' : 'text-gray-400 hover:text-white'}`}
-                >
-                  قبض ديون
-                </button>
-                <button
-                  onClick={() => setFilterType('maintenance_income')}
-                  className={`px-2 py-1 rounded cursor-pointer ${filterType === 'maintenance_income' ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/20' : 'text-gray-400 hover:text-white'}`}
-                >
-                  صيانة
-                </button>
-                <button
-                  onClick={() => setFilterType('expense')}
-                  className={`px-2 py-1 rounded cursor-pointer ${filterType === 'expense' ? 'bg-red-600/20 text-red-400 border border-red-500/20' : 'text-gray-400 hover:text-white'}`}
-                >
-                  مصاريف
-                </button>
-                <button
-                  onClick={() => setFilterType('refund')}
-                  className={`px-2 py-1 rounded cursor-pointer ${filterType === 'refund' ? 'bg-amber-600/20 text-amber-400 border border-amber-500/20' : 'text-gray-400 hover:text-white'}`}
-                >
-                  مرتجعات
-                </button>
-              </div>
-            </div>
-
-            {/* Search and export toolbar */}
-            <div className="flex gap-2 mb-4">
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="ابحث بالبيان أو تفاصيل القيد..."
-                  className="w-full pr-10 pl-3 py-2 text-xs rounded-xl bg-[#16212E] border border-gray-800 text-white placeholder-gray-500 focus:outline-none focus:border-gray-700 transition"
-                />
-                <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-              </div>
-
-              <button
-                onClick={handleExportCSV}
-                className="px-3.5 py-2 text-xs font-bold rounded-xl bg-[#16212E] border border-gray-800 text-gray-300 hover:border-gray-700 cursor-pointer flex items-center gap-1.5 transition"
-                title="تصدير السجل كملف إكسل CSV"
-              >
-                <Download className="w-4 h-4" /> تصدير CSV
-              </button>
-            </div>
-
-            {/* Logs table */}
-            <div className="overflow-x-auto max-h-[380px] overflow-y-auto">
+        {/* SubTab 1: Ledger */}
+        {subTab === 'ledger' ? (
+          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+            <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
               <table className="w-full text-right text-xs">
                 <thead>
-                  <tr className="border-b border-gray-800 text-gray-400">
-                    <th className="pb-3 pr-1">النوع</th>
-                    <th className="pb-3 text-right">البيان والوصف القيدي</th>
-                    <th className="pb-3 text-center">التاريخ والوقت</th>
+                  <tr className="border-b border-slate-200 text-slate-400 font-bold">
+                    <th className="pb-3 pr-2">التاريخ والتوقيت</th>
+                    <th className="pb-3 text-center">النوع</th>
+                    <th className="pb-3">البيان والشرح</th>
                     <th className="pb-3 text-center">المبلغ</th>
-                    <th className="pb-3 pl-1 text-left">خيارات</th>
+                    <th className="pb-3 pl-2 text-left">إجراءات</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-800/40">
+                <tbody className="divide-y divide-slate-100">
                   {filteredTransactions.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-gray-500">
-                        لا توجد قيود مالية في دفتر اليومية مطابقة لخيار البحث.
+                      <td colSpan={5} className="py-12 text-center text-slate-400">
+                        لا توجد حركات مالية مسجلة بالدفتر.
                       </td>
                     </tr>
                   ) : (
-                    [...filteredTransactions].reverse().map(t => (
-                      <tr key={t.id} className="hover:bg-[#182433]/20">
-                        <td className="py-3 pr-1">
-                          <span className={`px-2 py-0.5 rounded font-bold text-[9px] flex items-center gap-1 w-max ${
-                            t.type === 'sale' 
-                              ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
-                              : t.type === 'payment'
-                              ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                              : t.type === 'maintenance_income'
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                              : t.type === 'refund'
-                              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                              : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                          }`}>
-                            {t.type === 'sale' ? (
-                              <ArrowUpRight className="w-3 h-3" />
-                            ) : t.type === 'payment' ? (
-                              <ArrowDownRight className="w-3 h-3" />
-                            ) : t.type === 'maintenance_income' ? (
-                              <ArrowUpRight className="w-3 h-3 text-emerald-400" />
-                            ) : t.type === 'refund' ? (
-                              <ArrowDownRight className="w-3 h-3 text-amber-400" />
-                            ) : (
-                              <Calendar className="w-3 h-3" />
-                            )}
-                            {t.type === 'sale' 
-                              ? 'فاتورة' 
-                              : t.type === 'payment' 
-                              ? 'قبض ديون' 
-                              : t.type === 'maintenance_income'
-                              ? 'صيانة'
-                              : t.type === 'refund'
-                              ? 'مرتجع'
-                              : 'مصروف'}
-                          </span>
-                        </td>
-                        <td className="py-3 text-right text-gray-200 font-medium">
-                          {t.description}
-                        </td>
-                        <td className="py-3 text-center text-gray-400 font-mono">
-                          {new Date(t.date).toLocaleDateString('ar-YE')} {new Date(t.date).toLocaleTimeString('ar-YE', { hour: '2-digit', minute: '2-digit' })}
-                        </td>
-                        <td className={`py-3 text-center font-mono font-bold ${
-                          t.type === 'sale' || t.type === 'payment' || t.type === 'maintenance_income' ? 'text-green-400' : 'text-red-400'
-                        }`}>
-                          {t.type === 'sale' || t.type === 'payment' || t.type === 'maintenance_income' ? '+' : '-'}{t.amount.toLocaleString()} {currency}
-                        </td>
-                        <td className="py-3 pl-1 text-left">
-                          <button
-                            onClick={() => {
-                              if (confirm('⚠️ تنبيه: حذف القيود المالية قد يتلف توازن الحسابات، يوصى فقط بحذف القيود المدخلة بالخطأ. هل تود الحذف الحقيقي؟')) {
-                                soundManager.playWarningBeep();
-                                onDeleteTransaction(t.id);
-                              }
-                            }}
-                            className="p-1 rounded text-red-400 hover:bg-red-500/10 cursor-pointer transition"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-          </div>
-        )}
-
-        {/* Tab 2: Invoices Archive view */}
-        {subTab === 'invoices' && (
-          <div className="p-5 rounded-2xl bg-[#0F1824] border border-[#C5A862]/10 shadow-lg animate-fadeIn">
-            
-            <div className="mb-4">
-              <h3 className="text-sm font-bold text-[#F3E7C4]">أرشيف الفواتير الصادرة والمبيعات الجارية</h3>
-              <p className="text-[11px] text-gray-400">مراجعة وإرجاع وطباعة جميع الفواتير المسجلة بالنظام</p>
-            </div>
-
-            {/* Search input */}
-            <div className="relative mb-4">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="ابحث برقم الفاتورة، اسم العميل، أو المنتجات المشتراة..."
-                className="w-full pr-10 pl-3 py-2 text-xs rounded-xl bg-[#16212E] border border-gray-800 text-white placeholder-gray-500 focus:outline-none focus:border-gray-700 transition"
-              />
-              <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-            </div>
-
-            {/* Invoices list */}
-            <div className="overflow-x-auto max-h-[380px] overflow-y-auto">
-              <table className="w-full text-right text-xs">
-                <thead>
-                  <tr className="border-b border-gray-800 text-gray-400">
-                    <th className="pb-3 pr-1">رقم الفاتورة</th>
-                    <th className="pb-3 text-right">العميل</th>
-                    <th className="pb-3 text-center">التاريخ والوقت</th>
-                    <th className="pb-3 text-center">الصافي</th>
-                    <th className="pb-3 text-center">حالة الفاتورة</th>
-                    <th className="pb-3 pl-1 text-left">خيارات</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-800/40">
-                  {filteredInvoices.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="py-8 text-center text-gray-500">
-                        لا توجد أي فواتير صادر مسجلة تطابق محددات البحث.
-                      </td>
-                    </tr>
-                  ) : (
-                    [...filteredInvoices].reverse().map(inv => {
-                      const isRefunded = inv.status === 'refunded';
+                    [...filteredTransactions].reverse().map(t => {
+                      const isExpense = t.type === 'expense' || t.type === 'refund';
                       return (
-                        <tr key={inv.id} className={`hover:bg-[#182433]/20 ${isRefunded ? 'opacity-50 line-through' : ''}`}>
-                          <td className="py-3 pr-1 font-mono font-bold text-[#C5A862]">
-                            {inv.invoiceNumber}
-                          </td>
-                          <td className="py-3 text-right text-gray-200">
-                            <div>{inv.customerName}</div>
-                            <span className="text-[9px] text-gray-400 font-semibold bg-slate-800 px-1 py-0.5 rounded">
-                              {inv.type === 'cash' ? '💵 خلاص نقدي' : '📝 ذمة آجلة'}
-                            </span>
-                          </td>
-                          <td className="py-3 text-center text-gray-400 font-mono">
-                            {new Date(inv.date).toLocaleDateString('ar-YE')} {new Date(inv.date).toLocaleTimeString('ar-YE', { hour: '2-digit', minute: '2-digit' })}
-                          </td>
-                          <td className="py-3 text-center font-mono font-bold text-white">
-                            {inv.finalAmount.toLocaleString()} {currency}
+                        <tr key={t.id} className="hover:bg-slate-50 transition">
+                          <td className="py-3 pr-2 font-mono text-[11px] text-slate-500">
+                            {new Date(t.date).toLocaleString('ar-YE')}
                           </td>
                           <td className="py-3 text-center">
-                            <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] ${
-                              isRefunded 
-                                ? 'bg-red-500/10 text-red-400 border border-red-500/20' 
-                                : 'bg-green-500/10 text-green-400 border border-green-500/20'
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                              t.type === 'expense' ? 'bg-rose-100 text-rose-700' :
+                              t.type === 'refund' ? 'bg-amber-100 text-amber-700' :
+                              t.type === 'payment' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
                             }`}>
-                              {isRefunded ? '↩️ مرتجعة/ملغاة' : '✓ سارية ومثبتة'}
+                              {t.type === 'expense' ? 'مصروف' :
+                               t.type === 'refund' ? 'مرتجع' :
+                               t.type === 'payment' ? 'تحصيل' : 'مبيعات'}
                             </span>
                           </td>
-                          <td className="py-3 pl-1 text-left flex justify-end gap-1.5">
-                            
-                            {/* Reprint button */}
+                          <td className="py-3 font-medium text-slate-800">
+                            {t.description}
+                          </td>
+                          <td className={`py-3 text-center font-mono font-bold ${
+                            isExpense ? 'text-rose-600' : 'text-emerald-600'
+                          }`}>
+                            {isExpense ? '-' : '+'}{t.amount.toLocaleString()} {currency}
+                          </td>
+                          <td className="py-3 pl-2 text-left">
                             <button
                               onClick={() => {
-                                soundManager.playSuccessChime();
-                                onViewInvoice(inv);
+                                if (confirm('هل أنت متأكد من حذف هذه الحركة المالية من السجل؟')) {
+                                  onDeleteTransaction(t.id);
+                                }
                               }}
-                              className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-gray-300 hover:text-white cursor-pointer transition"
-                              title="عرض الفاتورة وإعادة طباعتها"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
                             >
-                              <Printer className="w-3.5 h-3.5" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
-
-                            {/* Refund return button */}
-                            {!isRefunded && (
-                              <button
-                                onClick={() => {
-                                  if (confirm(`⚠️ تحذير: هل أنت متأكد من استرجاع سلع الفاتورة "${inv.invoiceNumber}" وإعادة كميات المنتجات إلى مخزن المحل وإلغاء القيمة؟`)) {
-                                    soundManager.playWarningBeep();
-                                    onRefundInvoice(inv.id);
-                                  }
-                                }}
-                                className="p-1 rounded bg-amber-950/20 hover:bg-amber-500 hover:text-black text-amber-400 cursor-pointer transition"
-                                title="عمل مرتجع وإرجاع السلع بالكامل"
-                              >
-                                <Undo2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-
                           </td>
                         </tr>
                       );
@@ -516,7 +328,74 @@ export default function Transactions({
                 </tbody>
               </table>
             </div>
+          </div>
+        ) : (
+          /* SubTab 2: Invoices Archive */
+          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+            <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+              <table className="w-full text-right text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-400 font-bold">
+                    <th className="pb-3 pr-2">رقم الفاتورة</th>
+                    <th className="pb-3">العميل</th>
+                    <th className="pb-3 text-center">النوع</th>
+                    <th className="pb-3 text-center">المبلغ</th>
+                    <th className="pb-3 pl-2 text-left">معاينة / استرجاع</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredInvoices.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-12 text-center text-slate-400">
+                        لا توجد فواتير مبيعات مسجلة في الأرشيف.
+                      </td>
+                    </tr>
+                  ) : (
+                    [...filteredInvoices].reverse().map(inv => (
+                      <tr key={inv.id} className="hover:bg-slate-50 transition">
+                        <td className="py-3 pr-2 font-mono font-bold text-slate-900">
+                          {inv.invoiceNumber}
+                        </td>
+                        <td className="py-3 font-medium text-slate-800">
+                          {inv.customerName}
+                        </td>
+                        <td className="py-3 text-center">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            inv.type === 'cash' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                          }`}>
+                            {inv.type === 'cash' ? 'نقداً (كاش)' : 'آجل (دين)'}
+                          </span>
+                        </td>
+                        <td className="py-3 text-center font-mono font-bold text-blue-600">
+                          {inv.finalAmount.toLocaleString()} {currency}
+                        </td>
+                        <td className="py-3 pl-2 text-left flex justify-end gap-1.5">
+                          <button
+                            onClick={() => onViewInvoice(inv)}
+                            className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 font-bold hover:bg-blue-100 transition text-[10px] flex items-center gap-1"
+                          >
+                            <FileText className="w-3.5 h-3.5" /> عرض
+                          </button>
 
+                          {inv.status !== 'refunded' && (
+                            <button
+                              onClick={() => {
+                                if (confirm(`هل أنت متأكد من استرجاع الفاتورة رقم ${inv.invoiceNumber} بالكامل وإرجاع الأصناف للمستودع؟`)) {
+                                  onRefundInvoice(inv.id);
+                                }
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-600 font-bold hover:bg-rose-100 transition text-[10px] flex items-center gap-1"
+                            >
+                              <Undo2 className="w-3.5 h-3.5" /> استرجاع
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 

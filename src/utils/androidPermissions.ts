@@ -11,57 +11,46 @@ export interface AndroidPermissionStatus {
 }
 
 /**
- * Requests Android & Web permissions on application startup
- * (POST_NOTIFICATIONS, CAMERA, VIBRATE, STORAGE)
+ * Requests Android & Web permissions ONLY on user action (e.g. clicking camera / barcode scanner button)
+ * Prevents intrusive permission popups on initial application launch.
+ */
+export async function requestCameraPermissionOnDemand(): Promise<boolean> {
+  let granted = false;
+
+  // 1. Native Android WebView / Bridge call
+  if (typeof window !== 'undefined' && (window as any).AndroidInterface?.requestPermissions === 'function') {
+    try {
+      (window as any).AndroidInterface.requestPermissions(['android.permission.CAMERA']);
+    } catch (e) {
+      console.warn('Android Native Camera Bridge warning:', e);
+    }
+  }
+
+  // 2. Browser MediaDevices request
+  if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      stream.getTracks().forEach(track => track.stop());
+      granted = true;
+    } catch (e) {
+      console.warn('Camera permission denied or unavailable:', e);
+      granted = false;
+    }
+  }
+
+  return granted;
+}
+
+/**
+ * Passive startup check - does NOT pop up permission dialogs automatically on boot.
  */
 export async function requestAndroidStartupPermissions(): Promise<AndroidPermissionStatus> {
   const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
-  let notificationsGranted = false;
-  let cameraGranted = false;
   const vibrateSupported = typeof navigator !== 'undefined' && 'vibrate' in navigator;
 
-  // 1. Android Native Webview / Bridge / Capacitor / Cordova call
-  if (typeof window !== 'undefined' && (window as any).AndroidInterface?.requestPermissions === 'function') {
-    try {
-      (window as any).AndroidInterface.requestPermissions([
-        'android.permission.POST_NOTIFICATIONS',
-        'android.permission.CAMERA',
-        'android.permission.WRITE_EXTERNAL_STORAGE',
-        'android.permission.READ_EXTERNAL_STORAGE',
-        'android.permission.VIBRATE'
-      ]);
-    } catch (e) {
-      console.warn('Android Native Bridge call warning:', e);
-    }
-  }
-
-  // 2. Web Notifications Permission Request (for Android Chrome / PWA / Webview)
-  if (typeof window !== 'undefined' && 'Notification' in window) {
-    try {
-      if (Notification.permission === 'default') {
-        const result = await Notification.requestPermission();
-        notificationsGranted = result === 'granted';
-      } else {
-        notificationsGranted = Notification.permission === 'granted';
-      }
-    } catch (e) {
-      console.warn('Notification permission request error:', e);
-    }
-  }
-
-  // 3. Camera permission check if query API is supported
-  if (typeof navigator !== 'undefined' && navigator.permissions && navigator.permissions.query) {
-    try {
-      const cameraStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
-      cameraGranted = cameraStatus.state === 'granted';
-    } catch (e) {
-      // Permission API for camera may not be supported on all browsers
-    }
-  }
-
   return {
-    notificationsGranted,
-    cameraGranted,
+    notificationsGranted: typeof Notification !== 'undefined' && Notification.permission === 'granted',
+    cameraGranted: false,
     vibrateSupported,
     isAndroidDevice: isAndroid,
   };

@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { TrendingUp, Users, Package, Wallet, ArrowDownLeft, AlertCircle, Award, Phone, BarChart3, ArrowLeft } from 'lucide-react';
+import { TrendingUp, Users, Package, Wallet, ArrowDownLeft, AlertCircle, Award, Phone, BarChart3, ArrowLeft, Bell, AlertTriangle, ShieldAlert, Sparkles } from 'lucide-react';
 import { Product, Customer, Invoice, Payment, Transaction, SystemSettings } from '../types';
 
 interface DashboardProps {
@@ -28,151 +28,217 @@ export default function Dashboard({
 }: DashboardProps) {
 
   // Calculations
+  const activeProducts = products.filter(p => p.isDeleted !== true);
+  const activeCustomers = customers.filter(c => c.isDeleted !== true);
+
   const totalSales = invoices.reduce((sum, inv) => sum + inv.finalAmount, 0);
-  const totalDebts = customers.reduce((sum, cust) => sum + cust.totalDebt, 0);
+  const totalDebts = activeCustomers.reduce((sum, cust) => sum + cust.totalDebt, 0);
   
   // Total Inventory Value (Cost vs Selling)
-  const inventoryCostValue = products.reduce((sum, p) => sum + (p.costPrice * p.stock), 0);
-  const inventoryRetailValue = products.reduce((sum, p) => sum + (p.sellingPrice * p.stock), 0);
+  const inventoryCostValue = activeProducts.reduce((sum, p) => sum + (p.costPrice * p.stock), 0);
+  const inventoryRetailValue = activeProducts.reduce((sum, p) => sum + (p.sellingPrice * p.stock), 0);
   const expectedProfit = inventoryRetailValue - inventoryCostValue;
 
-  const lowStockProducts = products.filter(p => p.stock <= p.minStock);
+  const lowStockProducts = activeProducts.filter(p => p.stock <= p.minStock);
 
   // Top debtor customers
-  const topDebtors = [...customers]
+  const topDebtors = [...activeCustomers]
     .filter(c => c.totalDebt > 0)
     .sort((a, b) => b.totalDebt - a.totalDebt)
     .slice(0, 4);
+
+  // High urgency debts (> 50,000 or top debtors)
+  const highDebtCustomers = activeCustomers.filter(c => c.totalDebt >= 50000);
 
   // Format currency
   const fmt = (num: number) => {
     return num.toLocaleString() + ' ' + settings.currency;
   };
 
-  // Calculate some chart values
   const maxDebtorVal = topDebtors[0]?.totalDebt || 1;
 
   return (
     <div id="dashboard_tab_view" className="space-y-6">
       
-      {/* Welcome & Top Notification */}
-      <div className="p-6 rounded-2xl border border-[#C5A862]/30 bg-gradient-to-r from-[#121F2E] via-[#0B1521] to-[#060B10] shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative overflow-hidden">
-        {/* Decorative ambient light */}
-        <div className="absolute -right-24 -top-24 w-48 h-48 rounded-full bg-[#C5A862]/10 blur-3xl"></div>
+      {/* 1. Welcome Header Banner */}
+      <div className="p-6 rounded-3xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/40 shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative overflow-hidden transition-all">
+        <div className="absolute -right-24 -top-24 w-48 h-48 rounded-full bg-sky-500/10 blur-3xl pointer-events-none" />
         
         <div>
-          <h1 className="text-xl md:text-2xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-[#F3E7C4] to-[#C5A862]">
-            أهلاً بك في نظام سند المحاسبي الذكي
+          <div className="flex items-center gap-2 mb-1">
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
+              🏪 {settings.storeName || 'النشاط التجاري الموثق'}
+            </span>
+          </div>
+          <h1 className="text-xl md:text-2xl font-black text-slate-800 dark:text-white">
+            لوحة التحكم المحاسبية والمالية الذكية
           </h1>
-          <p className="text-gray-400 text-xs mt-1">
-            نسخة الكمبيوتر المستقلة (Desktop Edition) • إدارة المبيعات، المخازن، وحسابات الذمم والديون
+          <p className="text-slate-500 dark:text-gray-400 text-xs mt-1">
+            نظام سند المحاسبي • المبيعات، الأرباح، حركة المخزن، والديون المباشرة
           </p>
         </div>
 
-        {/* Developer Credit Tag & Profit Report Shortcut Button */}
+        {/* Developer Credit & Profit Report Shortcut */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <button
             onClick={() => setActiveTab('reports')}
-            className="flex items-center justify-between gap-3 bg-gradient-to-r from-emerald-950/80 to-[#10221c] border border-emerald-500/40 hover:border-emerald-400 px-4 py-2.5 rounded-xl text-xs font-bold text-emerald-300 hover:text-emerald-200 transition-all cursor-pointer shadow-md group"
+            className="flex items-center justify-between gap-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white px-4 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-emerald-500/20 group"
           >
             <div className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
+              <BarChart3 className="w-5 h-5 text-emerald-200 group-hover:scale-110 transition-transform" />
               <div className="text-right">
                 <div className="text-white">التقرير البياني للأرباح 📊</div>
-                <div className="text-[10px] text-emerald-400/80 font-normal">استعراض أرباح POS الرسومية باحترافية</div>
+                <div className="text-[10px] text-emerald-100 font-normal">استعراض تحليل المبيعات بالرسم البياني</div>
               </div>
             </div>
-            <ArrowLeft className="w-4 h-4 text-emerald-400 group-hover:-translate-x-1 transition-transform" />
+            <ArrowLeft className="w-4 h-4 text-white group-hover:-translate-x-1 transition-transform" />
           </button>
 
-          <div className="flex items-center gap-3 bg-[#1A2838]/80 border border-[#C5A862]/20 px-4 py-2 rounded-xl text-xs">
-            <Award className="w-5 h-5 text-[#C5A862]" />
+          <div className="flex items-center gap-3 bg-slate-50 dark:bg-[#1A2838]/80 border border-slate-200 dark:border-sky-800/40 px-4 py-2 rounded-2xl text-xs">
+            <Award className="w-5 h-5 text-sky-600 dark:text-sky-400" />
             <div>
-              <div className="text-gray-300 font-semibold">تطوير: م. عبدالمجيد المحواشي</div>
-              <div className="text-gray-400 text-[10px]">Compose for Desktop Framework</div>
+              <div className="text-slate-700 dark:text-gray-200 font-bold">تطوير: م. عبدالمجيد المحواشي</div>
+              <div className="text-slate-400 dark:text-gray-400 text-[10px]">نظام سند المحاسبي v2.4</div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* KPI Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 md:gap-4">
+      {/* 2. Smart System Alerts Card (التنبيهات الذكية) */}
+      {(lowStockProducts.length > 0 || highDebtCustomers.length > 0) && (
+        <div className="p-4 md:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-amber-500/10 border border-amber-500/30 shadow-md space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-sm">
+              <Bell className="w-5 h-5 text-amber-500 animate-bounce" />
+              <span>تنبيهات النظام الذكية 🔔</span>
+            </div>
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+              {lowStockProducts.length + highDebtCustomers.length} تنبيهات تحتاج متابعة
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            {lowStockProducts.length > 0 && (
+              <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-amber-200 dark:border-amber-900/50 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                  <div>
+                    <span className="font-bold text-slate-800 dark:text-white">نقص مخزون الأصناف</span>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                      يوجد {lowStockProducts.length} صنف وصل للحد الأدنى للمخزون
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveTab('inventory')}
+                  className="px-3 py-1 rounded-lg bg-amber-500 text-white font-bold text-[11px] hover:bg-amber-600 transition"
+                >
+                  استعراض الأصناف
+                </button>
+              </div>
+            )}
+
+            {highDebtCustomers.length > 0 && (
+              <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-rose-200 dark:border-rose-900/50 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
+                  <div>
+                    <span className="font-bold text-slate-800 dark:text-white">مديونيات عالية مستحقة</span>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                      يوجد {highDebtCustomers.length} عملاء تتجاوز ديونهم 50,000
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveTab('customers')}
+                  className="px-3 py-1 rounded-lg bg-rose-500 text-white font-bold text-[11px] hover:bg-rose-600 transition"
+                >
+                  دفتر التحصيل
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 3. KPI Financial Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5">
         
         {/* Total Sales */}
-        <div className="p-3.5 md:p-5 rounded-2xl bg-[#0F1824] border border-[#C5A862]/10 hover:border-[#C5A862]/40 hover:-translate-y-1 transition-all duration-300 shadow-md relative group">
+        <div className="p-4 md:p-5 rounded-2xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 hover:border-emerald-400/50 transition-all duration-300 shadow-md group">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-[11px] md:text-xs text-gray-400 font-medium">إجمالي المبيعات</span>
-              <h3 className="text-sm sm:text-lg md:text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#FFF] to-[#C5A862] mt-0.5 md:mt-1">
+              <span className="text-[11px] md:text-xs text-slate-500 dark:text-gray-400 font-bold">إجمالي المبيعات</span>
+              <h3 className="text-base sm:text-lg md:text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
                 {fmt(totalSales)}
               </h3>
             </div>
-            <div className="p-2 md:p-2.5 rounded-xl bg-green-500/10 text-green-400 border border-green-500/20">
-              <TrendingUp className="w-4 h-4 md:w-5 md:h-5" />
+            <div className="p-2.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+              <TrendingUp className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-[10px] md:text-[11px] text-gray-400 mt-2 md:mt-4 flex justify-between">
-            <span className="hidden sm:inline">مجموع الفواتير:</span>
-            <span className="font-semibold text-white">{invoices.length} فواتير</span>
+          <div className="text-[10px] md:text-[11px] text-slate-500 dark:text-gray-400 mt-3 flex justify-between">
+            <span>عدد الفواتير الصادرة:</span>
+            <span className="font-bold text-slate-800 dark:text-white">{invoices.length} فاتورة</span>
           </div>
         </div>
 
         {/* Total Debts */}
-        <div className="p-3.5 md:p-5 rounded-2xl bg-[#0F1824] border border-[#C5A862]/10 hover:border-[#C5A862]/40 hover:-translate-y-1 transition-all duration-300 shadow-md relative group">
+        <div className="p-4 md:p-5 rounded-2xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 hover:border-rose-400/50 transition-all duration-300 shadow-md group">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-[11px] md:text-xs text-gray-400 font-medium">الديون المستحقة</span>
-              <h3 className="text-sm sm:text-lg md:text-xl font-bold text-red-400 mt-0.5 md:mt-1">
+              <span className="text-[11px] md:text-xs text-slate-500 dark:text-gray-400 font-bold">الديون والذمم المستحقة</span>
+              <h3 className="text-base sm:text-lg md:text-xl font-black text-rose-600 dark:text-rose-400 mt-1">
                 {fmt(totalDebts)}
               </h3>
             </div>
-            <div className="p-2 md:p-2.5 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20">
-              <Wallet className="w-4 h-4 md:w-5 md:h-5" />
+            <div className="p-2.5 rounded-2xl bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800">
+              <Wallet className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-[10px] md:text-[11px] text-gray-400 mt-2 md:mt-4 flex justify-between">
-            <span className="hidden sm:inline">العملاء الدائنون:</span>
-            <span className="font-semibold text-red-400">
-              {customers.filter(c => c.totalDebt > 0).length} عملاء
+          <div className="text-[10px] md:text-[11px] text-slate-500 dark:text-gray-400 mt-3 flex justify-between">
+            <span>العملاء الدائنون:</span>
+            <span className="font-bold text-rose-600 dark:text-rose-400">
+              {activeCustomers.filter(c => c.totalDebt > 0).length} عملاء
             </span>
           </div>
         </div>
 
-        {/* Inventory Value */}
-        <div className="p-3.5 md:p-5 rounded-2xl bg-[#0F1824] border border-[#C5A862]/10 hover:border-[#C5A862]/40 hover:-translate-y-1 transition-all duration-300 shadow-md relative group">
+        {/* Inventory Capital Value */}
+        <div className="p-4 md:p-5 rounded-2xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 hover:border-sky-400/50 transition-all duration-300 shadow-md group">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-[11px] md:text-xs text-gray-400 font-medium">رأس مال المخزون</span>
-              <h3 className="text-sm sm:text-lg md:text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#FFF] to-[#C5A862] mt-0.5 md:mt-1">
+              <span className="text-[11px] md:text-xs text-slate-500 dark:text-gray-400 font-bold">رأس مال المخزون الحالي</span>
+              <h3 className="text-base sm:text-lg md:text-xl font-black text-sky-600 dark:text-sky-400 mt-1">
                 {fmt(inventoryCostValue)}
               </h3>
             </div>
-            <div className="p-2 md:p-2.5 rounded-xl bg-[#C5A862]/10 text-[#C5A862] border border-[#C5A862]/20">
-              <Package className="w-4 h-4 md:w-5 md:h-5" />
+            <div className="p-2.5 rounded-2xl bg-sky-50 dark:bg-sky-950 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800">
+              <Package className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-[10px] md:text-[11px] text-gray-400 mt-2 md:mt-4 flex justify-between">
-            <span className="hidden sm:inline">قيمة البيع:</span>
-            <span className="font-semibold text-[#C5A862]">{fmt(inventoryRetailValue)}</span>
+          <div className="text-[10px] md:text-[11px] text-slate-500 dark:text-gray-400 mt-3 flex justify-between">
+            <span>قيمة البيع المتوقعة:</span>
+            <span className="font-bold text-sky-600 dark:text-sky-300">{fmt(inventoryRetailValue)}</span>
           </div>
         </div>
 
-        {/* Expected profit */}
-        <div className="p-3.5 md:p-5 rounded-2xl bg-[#0F1824] border border-[#C5A862]/10 hover:border-[#C5A862]/40 hover:-translate-y-1 transition-all duration-300 shadow-md relative group">
+        {/* Expected Net Profit */}
+        <div className="p-4 md:p-5 rounded-2xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 hover:border-indigo-400/50 transition-all duration-300 shadow-md group">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-[11px] md:text-xs text-gray-400 font-medium">أرباح مقدرة</span>
-              <h3 className="text-sm sm:text-lg md:text-xl font-bold text-green-400 mt-0.5 md:mt-1">
+              <span className="text-[11px] md:text-xs text-slate-500 dark:text-gray-400 font-bold">الأرباح المتوقعة من المخزون</span>
+              <h3 className="text-base sm:text-lg md:text-xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
                 {fmt(expectedProfit)}
               </h3>
             </div>
-            <div className="p-2 md:p-2.5 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
-              <ArrowDownLeft className="w-4 h-4 md:w-5 md:h-5" />
+            <div className="p-2.5 rounded-2xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+              <Sparkles className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-[10px] md:text-[11px] text-gray-400 mt-2 md:mt-4 flex justify-between">
-            <span className="hidden sm:inline">هامش الربح:</span>
-            <span className="font-semibold text-green-400">
+          <div className="text-[10px] md:text-[11px] text-slate-500 dark:text-gray-400 mt-3 flex justify-between">
+            <span>هامش الربح التجاري:</span>
+            <span className="font-bold text-indigo-600 dark:text-indigo-300">
               {inventoryCostValue ? Math.round((expectedProfit / inventoryCostValue) * 100) : 0}%
             </span>
           </div>
@@ -180,33 +246,32 @@ export default function Dashboard({
 
       </div>
 
-      {/* Bento Section: Debt graph & Stock alerts */}
+      {/* 4. Debt Analytics & Low Stock Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Top Debtors Analytics (Custom Gold Bar Chart) */}
-        <div className="lg:col-span-2 p-6 rounded-2xl bg-[#0F1824] border border-[#C5A862]/20 shadow-lg flex flex-col justify-between">
+        {/* Top Debtors Chart */}
+        <div className="lg:col-span-2 p-6 rounded-3xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 shadow-xl flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-base font-bold text-[#F3E7C4] flex items-center gap-2">
-                <Users className="w-5 h-5 text-[#C5A862]" />
-                أكبر مديونيات العملاء المستحقة
+              <h2 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                <Users className="w-5 h-5 text-sky-600 dark:text-sky-400" />
+                أكبر مديونيات العملاء للتحصيل
               </h2>
               <button 
                 onClick={() => setActiveTab('customers')} 
-                className="text-xs text-[#C5A862] hover:underline cursor-pointer"
+                className="text-xs text-sky-600 dark:text-sky-400 hover:underline cursor-pointer font-bold"
               >
-                دفتر العملاء الكامل ←
+                دفتر التحصيل الكامل ←
               </button>
             </div>
-            <p className="text-xs text-gray-400 mb-6">
-              رسم بياني توضيحي لمبالغ الذمم والديون المترتبة على العملاء الأعلى طلباً لتسهيل عمليات المتابعة والتحصيل الفوري.
+            <p className="text-xs text-slate-500 dark:text-gray-400 mb-6">
+              تحليل مالي مباشر لأعلى مبالغ الذمم والديون المترتبة على العملاء لسرعة المتابعة والتحصيل.
             </p>
 
-            {/* Bars container */}
             <div className="space-y-4">
               {topDebtors.length === 0 ? (
-                <div className="py-8 text-center text-gray-500 text-sm">
-                  لا توجد مديونيات مستحقة في الوقت الحالي. ممتاز!
+                <div className="py-8 text-center text-slate-400 text-sm">
+                  لا توجد مديونيات مستحقة حالياً. ممتاز!
                 </div>
               ) : (
                 topDebtors.map(debtor => {
@@ -214,13 +279,13 @@ export default function Dashboard({
                   return (
                     <div key={debtor.id} className="space-y-1.5">
                       <div className="flex justify-between text-xs">
-                        <span className="font-semibold text-gray-200">{debtor.name}</span>
-                        <span className="font-semibold font-mono text-red-400">{fmt(debtor.totalDebt)}</span>
+                        <span className="font-bold text-slate-800 dark:text-gray-200">{debtor.name}</span>
+                        <span className="font-bold font-mono text-rose-600 dark:text-rose-400">{fmt(debtor.totalDebt)}</span>
                       </div>
-                      <div className="w-full bg-[#182535] h-3 rounded-full overflow-hidden flex">
+                      <div className="w-full bg-slate-100 dark:bg-[#182535] h-3 rounded-full overflow-hidden flex">
                         <div
                           style={{ width: `${pct}%` }}
-                          className="bg-gradient-to-r from-[#9F8342] via-[#C5A862] to-[#F3E7C4] rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(197,168,98,0.4)]"
+                          className="bg-gradient-to-r from-sky-500 to-blue-600 rounded-full transition-all duration-500 shadow-sm"
                         />
                       </div>
                     </div>
@@ -230,39 +295,39 @@ export default function Dashboard({
             </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-gray-800 text-xs text-gray-400 flex justify-between items-center">
-            <span>مجموع ديون العملاء الإجمالي في الذمم:</span>
-            <span className="font-bold text-red-400 text-sm font-mono">{fmt(totalDebts)}</span>
+          <div className="mt-6 pt-4 border-t border-slate-100 dark:border-gray-800 text-xs text-slate-500 dark:text-gray-400 flex justify-between items-center">
+            <span>مجموع ديون العملاء الإجمالي:</span>
+            <span className="font-black text-rose-600 dark:text-rose-400 text-sm font-mono">{fmt(totalDebts)}</span>
           </div>
         </div>
 
-        {/* Low Stock Notifications / Alerts */}
-        <div className="p-6 rounded-2xl bg-[#0F1824] border border-[#C5A862]/20 shadow-lg flex flex-col justify-between">
+        {/* Low Stock Items List */}
+        <div className="p-6 rounded-3xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 shadow-xl flex flex-col justify-between">
           <div>
-            <h2 className="text-base font-bold text-[#F3E7C4] flex items-center gap-2 mb-4">
-              <AlertCircle className="w-5 h-5 text-red-400" />
-              تنبيهات نقص مخزون السلع
+            <h2 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4">
+              <AlertCircle className="w-5 h-5 text-rose-500" />
+              تنبيهات نقص المخزون
             </h2>
-            <p className="text-xs text-gray-400 mb-4">
-              المنتجات التالية وصلت إلى حد الطلب الأدنى الموصى به من قبل المشرف:
+            <p className="text-xs text-slate-500 dark:text-gray-400 mb-4">
+              الأصناف التي وصلت إلى حد النقص الأدنى:
             </p>
 
-            <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
+            <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
               {lowStockProducts.length === 0 ? (
-                <div className="py-8 text-center text-green-400 text-xs flex flex-col items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center border border-green-500/20 text-green-400">✓</div>
-                  جميع مستويات المخزون كافية ومستقرة!
+                <div className="py-8 text-center text-emerald-600 dark:text-emerald-400 text-xs flex flex-col items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center border border-emerald-300 dark:border-emerald-800 text-emerald-600">✓</div>
+                  جميع مستويات المخزون ممتازة!
                 </div>
               ) : (
                 lowStockProducts.map(p => (
-                  <div key={p.id} className="p-3 rounded-xl bg-red-950/20 border border-red-500/20 flex items-center justify-between text-xs">
+                  <div key={p.id} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-rose-900/30 flex items-center justify-between text-xs">
                     <div className="space-y-0.5">
-                      <div className="font-semibold text-gray-200">{p.name}</div>
-                      <div className="text-[10px] text-gray-400 font-mono">باركود: {p.barcode}</div>
+                      <div className="font-bold text-slate-800 dark:text-gray-200">{p.name}</div>
+                      <div className="text-[10px] text-slate-400 font-mono">باركود: {p.barcode}</div>
                     </div>
                     <div className="text-left">
-                      <div className="text-red-400 font-bold font-mono">الكمية: {p.stock}</div>
-                      <div className="text-[10px] text-gray-400">الحد الأدنى: {p.minStock}</div>
+                      <div className="text-rose-600 dark:text-rose-400 font-bold font-mono">المتبقي: {p.stock}</div>
+                      <div className="text-[10px] text-slate-400">الحد الأدنى: {p.minStock}</div>
                     </div>
                   </div>
                 ))
@@ -272,7 +337,7 @@ export default function Dashboard({
 
           <button
             onClick={() => setActiveTab('inventory')}
-            className="w-full mt-4 py-2.5 rounded-xl bg-gradient-to-br from-[#1A2E44] to-[#121E2E] text-xs font-semibold text-[#C5A862] hover:text-white border border-[#C5A862]/30 hover:border-[#C5A862] transition-all cursor-pointer text-center"
+            className="w-full mt-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-xs font-bold text-white transition-all cursor-pointer text-center shadow-md"
           >
             إضافة كميات للمستودع
           </button>
@@ -280,45 +345,45 @@ export default function Dashboard({
 
       </div>
 
-      {/* Transactions History Feed */}
-      <div className="p-6 rounded-2xl bg-[#0F1824] border border-[#C5A862]/20 shadow-lg">
+      {/* 5. Recent Transactions Log */}
+      <div className="p-6 rounded-3xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 shadow-xl">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-base font-bold text-[#F3E7C4] flex items-center gap-2">
-            <ArrowDownLeft className="w-5 h-5 text-green-400" />
-            دفتر القيود والعمليات الحسابية الأخيرة
+          <h2 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
+            <ArrowDownLeft className="w-5 h-5 text-emerald-500" />
+            دفتر العمليات والقيود الأخيرة
           </h2>
           <button 
             onClick={() => setActiveTab('transactions')} 
-            className="text-xs text-[#C5A862] hover:underline cursor-pointer"
+            className="text-xs text-sky-600 dark:text-sky-400 hover:underline font-bold cursor-pointer"
           >
-            جميع قيود اليومية ←
+            جميع القيود ←
           </button>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs">
             <thead>
-              <tr className="border-b border-gray-800 text-gray-400">
+              <tr className="border-b border-slate-200 dark:border-gray-800 text-slate-400">
                 <th className="pb-3 pr-2">تفاصيل العملية</th>
                 <th className="pb-3 text-center">التاريخ والوقت</th>
                 <th className="pb-3 text-center">النوع</th>
                 <th className="pb-3 pl-2 text-left">المبلغ</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-800/50">
+            <tbody className="divide-y divide-slate-100 dark:divide-gray-800/50">
               {transactions.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-gray-500">
-                    لا توجد أي قيود مسجلة بعد. ابدأ بعمل فاتورة مبيعات جديدة!
+                  <td colSpan={4} className="py-8 text-center text-slate-400">
+                    لا توجد أي قيود مسجلة بعد.
                   </td>
                 </tr>
               ) : (
                 [...transactions].reverse().slice(0, 5).map(t => (
-                  <tr key={t.id} className="hover:bg-slate-800/20">
-                    <td className="py-3 pr-2 font-medium text-gray-200">
+                  <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/20">
+                    <td className="py-3 pr-2 font-bold text-slate-800 dark:text-gray-200">
                       {t.description}
                     </td>
-                    <td className="py-3 text-center text-gray-400 font-mono">
+                    <td className="py-3 text-center text-slate-400 font-mono">
                       {new Date(t.date).toLocaleString('ar-YE', {
                         year: 'numeric',
                         month: 'short',
@@ -328,18 +393,18 @@ export default function Dashboard({
                       })}
                     </td>
                     <td className="py-3 text-center">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                         t.type === 'sale' 
-                          ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
+                          ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' 
                           : t.type === 'payment'
-                          ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                          : 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
+                          ? 'bg-sky-50 dark:bg-sky-950 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800'
+                          : 'bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
                       }`}>
                         {t.type === 'sale' ? 'مبيعات' : t.type === 'payment' ? 'سداد ديون' : 'مصروف'}
                       </span>
                     </td>
-                    <td className={`py-3 pl-2 text-left font-bold font-mono ${
-                      t.type === 'sale' ? 'text-green-400' : 'text-blue-400'
+                    <td className={`py-3 pl-2 text-left font-black font-mono ${
+                      t.type === 'sale' ? 'text-emerald-600 dark:text-emerald-400' : 'text-sky-600 dark:text-sky-400'
                     }`}>
                       {t.type === 'sale' ? '+' : ''}{fmt(t.amount)}
                     </td>

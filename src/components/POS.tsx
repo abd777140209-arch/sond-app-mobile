@@ -4,7 +4,23 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ShoppingCart, Trash2, Plus, Minus, User, CreditCard, Banknote, Tag, ShieldCheck, Barcode } from 'lucide-react';
+import { 
+  Search, 
+  ShoppingCart, 
+  Trash2, 
+  Plus, 
+  Minus, 
+  User, 
+  CreditCard, 
+  Banknote, 
+  Tag, 
+  ShieldCheck, 
+  Barcode,
+  X,
+  Check,
+  AlertCircle,
+  FileText
+} from 'lucide-react';
 import { Product, Customer, Invoice, InvoiceItem, InvoiceType } from '../types';
 import { soundManager } from '../utils/sound';
 
@@ -93,7 +109,7 @@ export default function POS({ products, customers, onCompleteSale, currency }: P
 
   const updateQuantity = (productId: string, delta: number) => {
     soundManager.playScanBeep();
-    const targetProduct = products.find(p => p.id === productId);
+    const targetProduct = activeProducts.find(p => p.id === productId);
     if (!targetProduct) return;
 
     setCart(prevCart => {
@@ -148,7 +164,7 @@ export default function POS({ products, customers, onCompleteSale, currency }: P
       return;
     }
 
-    const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
+    const selectedCustomer = activeCustomers.find(c => c.id === selectedCustomerId);
     const customerName = selectedCustomer ? selectedCustomer.name : 'عميل سفري / نقدي';
 
     // Call callback to finish sale
@@ -182,25 +198,30 @@ export default function POS({ products, customers, onCompleteSale, currency }: P
   return (
     <div id="pos_tab_view" className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
       
-      {/* LEFT: Products selection catalogue & Barcode scanning (8 columns on large screens) */}
+      {/* LEFT: Products selection catalogue & Barcode scanning (7 cols) */}
       <div className="xl:col-span-7 space-y-4">
         
-        {/* Error notification bar */}
+        {/* Error Notification Bar */}
         {posError && (
-          <div className="p-3 rounded-xl bg-red-950/40 border border-red-500/30 text-red-300 text-xs font-semibold animate-pulse flex justify-between items-center">
-            <span>{posError}</span>
-            <button onClick={() => setPosError('')} className="text-gray-400 hover:text-white px-1">✕</button>
+          <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex justify-between items-center shadow-sm">
+            <span className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+              {posError}
+            </span>
+            <button onClick={() => setPosError('')} className="text-rose-400 hover:text-rose-600 p-1">
+              <X className="w-4 h-4" />
+            </button>
           </div>
         )}
 
-        {/* Dual Input Section (Barcode Scanner and Search) */}
+        {/* Barcode & Search Controls */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           
-          {/* Simulated Barcode Wedge Wedge Input */}
-          <form onSubmit={handleBarcodeSubmit} className="relative">
-            <label className="block text-[11px] text-gray-400 mb-1 font-semibold flex items-center gap-1.5">
-              <Barcode className="w-3.5 h-3.5 text-[#C5A862]" />
-              قارئ الباركود والليزري (Auto Focus)
+          {/* Barcode Scanner Input */}
+          <form onSubmit={handleBarcodeSubmit} className="space-y-1">
+            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+              <Barcode className="w-4 h-4 text-blue-600" />
+              <span>قارئ الباركود (الماسح الليزري)</span>
             </label>
             <div className="relative">
               <input
@@ -209,58 +230,52 @@ export default function POS({ products, customers, onCompleteSale, currency }: P
                 type="text"
                 value={barcodeInput}
                 onChange={(e) => setBarcodeInput(e.target.value)}
-                placeholder="امسح بالليزر أو اكتب الباركود..."
-                className="w-full pl-10 pr-3 py-2 text-xs rounded-xl bg-[#0F1824] border border-[#C5A862]/30 text-white font-mono placeholder-gray-500 focus:outline-none focus:border-[#C5A862] focus:ring-1 focus:ring-[#C5A862]/50 transition-all text-left"
+                placeholder="امسح الباركود بالليزر..."
+                className="w-full pl-16 pr-3.5 py-2.5 text-xs font-mono rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition text-right"
               />
               <button
                 type="submit"
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-[#C5A862]/10 hover:bg-[#C5A862]/30 text-[#C5A862] cursor-pointer font-bold text-[10px]"
+                className="absolute left-2 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-lg bg-blue-600 text-white font-bold text-[11px] hover:bg-blue-700 cursor-pointer shadow-sm"
               >
-                إدخال
+                مسح
               </button>
             </div>
           </form>
 
-          {/* Search bar */}
-          <div className="relative">
-            <label className="block text-[11px] text-gray-400 mb-1 font-semibold">بحث سريع بالاسم أو الباركود</label>
+          {/* Text Search Bar */}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-700">بحث بالاسم أو الصنف</label>
             <div className="relative">
               <input
                 id="pos_search_input"
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="ابحث عن المنتجات بالاسم أو رمز الباركود..."
-                className="w-full pr-10 pl-3 py-2 text-xs rounded-xl bg-[#0F1824] border border-gray-800 text-white placeholder-gray-500 focus:outline-none focus:border-[#C5A862] transition-all"
+                placeholder="ابحث باسم السلعة..."
+                className="w-full pr-10 pl-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
               />
-              <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             </div>
           </div>
 
         </div>
 
-        {/* Quick Products Catalog Grid */}
-        <div className="p-4 rounded-2xl bg-[#0F1824] border border-[#C5A862]/10 shadow-lg">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
+        {/* Quick Products Catalog Card */}
+        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
-              <h3 className="text-xs font-bold text-gray-300">كاتلوج السلع السريع ({filteredProducts.length} صنف)</h3>
-              <p className="text-[10px] text-gray-500">اضغط على الصنف لإضافته مباشرة للفاتورة</p>
+              <h3 className="text-sm font-bold text-slate-900">كاتلوج السلع السريع ({filteredProducts.length} صنف)</h3>
+              <p className="text-xs text-slate-400">اضغط على السلعة لإضافتها مباشرة لفاتورة المبيعات</p>
             </div>
-            
-            {/* Category Pills */}
-            <div className="flex flex-wrap gap-1 bg-[#141E2B] border border-gray-800 p-0.5 rounded-lg text-[9px] font-bold">
+
+            {/* Category Filter Pills */}
+            <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold overflow-x-auto max-w-full">
               {categoriesList.map(cat => (
                 <button
                   key={cat}
-                  type="button"
-                  onClick={() => {
-                    soundManager.playScanBeep();
-                    setSelectedCategory(cat);
-                  }}
-                  className={`px-2 py-1 rounded cursor-pointer transition ${
-                    selectedCategory === cat 
-                      ? 'bg-[#C5A862] text-black' 
-                      : 'text-gray-400 hover:text-white hover:bg-slate-800'
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-2.5 py-1 rounded-lg transition shrink-0 ${
+                    selectedCategory === cat ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
                   {cat}
@@ -269,261 +284,209 @@ export default function POS({ products, customers, onCompleteSale, currency }: P
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[460px] overflow-y-auto p-1">
-            {filteredProducts.map(product => {
-              const outOfStock = product.stock <= 0;
-              const isLow = product.stock <= product.minStock;
-              return (
+          {/* Grid Products */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[400px] overflow-y-auto pr-1">
+            {filteredProducts.length === 0 ? (
+              <div className="col-span-full py-12 text-center text-slate-400 text-xs">
+                لا توجد أصناف متوفرة بالبحث.
+              </div>
+            ) : (
+              filteredProducts.map(product => (
                 <button
-                  id={`add_p_btn_${product.id}`}
                   key={product.id}
-                  disabled={outOfStock}
                   onClick={() => addProductToCart(product)}
-                  className={`p-3 rounded-xl border text-right transition-all duration-200 cursor-pointer flex flex-col justify-between h-[105px] group ${
-                    outOfStock
-                      ? 'bg-red-950/10 border-red-950/30 opacity-50 cursor-not-allowed'
-                      : isLow
-                      ? 'bg-[#182330] border-amber-600/30 hover:border-[#C5A862] hover:bg-[#1E2E40]'
-                      : 'bg-[#121D29] border-gray-800/80 hover:border-[#C5A862] hover:bg-[#1A2838]'
-                  }`}
+                  className="p-3 rounded-2xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 transition text-right cursor-pointer flex flex-col justify-between space-y-2 shadow-sm group"
                 >
                   <div>
-                    <div className="text-[11px] font-bold text-gray-100 line-clamp-2 leading-relaxed">
+                    <div className="font-bold text-slate-900 text-xs group-hover:text-blue-600 transition line-clamp-2">
                       {product.name}
                     </div>
-                    <div className="text-[9px] text-gray-500 font-mono mt-1">
-                      {product.barcode}
+                    <div className="text-[10px] text-slate-400 font-mono mt-1">
+                      {product.category || 'عام'}
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-end mt-2 w-full border-t border-gray-800/40 pt-1">
-                    <span className="text-[11px] font-bold text-[#C5A862] font-mono">
-                      {(product.sellingPrice).toLocaleString()} {currency}
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-200/60">
+                    <span className="text-xs font-black text-blue-600 font-mono">
+                      {product.sellingPrice.toLocaleString()} {currency}
                     </span>
-                    <span className={`text-[10px] font-mono font-bold ${
-                      outOfStock ? 'text-red-500' : isLow ? 'text-amber-400' : 'text-green-500'
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                      product.stock <= product.minStock ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-700'
                     }`}>
-                      {outOfStock ? 'نفد' : `متاح: ${product.stock}`}
+                      المخزون: {product.stock}
                     </span>
                   </div>
                 </button>
-              );
-            })}
+              ))
+            )}
           </div>
-        </div>
-
-        {/* Quick Sample Barcodes Wedge helper */}
-        <div className="p-3.5 rounded-xl bg-slate-900/40 border border-slate-800 text-xs text-gray-400 flex flex-wrap gap-2 items-center">
-          <span className="font-semibold text-[11px] text-[#C5A862] flex items-center gap-1">
-            <Barcode className="w-3.5 h-3.5" /> باركودات محاكاة للتجربة السريعة:
-          </span>
-          {products.slice(0, 5).map(p => (
-            <button
-              id={`quick_barcode_${p.barcode}`}
-              key={p.id}
-              onClick={() => {
-                setBarcodeInput(p.barcode);
-                soundManager.playScanBeep();
-              }}
-              className="px-2 py-1 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 hover:text-white transition text-[10px] font-mono text-gray-300 cursor-pointer"
-            >
-              {p.name.split(' ')[0]} ({p.barcode})
-            </button>
-          ))}
         </div>
 
       </div>
 
-      {/* RIGHT: Active Invoice Receipt Draft & Checkout (5 columns) */}
+      {/* RIGHT: Current Invoice Shopping Cart & Checkout (5 cols) */}
       <div className="xl:col-span-5 space-y-4">
         
-        <div className="rounded-2xl border border-[#C5A862]/30 bg-[#0F1824] shadow-xl overflow-hidden flex flex-col justify-between">
+        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
           
-          {/* Receipt Header */}
-          <div className="p-4 bg-gradient-to-l from-[#182433] to-[#0F1824] border-b border-[#C5A862]/20 flex justify-between items-center">
+          <div className="flex justify-between items-center pb-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
-              <ShoppingCart className="w-5 h-5 text-[#C5A862]" />
+              <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                <ShoppingCart className="w-5 h-5" />
+              </div>
               <div>
-                <h3 className="text-xs font-bold text-[#F3E7C4]">مسودة الفاتورة الجارية</h3>
-                <p className="text-[10px] text-gray-400">سجل مشتريات الزبون</p>
+                <h3 className="text-sm font-bold text-slate-900">سلة فاتورة المبيعات الحالية</h3>
+                <p className="text-[11px] text-slate-400">{cart.length} الأصناف بالافتراض</p>
               </div>
             </div>
-            
+
             {cart.length > 0 && (
               <button
-                id="clear_cart_btn"
                 onClick={clearCart}
-                className="px-2.5 py-1.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 transition text-[10px] font-semibold cursor-pointer flex items-center gap-1"
+                className="text-xs font-bold text-rose-600 hover:bg-rose-50 px-2.5 py-1 rounded-lg transition"
               >
-                <Trash2 className="w-3.5 h-3.5" /> تصفير السلة
+                تفريغ السلة
               </button>
             )}
           </div>
 
-          {/* Cart items list */}
-          <div className="p-4 min-h-[220px] max-h-[300px] overflow-y-auto divide-y divide-gray-800/40">
+          {/* Cart Items List */}
+          <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
             {cart.length === 0 ? (
-              <div className="py-16 text-center text-gray-500 text-xs flex flex-col items-center justify-center gap-2">
-                <ShoppingCart className="w-8 h-8 text-gray-600 animate-pulse" />
-                سلة المبيعات فارغة تماماً.
-                <br />
-                اكتب باركوداً باليسار أو اختر سلعة للبدء!
+              <div className="py-12 text-center text-slate-400 text-xs">
+                السلة فارغة حالياً. امسح الباركود أو اختر أصنافاً من الكاتلوج.
               </div>
             ) : (
               cart.map(item => (
-                <div key={item.productId} className="py-2.5 flex justify-between items-center gap-3">
-                  
-                  {/* Item Description */}
-                  <div className="space-y-0.5 flex-1 min-w-0">
-                    <div className="text-[11px] font-bold text-gray-200 truncate">{item.name}</div>
-                    <div className="text-[10px] text-gray-400 font-mono">
-                      {item.sellingPrice.toLocaleString()} × {item.quantity} = {item.total.toLocaleString()} {currency}
+                <div key={item.productId} className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
+                  <div className="flex-1">
+                    <div className="font-bold text-slate-900 text-xs">{item.name}</div>
+                    <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                      {item.sellingPrice.toLocaleString()} × {item.quantity} = <span className="font-bold text-blue-600">{item.total.toLocaleString()} {currency}</span>
                     </div>
                   </div>
 
-                  {/* Quantity Controls */}
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5">
                     <button
-                      id={`dec_qty_btn_${item.productId}`}
                       onClick={() => updateQuantity(item.productId, -1)}
-                      className="p-1 rounded bg-[#182330] hover:bg-[#203144] border border-gray-800 text-gray-300 hover:text-white cursor-pointer"
+                      className="w-6 h-6 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center font-bold"
                     >
                       <Minus className="w-3 h-3" />
                     </button>
-                    <span className="w-6 text-center font-bold text-xs text-white font-mono">{item.quantity}</span>
+                    <span className="w-6 text-center font-bold text-xs font-mono">{item.quantity}</span>
                     <button
-                      id={`inc_qty_btn_${item.productId}`}
                       onClick={() => updateQuantity(item.productId, 1)}
-                      className="p-1 rounded bg-[#182330] hover:bg-[#203144] border border-gray-800 text-gray-300 hover:text-white cursor-pointer"
+                      className="w-6 h-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center font-bold"
                     >
                       <Plus className="w-3 h-3" />
                     </button>
+
+                    <button
+                      onClick={() => removeCartItem(item.productId)}
+                      className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition mr-1"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
-
-                  {/* Delete Button */}
-                  <button
-                    id={`del_cart_item_${item.productId}`}
-                    onClick={() => removeCartItem(item.productId)}
-                    className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg transition cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-
                 </div>
               ))
             )}
           </div>
 
-          {/* Checkout & Bill Summary controls */}
-          <div className="p-4 bg-gradient-to-b from-[#111A26] to-[#0D151F] border-t border-gray-800 space-y-4">
+          {/* Customer Selection & Payment Type */}
+          <div className="space-y-3 pt-3 border-t border-slate-100">
             
-            {/* Customer Linker Selection */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] text-gray-400 font-bold flex items-center gap-1">
-                <User className="w-3.5 h-3.5 text-[#C5A862]" />
-                ربط الفاتورة بعميل (اختياري للنقدي، إجباري للآجل):
-              </label>
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700">نوع العملية والتسديد:</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentType('cash')}
+                  className={`py-2 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
+                    paymentType === 'cash'
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <Banknote className="w-4 h-4" />
+                  <span>نقداً (كاش)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPaymentType('debt')}
+                  className={`py-2 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
+                    paymentType === 'debt'
+                      ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <CreditCard className="w-4 h-4" />
+                  <span>آجل (على الحساب)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Select Customer */}
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700">اختر العميل (مطلوب للآجل):</label>
               <select
-                id="pos_customer_select"
                 value={selectedCustomerId}
                 onChange={(e) => setSelectedCustomerId(e.target.value)}
-                className="w-full bg-[#16212E] border border-gray-800 text-xs rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#C5A862]"
+                className="w-full bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3.5 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
               >
-                <option value="">-- عميل مجهول / بيع نقدي سفري --</option>
+                <option value="">-- عميل نقدي (سفري) --</option>
                 {activeCustomers.map(c => (
                   <option key={c.id} value={c.id}>
-                    {c.name} {c.totalDebt > 0 ? `(عليه دين: ${c.totalDebt.toLocaleString()} ${currency})` : ''}
+                    {c.name} {c.totalDebt > 0 ? `(مدين: ${c.totalDebt.toLocaleString()} ${currency})` : ''}
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Discount & Promo Input */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10px] text-gray-400 font-bold flex items-center gap-1">
-                  <Tag className="w-3.5 h-3.5 text-[#C5A862]" />
-                  خصم نقدي مباشر ({currency}):
-                </label>
-                <input
-                  id="pos_discount_input"
-                  type="number"
-                  min="0"
-                  value={discountInput || ''}
-                  onChange={(e) => setDiscountInput(Math.max(0, parseFloat(e.target.value) || 0))}
-                  placeholder="0.00"
-                  className="w-full bg-[#16212E] border border-gray-800 text-xs font-bold font-mono rounded-xl px-3 py-1.5 text-white focus:outline-none focus:border-[#C5A862]"
-                />
-              </div>
-
-              {/* Payment Terms Selector */}
-              <div className="space-y-1">
-                <label className="text-[10px] text-gray-400 font-bold flex items-center gap-1">
-                  <CreditCard className="w-3.5 h-3.5 text-[#C5A862]" />
-                  شروط وطريقة الدفع:
-                </label>
-                <div className="flex bg-[#16212E] border border-gray-800 rounded-xl p-0.5">
-                  <button
-                    id="pay_type_cash"
-                    type="button"
-                    onClick={() => {
-                      soundManager.playScanBeep();
-                      setPaymentType('cash');
-                    }}
-                    className={`flex-1 py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 ${
-                      paymentType === 'cash'
-                        ? 'bg-green-600/20 text-green-400 border border-green-500/30'
-                        : 'text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    <Banknote className="w-3 h-3" /> نقدي
-                  </button>
-                  <button
-                    id="pay_type_debt"
-                    type="button"
-                    onClick={() => {
-                      soundManager.playScanBeep();
-                      setPaymentType('debt');
-                    }}
-                    className={`flex-1 py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 ${
-                      paymentType === 'debt'
-                        ? 'bg-red-600/20 text-red-400 border border-red-500/30'
-                        : 'text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    <ShieldCheck className="w-3 h-3" /> بيع آجل
-                  </button>
-                </div>
-              </div>
+            {/* Discount Input */}
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700">خصم إضافي على الفاتورة:</label>
+              <input
+                type="number"
+                min="0"
+                value={discountInput || ''}
+                onChange={(e) => setDiscountInput(Math.max(0, parseFloat(e.target.value) || 0))}
+                placeholder="0"
+                className="w-full bg-slate-50 border border-slate-200 text-xs font-bold font-mono rounded-xl px-3.5 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+              />
             </div>
 
-            {/* Calculations readout */}
-            <div className="p-3 rounded-xl bg-[#090E14]/80 border border-gray-800/60 text-xs space-y-2">
-              <div className="flex justify-between text-gray-400">
+            {/* Total Calculation Display */}
+            <div className="p-4 rounded-2xl bg-slate-900 text-white space-y-2 shadow-inner">
+              <div className="flex justify-between text-xs text-slate-400">
                 <span>المجموع الفرعي:</span>
                 <span className="font-mono">{cartSubtotal.toLocaleString()} {currency}</span>
               </div>
-              <div className="flex justify-between text-gray-400">
-                <span>الخصم المطبق:</span>
-                <span className="font-mono text-amber-400">-{discountInput.toLocaleString()} {currency}</span>
-              </div>
-              <div className="h-px bg-gray-800/60 my-1"></div>
-              <div className="flex justify-between items-center text-sm font-bold text-white">
-                <span>الصافي المطلوب للتسديد:</span>
-                <span className="font-mono text-xl text-transparent bg-clip-text bg-gradient-to-r from-white to-[#C5A862]">
-                  {cartTotal.toLocaleString()} {currency}
-                </span>
+              {discountInput > 0 && (
+                <div className="flex justify-between text-xs text-rose-400">
+                  <span>الخصم الممنوح:</span>
+                  <span className="font-mono">-{discountInput.toLocaleString()} {currency}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-base font-black pt-2 border-t border-slate-800 text-emerald-400">
+                <span>المبلغ الإجمالي المطلوب:</span>
+                <span className="font-mono dir-ltr">{cartTotal.toLocaleString()} {currency}</span>
               </div>
             </div>
 
-            {/* Checkout Trigger Button */}
+            {/* Checkout Action Button */}
             <button
-              id="pos_complete_checkout_btn"
-              type="button"
               onClick={handleCheckout}
-              className={`w-full py-3 rounded-xl text-xs font-bold text-black bg-gradient-to-r from-[#BF953F] via-[#F3E7C4] to-[#B38728] hover:from-[#A0813D] hover:to-[#9F8342] shadow-[0_4px_12px_rgba(197,168,98,0.25)] hover:shadow-[0_4px_16px_rgba(197,168,98,0.4)] active:scale-[0.98] transition-all cursor-pointer text-center flex items-center justify-center gap-2`}
+              disabled={cart.length === 0}
+              className={`w-full py-3.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-2 shadow-md ${
+                cart.length > 0 
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20' 
+                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+              }`}
             >
-              <Banknote className="w-4 h-4" /> إتمام وحفظ فاتورة المبيعات الجديدة
+              <FileText className="w-4 h-4" />
+              <span>إصدار وتثبيت فاتورة المبيعات</span>
             </button>
 
           </div>

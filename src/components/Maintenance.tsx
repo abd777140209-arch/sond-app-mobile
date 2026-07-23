@@ -19,7 +19,8 @@ import {
   Trash2, 
   Printer, 
   TrendingUp,
-  SlidersHorizontal
+  SlidersHorizontal,
+  X
 } from 'lucide-react';
 import { MaintenanceOrder } from '../types';
 import { soundManager } from '../utils/sound';
@@ -86,432 +87,319 @@ export default function Maintenance({
     soundManager.playSuccessChime();
   };
 
-  const handlePrintTicket = (order: MaintenanceOrder) => {
-    setPrintOrder(order);
-    soundManager.playSuccessChime();
-    setTimeout(() => {
-      window.print();
-    }, 150);
+  const getWhatsAppStatusLink = (order: MaintenanceOrder) => {
+    let statusText = 'تم استلام جهازكم كرت صيانة جديد.';
+    if (order.status === 'repairing') statusText = 'جاري العمل وصيانة جهازكم حالياً بالورشة.';
+    if (order.status === 'completed') statusText = 'تمت صيانة وإصلاح جهازكم بنجاح وهو جاهز للاستلام.';
+    if (order.status === 'delivered') statusText = 'تم تسليم الجهاز إليكم، شاكرين لكم ثقتكم بنا.';
+
+    const text = `السلام عليكم ورحمة الله وبركاته يا أخي العزيز *${order.customerName}*.\nنود إحاطتكم بحالة طلب الصيانة رقم (*${order.orderNumber}*) للجهاز (*${order.deviceName}*):\n📌 الحالة: *${statusText}*\n💰 التكلفة المقدرة: *${order.cost.toLocaleString()} ${currency}*.\n*نظام سند المحاسبي للصيانة*`;
+    
+    const cleanPhone = order.customerPhone.replace(/[^0-9]/g, '');
+    const finalPhone = cleanPhone.startsWith('77') || cleanPhone.startsWith('73') || cleanPhone.startsWith('71') || cleanPhone.startsWith('70') 
+      ? '967' + cleanPhone
+      : cleanPhone;
+
+    return `https://api.whatsapp.com/send?phone=${finalPhone}&text=${encodeURIComponent(text)}`;
   };
 
-  // Filtered orders
   const filteredOrders = orders.filter(o => {
-    const query = searchQuery.toLowerCase();
     const matchesSearch = 
-      o.customerName.toLowerCase().includes(query) || 
-      o.deviceName.toLowerCase().includes(query) || 
-      o.orderNumber.toLowerCase().includes(query) ||
-      o.customerPhone.includes(query);
+      o.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      o.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      o.deviceName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      o.customerPhone.includes(searchQuery);
+
     const matchesStatus = statusFilter === 'all' || o.status === statusFilter;
+
     return matchesSearch && matchesStatus;
   });
 
   // Stats
-  const pendingCount = orders.filter(o => o.status === 'received' || o.status === 'repairing').length;
-  const completedCount = orders.filter(o => o.status === 'completed').length;
-  const deliveredCount = orders.filter(o => o.status === 'delivered').length;
-  const totalRepairRevenue = orders.filter(o => o.status === 'delivered').reduce((sum, o) => sum + o.cost, 0);
+  const totalReceived = orders.filter(o => o.status === 'received').length;
+  const totalRepairing = orders.filter(o => o.status === 'repairing').length;
+  const totalCompleted = orders.filter(o => o.status === 'completed').length;
+  const totalIncome = orders.filter(o => o.status === 'delivered' || o.status === 'completed').reduce((sum, o) => sum + o.cost, 0);
 
   return (
-    <div id="maintenance_management_view" className="space-y-6">
+    <div id="maintenance_tab_view" className="space-y-6 pb-12">
       
-      {/* Printable Maintenance Ticket Overlay */}
-      {printOrder && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 print:absolute print:inset-0 print:bg-white print:text-black">
-          <div className="bg-white text-black p-6 rounded-2xl w-full max-w-xs border border-gray-200 print:border-0 font-sans print-area" style={{ direction: 'rtl' }}>
-            <div className="text-center space-y-1">
-              <h2 className="text-base font-extrabold text-gray-900">👑 مركز الصيانة والبرمجة</h2>
-              <p className="text-[10px] text-gray-500">كرت استلام جهاز صيانة</p>
-              <div className="border-t border-dashed border-gray-400 my-2"></div>
-            </div>
-
-            <div className="text-[11px] space-y-2 mt-3 text-gray-800">
-              <div className="flex justify-between">
-                <span>رقم الطلب:</span>
-                <span className="font-bold font-mono">{printOrder.orderNumber}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>تاريخ الاستلام:</span>
-                <span className="font-mono">{new Date(printOrder.dateReceived).toLocaleDateString('ar-YE')}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>اسم العميل:</span>
-                <span className="font-bold">{printOrder.customerName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>رقم التلفون:</span>
-                <span className="font-mono">{printOrder.customerPhone || 'غير مسجل'}</span>
-              </div>
-              <div className="border-t border-dashed border-gray-300 my-1"></div>
-              <div className="flex justify-between">
-                <span>الجهاز:</span>
-                <span className="font-bold">{printOrder.deviceName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>المشكلة/العطل:</span>
-                <span className="text-red-700 font-medium">{printOrder.issueDescription}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>التكلفة التقريبية:</span>
-                <span className="font-bold font-mono text-green-700">{printOrder.cost.toLocaleString()} {currency}</span>
-              </div>
-              {printOrder.notes && (
-                <div className="bg-gray-100 p-1.5 rounded text-[10px] text-gray-600 mt-1">
-                  <strong>ملاحظات:</strong> {printOrder.notes}
-                </div>
-              )}
-            </div>
-
-            <div className="border-t border-dashed border-gray-400 my-4"></div>
-            <div className="text-center text-[9px] text-gray-500 space-y-1">
-              <p>يرجى إبراز هذا الكرت عند الاستلام والتدقيق</p>
-              <p className="font-bold">المحل غير مسؤول عن الأجهزة التي تترك أكثر من 30 يوماً</p>
-              <p className="text-[8px] text-gray-400 mt-2">نظام سند الذكي المحاسبي © 2026</p>
-            </div>
-
-            <div className="mt-4 flex gap-2 no-print">
-              <button
-                onClick={() => window.print()}
-                className="flex-1 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-bold cursor-pointer"
-              >
-                طباعة الكرت
-              </button>
-              <button
-                onClick={() => setPrintOrder(null)}
-                className="flex-1 py-1.5 rounded-lg bg-gray-200 hover:bg-gray-300 text-black text-xs font-bold cursor-pointer"
-              >
-                إغلاق
-              </button>
-            </div>
+      {/* 1. STATS SUMMARY BAR */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <span className="text-xs font-bold text-slate-500">أجهزة تحت الاستلام</span>
+            <h3 className="text-lg font-black text-blue-600 mt-1">{totalReceived} جهاز</h3>
           </div>
-        </div>
-      )}
-
-      {/* Stats row */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 no-print">
-        <div className="p-4 rounded-xl bg-[#0F1824] border border-[#C5A862]/10 shadow-lg flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[10px] text-gray-400 font-bold block">أجهزة قيد الصيانة والانتظار</span>
-            <span className="text-xl font-bold text-amber-400 font-mono">{pendingCount} أجهزة</span>
-          </div>
-          <div className="p-3 rounded-lg bg-amber-500/10 text-amber-400">
+          <div className="p-2.5 rounded-xl bg-blue-50 text-blue-600">
             <Clock className="w-5 h-5" />
           </div>
         </div>
 
-        <div className="p-4 rounded-xl bg-[#0F1824] border border-[#C5A862]/10 shadow-lg flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[10px] text-gray-400 font-bold block">أجهزة جاهزة للتسليم</span>
-            <span className="text-xl font-bold text-green-400 font-mono">{completedCount} أجهزة</span>
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <span className="text-xs font-bold text-slate-500">جاري الصيانة بالورشة</span>
+            <h3 className="text-lg font-black text-amber-600 mt-1">{totalRepairing} جهاز</h3>
           </div>
-          <div className="p-3 rounded-lg bg-green-500/10 text-green-400">
+          <div className="p-2.5 rounded-xl bg-amber-50 text-amber-600">
+            <Wrench className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <span className="text-xs font-bold text-slate-500">جاهزة للاستلام</span>
+            <h3 className="text-lg font-black text-emerald-600 mt-1">{totalCompleted} جهاز</h3>
+          </div>
+          <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600">
             <CheckCircle2 className="w-5 h-5" />
           </div>
         </div>
 
-        <div className="p-4 rounded-xl bg-[#0F1824] border border-[#C5A862]/10 shadow-lg flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[10px] text-gray-400 font-bold block">أجهزة تم تسليمها بنجاح</span>
-            <span className="text-xl font-bold text-blue-400 font-mono">{deliveredCount} أجهزة</span>
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <span className="text-xs font-bold text-slate-500">إيرادات أجور الصيانة</span>
+            <h3 className="text-lg font-black text-slate-900 mt-1 dir-ltr text-right">
+              {totalIncome.toLocaleString()} <span className="text-xs font-normal text-slate-400">{currency}</span>
+            </h3>
           </div>
-          <div className="p-3 rounded-lg bg-blue-500/10 text-blue-400">
-            <Smartphone className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="p-4 rounded-xl bg-gradient-to-br from-[#122030] to-[#0D1520] border border-[#C5A862]/20 shadow-lg flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[10px] text-gray-400 font-bold block">أرباح وإيرادات الصيانة المحصلة</span>
-            <span className="text-xl font-bold text-[#C5A862] font-mono">{totalRepairRevenue.toLocaleString()} {currency}</span>
-          </div>
-          <div className="p-3 rounded-lg bg-[#C5A862]/10 text-[#C5A862]">
+          <div className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600">
             <TrendingUp className="w-5 h-5" />
           </div>
         </div>
       </div>
 
-      {/* Main Grid: Control panel (Left) + Orders List (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start no-print">
+      {/* 2. HEADER ACTIONS & NEW ORDER MODAL/BUTTON */}
+      <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
         
-        {/* LEFT: Add Order Form */}
-        <div className="lg:col-span-4 space-y-4">
-          <div className="p-5 rounded-2xl bg-[#0F1824] border border-[#C5A862]/10 shadow-lg">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-sm font-bold text-[#F3E7C4] flex items-center gap-2">
-                <Wrench className="w-5 h-5 text-[#C5A862]" />
-                استلام جهاز جديد للصيانة
-              </h3>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Wrench className="w-5 h-5 text-blue-600" />
+              إدارة كروت وأوامر صيانة الأجهزة والبرمجيات
+            </h2>
+            <p className="text-xs text-slate-400">متابعة الأجهزة المستلمة، التكلفة، ورسائل التحديث</p>
+          </div>
+
+          <button
+            onClick={() => {
+              setShowAddForm(!showAddForm);
+              soundManager.playScanBeep();
+            }}
+            className="px-4 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 transition cursor-pointer flex items-center gap-1.5"
+          >
+            <Plus className="w-4 h-4" />
+            <span>فتح كرت صيانة جديد</span>
+          </button>
+        </div>
+
+        {/* Add New Maintenance Form */}
+        {showAddForm && (
+          <div className="p-4 rounded-2xl bg-slate-50 border border-blue-200 space-y-3 pt-4 animate-fadeIn">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+              <h3 className="text-xs font-bold text-slate-900">بيانات كرت استلام الجهاز الجديد</h3>
+              <button onClick={() => setShowAddForm(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
             {formError && (
-              <div className="p-2 mb-3 rounded-lg bg-red-950/40 border border-red-500/30 text-red-300 text-[11px] font-semibold">
+              <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
                 {formError}
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
-              <div className="space-y-1">
-                <label className="text-[10px] text-gray-400 font-bold">اسم العميل ورقم الملف:</label>
-                <div className="relative">
+            <form onSubmit={handleSubmit} className="space-y-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">اسم العميل:</label>
                   <input
                     type="text"
                     required
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="مثال: يحيى صالح الحيمي"
-                    className="w-full bg-[#16212E] border border-gray-800 text-xs rounded-xl pr-9 pl-3 py-2 text-white focus:outline-none focus:border-[#C5A862]"
+                    placeholder="مثال: عبدالمجيد المحواشي..."
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  <User className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 </div>
-              </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] text-gray-400 font-bold">رقم هاتف العميل للتواصل:</label>
-                <div className="relative">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">رقم جوال العميل:</label>
                   <input
-                    type="text"
+                    type="tel"
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
-                    placeholder="مثال: 777123456"
-                    className="w-full bg-[#16212E] border border-gray-800 text-xs font-mono rounded-xl pr-9 pl-3 py-2 text-white focus:outline-none focus:border-[#C5A862]"
+                    placeholder="77XXXXXXX"
+                    className="w-full bg-white border border-slate-200 font-mono rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-right"
                   />
-                  <Phone className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] text-gray-400 font-bold">نوع وموديل الهاتف الذكي:</label>
-                <div className="relative">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">اسم الجهاز والموديل:</label>
                   <input
                     type="text"
                     required
                     value={deviceName}
                     onChange={(e) => setDeviceName(e.target.value)}
-                    placeholder="مثال: Redmi Note 13 Pro"
-                    className="w-full bg-[#16212E] border border-gray-800 text-xs rounded-xl pr-9 pl-3 py-2 text-white focus:outline-none focus:border-[#C5A862]"
+                    placeholder="مثال: Samsung Galaxy S21 Ultra"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  <Smartphone className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 </div>
-              </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] text-gray-400 font-bold">وصف المشكلة / القطع المراد برمجتها:</label>
-                <textarea
-                  required
-                  value={issueDescription}
-                  onChange={(e) => setIssueDescription(e.target.value)}
-                  placeholder="مثال: كسر شاشة داخلية + بحاجة لتغيير باغة حماية خارجية وصيانة منفذ الشحن"
-                  rows={2}
-                  className="w-full bg-[#16212E] border border-gray-800 text-xs rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#C5A862] resize-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-[10px] text-gray-400 font-bold">التكلفة التقريبية:</label>
+                  <label className="font-bold text-slate-700">التكلفة / الأجرة المقدرة:</label>
                   <input
                     type="number"
                     min="0"
                     value={cost || ''}
-                    onChange={(e) => setCost(Math.max(0, parseInt(e.target.value) || 0))}
-                    placeholder="25000"
-                    className="w-full bg-[#16212E] border border-gray-800 text-xs font-mono font-bold rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#C5A862]"
+                    onChange={(e) => setCost(Math.max(0, parseFloat(e.target.value) || 0))}
+                    placeholder="مثال: 15000"
+                    className="w-full bg-white border border-slate-200 font-bold font-mono rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] text-gray-400 font-bold">حالة الكرت الافتراضية:</label>
-                  <div className="bg-[#121D2A] border border-gray-800 text-[11px] font-bold text-amber-400 rounded-xl px-3 py-2.5">
-                    📥 مستلم وقيد الانتظار
-                  </div>
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] text-gray-400 font-bold">ملاحظات وقطع مرفقة (بطارية، كفر):</label>
+                <label className="font-bold text-slate-700">وصف المشكلة والأعطال:</label>
                 <input
                   type="text"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="مثال: تم استلام كفر حماية خارجي مع الجهاز"
-                  className="w-full bg-[#16212E] border border-gray-800 text-xs rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#C5A862]"
+                  required
+                  value={issueDescription}
+                  onChange={(e) => setIssueDescription(e.target.value)}
+                  placeholder="مثال: الشاشة مكسورة + تغيير منفذ الشحن..."
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full py-2.5 rounded-xl text-xs font-bold bg-[#C5A862] hover:bg-[#9F8342] text-black transition duration-200 cursor-pointer text-center shadow-lg"
+                className="w-full py-3 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md transition cursor-pointer"
               >
-                تسجيل وتأكيد كرت الاستلام ⚙️
+                تثبيت وطباعة كرت الاستلام
               </button>
             </form>
           </div>
+        )}
+
+        {/* Filter & Search Controls */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 pt-2">
+          
+          <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold overflow-x-auto max-w-full">
+            {[
+              { id: 'all', label: 'الكل' },
+              { id: 'received', label: 'مستلم' },
+              { id: 'repairing', label: 'جاري الصيانة' },
+              { id: 'completed', label: 'جاهز للاستلام' },
+              { id: 'delivered', label: 'تم التسليم' }
+            ].map(f => (
+              <button
+                key={f.id}
+                onClick={() => setStatusFilter(f.id as any)}
+                className={`px-3 py-1 rounded-lg transition shrink-0 ${
+                  statusFilter === f.id ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="relative w-full md:w-64">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="ابحث برقم الكرت، الاسم، أو نوع الجهاز..."
+              className="w-full pr-9 pl-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+            />
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          </div>
+
         </div>
 
-        {/* RIGHT: Orders Ledger */}
-        <div className="lg:col-span-8 space-y-4">
-          <div className="p-5 rounded-2xl bg-[#0F1824] border border-[#C5A862]/10 shadow-lg">
-            
-            {/* Header / Filter Toolbar */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-              <div>
-                <h3 className="text-sm font-bold text-[#F3E7C4]">سجل أجهزة الصيانة والبرمجيات</h3>
-                <p className="text-[11px] text-gray-400">إجمالي طلبات الصيانة بالمركز: {orders.length} أجهزة</p>
-              </div>
+        {/* Orders Table */}
+        <div className="overflow-x-auto max-h-[450px] overflow-y-auto">
+          <table className="w-full text-right text-xs">
+            <thead>
+              <tr className="border-b border-slate-200 text-slate-400 font-bold">
+                <th className="pb-3 pr-2">رقم الكرت</th>
+                <th className="pb-3">العميل والهاتف</th>
+                <th className="pb-3">الجهاز والمشكلة</th>
+                <th className="pb-3 text-center">التكلفة</th>
+                <th className="pb-3 text-center">الحالة</th>
+                <th className="pb-3 pl-2 text-left">إجراءات والتحديث</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-slate-400">
+                    لا توجد كروت صيانة تطابق خيارات التصفية.
+                  </td>
+                </tr>
+              ) : (
+                [...filteredOrders].reverse().map(order => (
+                  <tr key={order.id} className="hover:bg-slate-50 transition">
+                    <td className="py-3 pr-2 font-mono font-bold text-slate-900">
+                      #{order.orderNumber}
+                    </td>
+                    <td className="py-3">
+                      <div className="font-bold text-slate-900">{order.customerName}</div>
+                      <div className="text-[10px] text-slate-400 font-mono">{order.customerPhone}</div>
+                    </td>
+                    <td className="py-3">
+                      <div className="font-bold text-slate-800">{order.deviceName}</div>
+                      <div className="text-[10px] text-slate-400">{order.issueDescription}</div>
+                    </td>
+                    <td className="py-3 text-center font-mono font-bold text-blue-600">
+                      {order.cost.toLocaleString()} {currency}
+                    </td>
+                    <td className="py-3 text-center">
+                      <select
+                        value={order.status}
+                        onChange={(e) => onUpdateStatus(order.id, e.target.value as any)}
+                        className={`text-[11px] font-bold px-2 py-1 rounded-xl border focus:outline-none cursor-pointer ${
+                          order.status === 'completed' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
+                          order.status === 'repairing' ? 'bg-amber-100 text-amber-800 border-amber-200' :
+                          order.status === 'delivered' ? 'bg-slate-100 text-slate-700 border-slate-200' : 'bg-blue-100 text-blue-800 border-blue-200'
+                        }`}
+                      >
+                        <option value="received">مستلم (تحت الفحص)</option>
+                        <option value="repairing">جاري الصيانة (بالورشة)</option>
+                        <option value="completed">جاهز للاستلام ✓</option>
+                        <option value="delivered">تم التسليم النهائي</option>
+                      </select>
+                    </td>
+                    <td className="py-3 pl-2 text-left flex justify-end gap-1.5">
+                      <a
+                        href={getWhatsAppStatusLink(order)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition cursor-pointer"
+                        title="إرسال تحديث الحالة عبر واتساب"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                      </a>
 
-              {/* Status Filters */}
-              <div className="flex flex-wrap gap-1 bg-[#16212E] border border-gray-800 rounded-xl p-0.5 text-[10px] font-bold">
-                <button
-                  onClick={() => setStatusFilter('all')}
-                  className={`px-2.5 py-1 rounded-lg cursor-pointer transition ${statusFilter === 'all' ? 'bg-[#C5A862] text-black' : 'text-gray-400 hover:text-white'}`}
-                >
-                  الكل
-                </button>
-                <button
-                  onClick={() => setStatusFilter('received')}
-                  className={`px-2 py-1 rounded-lg cursor-pointer transition ${statusFilter === 'received' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'text-gray-400 hover:text-white'}`}
-                >
-                  بالانتظار
-                </button>
-                <button
-                  onClick={() => setStatusFilter('repairing')}
-                  className={`px-2 py-1 rounded-lg cursor-pointer transition ${statusFilter === 'repairing' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'text-gray-400 hover:text-white'}`}
-                >
-                  قيد العمل
-                </button>
-                <button
-                  onClick={() => setStatusFilter('completed')}
-                  className={`px-2 py-1 rounded-lg cursor-pointer transition ${statusFilter === 'completed' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'text-gray-400 hover:text-white'}`}
-                >
-                  جاهز
-                </button>
-                <button
-                  onClick={() => setStatusFilter('delivered')}
-                  className={`px-2 py-1 rounded-lg cursor-pointer transition ${statusFilter === 'delivered' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'text-gray-400 hover:text-white'}`}
-                >
-                  المستلمة
-                </button>
-              </div>
-            </div>
-
-            {/* Search Input */}
-            <div className="relative mb-4">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="ابحث برقم الكرت، اسم العميل، التلفون أو موديل الجهاز..."
-                className="w-full pr-10 pl-3 py-2 text-xs rounded-xl bg-[#16212E] border border-gray-800 text-white placeholder-gray-500 focus:outline-none focus:border-gray-700 transition"
-              />
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-            </div>
-
-            {/* List Table */}
-            <div className="overflow-x-auto max-h-[450px] overflow-y-auto">
-              <table className="w-full text-right text-xs">
-                <thead>
-                  <tr className="border-b border-gray-800 text-gray-400">
-                    <th className="pb-3 pr-2">رقم الكرت</th>
-                    <th className="pb-3">العميل والجهاز</th>
-                    <th className="pb-3 text-center">المشكلة / العطل</th>
-                    <th className="pb-3 text-center">التكلفة</th>
-                    <th className="pb-3 text-center">الحالة</th>
-                    <th className="pb-3 text-left pl-2">إجراءات</th>
+                      <button
+                        onClick={() => {
+                          if (confirm(`هل أنت متأكد من حذف كرت الصيانة رقم #${order.orderNumber}؟`)) {
+                            onDeleteOrder(order.id);
+                          }
+                        }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                        title="حذف الكرت"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-800/40">
-                  {filteredOrders.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="py-12 text-center text-gray-500">
-                        لا توجد كروت صيانة تطابق خيارات التصفية المحددة.
-                      </td>
-                    </tr>
-                  ) : (
-                    [...filteredOrders].reverse().map(o => (
-                      <tr key={o.id} className="hover:bg-[#182433]/20">
-                        <td className="py-3 pr-2 font-mono font-bold text-[#C5A862]">
-                          {o.orderNumber}
-                        </td>
-                        <td className="py-3">
-                          <div className="font-bold text-gray-200">{o.deviceName}</div>
-                          <div className="text-[10px] text-gray-400 flex items-center gap-1.5 mt-0.5">
-                            <span>{o.customerName}</span>
-                            {o.customerPhone && <span className="font-mono text-gray-500">({o.customerPhone})</span>}
-                          </div>
-                        </td>
-                        <td className="py-3 text-center text-red-300 font-semibold max-w-[150px] truncate" title={o.issueDescription}>
-                          {o.issueDescription}
-                        </td>
-                        <td className="py-3 text-center font-mono font-bold text-green-400">
-                          {o.cost.toLocaleString()} {currency}
-                        </td>
-                        <td className="py-3 text-center">
-                          <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] inline-block ${
-                            o.status === 'received' 
-                              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                              : o.status === 'repairing'
-                              ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-                              : o.status === 'completed'
-                              ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                              : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                          }`}>
-                            {o.status === 'received' ? '📥 بالانتظار' : o.status === 'repairing' ? '⚙️ قيد الإصلاح' : o.status === 'completed' ? '✅ جاهز' : '📱 تم التسليم'}
-                          </span>
-                        </td>
-                        <td className="py-3 pl-2 text-left space-x-1.5 space-x-reverse">
-                          
-                          {/* Print mini repair invoice card */}
-                          <button
-                            onClick={() => handlePrintTicket(o)}
-                            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-gray-300 cursor-pointer"
-                            title="طباعة كرت الاستلام"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Quick change status selector */}
-                          {o.status !== 'delivered' && (
-                            <select
-                              value={o.status}
-                              onChange={(e) => {
-                                onUpdateStatus(o.id, e.target.value as any);
-                                if (e.target.value === 'delivered') {
-                                  soundManager.playSuccessChime();
-                                } else {
-                                  soundManager.playScanBeep();
-                                }
-                              }}
-                              className="bg-[#121D2A] border border-gray-800 text-gray-300 rounded px-1.5 py-0.5 text-[10px] font-bold focus:outline-none"
-                            >
-                              <option value="received">قيد الانتظار</option>
-                              <option value="repairing">بدء التصليح</option>
-                              <option value="completed">تم الإصلاح (جاهز)</option>
-                              <option value="delivered">تسليم للعميل وقبض التكلفة</option>
-                            </select>
-                          )}
-
-                          {/* Delete order */}
-                          <button
-                            onClick={() => {
-                              if (confirm('⚠️ تحذير: هل أنت متأكد من رغبتك في حذف كرت استلام صيانة هذا الجهاز نهائياً؟')) {
-                                soundManager.playWarningBeep();
-                                onDeleteOrder(o.id);
-                              }
-                            }}
-                            className="p-1 rounded bg-red-950/20 hover:bg-red-500/10 text-red-400 cursor-pointer"
-                            title="حذف كرت الصيانة"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
 
       </div>
