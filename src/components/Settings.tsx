@@ -74,6 +74,7 @@ export default function Settings({
   const [appTheme, setAppTheme] = useState<AppTheme>(settings.appTheme || 'financial-blue');
   const [cardShape, setCardShape] = useState<CardShape>(settings.cardShape || 'soft');
   const [density, setDensity] = useState<DisplayDensity>(settings.density || 'comfortable');
+  const [deviceMode, setDeviceMode] = useState<'mobile' | 'desktop'>(settings.deviceMode || 'mobile');
 
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -116,7 +117,8 @@ export default function Settings({
       isPrivacyPinEnabled,
       appTheme,
       cardShape,
-      density
+      density,
+      deviceMode
     });
 
     setSaveSuccess(true);
@@ -196,9 +198,24 @@ export default function Settings({
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex justify-between items-center">
               <span className="text-slate-500 font-bold">نوع الاشتراك:</span>
               <span className="font-mono font-bold text-blue-600">
-                {currentLicense.subscriptionType === 'lifetime' ? 'ترخيص دائم مدى الحياة' : 'اشتراك سنوي (Pro)'}
+                {currentLicense.subscriptionType === 'monthly'
+                  ? 'اشتراك شهري (1 Month)'
+                  : currentLicense.subscriptionType === 'yearly'
+                  ? 'اشتراك سنوي (1 Year Pro)'
+                  : currentLicense.subscriptionType === 'lifetime'
+                  ? 'ترخيص دائم مدى الحياة'
+                  : 'نسخة تجريبية مؤقتة'}
               </span>
             </div>
+
+            {currentLicense.expiresAt && (
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex justify-between items-center">
+                <span className="text-slate-500 font-bold">تاريخ انتهاء الترخيص:</span>
+                <span className="font-mono font-bold text-slate-800">
+                  {new Date(currentLicense.expiresAt).toLocaleDateString('ar-YE', { year: 'numeric', month: 'long', day: 'numeric' })}
+                </span>
+              </div>
+            )}
 
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex justify-between items-center">
               <span className="text-slate-500 font-bold">معرف الجهاز الموثق (HWID):</span>
@@ -498,11 +515,68 @@ export default function Settings({
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                   <Palette className="w-4 h-4 text-purple-600" />
-                  <span>تخصيص المظهر والأشكال (Themes & Layouts)</span>
+                  <span>تخصيص المظهر ونوع الجهاز (Device Layout & Themes)</span>
                 </h4>
                 <span className="text-[10px] text-purple-700 font-bold bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-200">
                   تطبيق فوري ✨
                 </span>
+              </div>
+
+              {/* 0. Device Layout Option (Mobile vs Desktop) */}
+              <div className="space-y-2 p-3 bg-sky-50/60 border border-sky-200 rounded-2xl">
+                <label className="text-[11px] font-bold text-sky-900 flex items-center gap-1.5">
+                  <Smartphone className="w-4 h-4 text-sky-600" />
+                  <span>نوع واجهة الجهاز وتخطيط الشاشة (Device Mode):</span>
+                </label>
+                <p className="text-[10px] text-slate-500">اختر نمط العرض المناسب لجهازك (واجهة الهاتف هي الافتراضية)</p>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  {/* Mobile View */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.playScanBeep();
+                      setDeviceMode('mobile');
+                    }}
+                    className={`p-3 rounded-xl border text-right transition cursor-pointer flex items-center gap-3 ${
+                      deviceMode === 'mobile'
+                        ? 'bg-white border-sky-600 ring-2 ring-sky-500/30 text-sky-950 font-bold shadow-xs'
+                        : 'bg-white/70 border-slate-200 text-slate-700 hover:bg-white'
+                    }`}
+                  >
+                    <div className="p-2 rounded-lg bg-sky-100 text-sky-700 shrink-0">
+                      <Smartphone className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-900 flex items-center gap-1">
+                        <span>واجهة الهاتف (Mobile View)</span>
+                        <span className="text-[9px] px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded font-bold">افتراضي</span>
+                      </div>
+                      <div className="text-[9.5px] text-slate-500">مخصصة للهواتف واستخدام اللمس باليد</div>
+                    </div>
+                  </button>
+
+                  {/* Desktop View */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.playScanBeep();
+                      setDeviceMode('desktop');
+                    }}
+                    className={`p-3 rounded-xl border text-right transition cursor-pointer flex items-center gap-3 ${
+                      deviceMode === 'desktop'
+                        ? 'bg-white border-sky-600 ring-2 ring-sky-500/30 text-sky-950 font-bold shadow-xs'
+                        : 'bg-white/70 border-slate-200 text-slate-700 hover:bg-white'
+                    }`}
+                  >
+                    <div className="p-2 rounded-lg bg-sky-100 text-sky-700 shrink-0">
+                      <HardDrive className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-900">واجهة الكمبيوتر والتابلت</div>
+                      <div className="text-[9.5px] text-slate-500">عرض عريض للشاشات الكبيرة واللوحية</div>
+                    </div>
+                  </button>
+                </div>
               </div>
 
               {/* 1. App Color Theme */}

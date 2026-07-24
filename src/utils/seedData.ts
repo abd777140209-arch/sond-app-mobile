@@ -16,7 +16,8 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   isPrivacyPinEnabled: true,
   appTheme: 'financial-blue',
   cardShape: 'soft',
-  density: 'comfortable'
+  density: 'comfortable',
+  deviceMode: 'mobile'
 };
 
 export const SEED_PRODUCTS: Product[] = [

@@ -142,13 +142,35 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
 
           // Offline fallback validation
           if (key.length >= 8) {
+            const upperKey = key.toUpperCase();
+            let subType: 'monthly' | 'yearly' | 'lifetime' | 'trial' = 'monthly';
+            let expDate = new Date();
+
+            if (upperKey.startsWith('MHTM')) {
+              subType = 'monthly';
+              expDate.setMonth(expDate.getMonth() + 1);
+            } else if (upperKey.startsWith('MHTY')) {
+              subType = 'yearly';
+              expDate.setFullYear(expDate.getFullYear() + 1);
+            } else if (upperKey.startsWith('MHTL')) {
+              subType = 'lifetime';
+              expDate.setFullYear(expDate.getFullYear() + 100);
+            } else if (upperKey.startsWith('MHTT')) {
+              subType = 'trial';
+              expDate.setDate(expDate.getDate() + 7);
+            } else {
+              // Default to 1 month for standard activation key
+              subType = 'monthly';
+              expDate.setMonth(expDate.getMonth() + 1);
+            }
+
             const activeLic: LicenseInfo = {
               licenseKey: key,
               status: 'active',
               activatedAt: new Date().toISOString(),
-              expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+              expiresAt: expDate.toISOString(),
               hwid: license.hwid,
-              subscriptionType: 'yearly',
+              subscriptionType: subType,
               customerName: storeName,
               phone: phone
             };
@@ -171,7 +193,7 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
   };
 
   return (
-    <div id="saas_activator_panel" className="min-h-screen bg-[#F8FAFC] dark:bg-[#090D16] text-slate-800 dark:text-[#F1F5F9] flex flex-col justify-center items-center p-4 md:p-8 relative overflow-y-auto font-sans" dir="rtl">
+    <div id="saas_activator_panel" className="min-h-screen bg-[#F8FAFC] text-slate-800 flex flex-col justify-center items-center p-4 md:p-8 relative overflow-y-auto font-sans" dir="rtl">
       
       {/* Top Header Badge */}
       <div className="absolute top-4 left-4 text-[11px] text-slate-400 dark:text-sky-400/80 font-mono tracking-widest hidden md:block">

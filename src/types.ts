@@ -106,6 +106,7 @@ export interface SystemSettings {
   appTheme?: AppTheme;
   cardShape?: CardShape;
   density?: DisplayDensity;
+  deviceMode?: 'mobile' | 'desktop';
 }
 
 export interface Employee {
