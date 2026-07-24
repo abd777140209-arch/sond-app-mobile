@@ -7,6 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Camera, Barcode, X, RefreshCw, Check, AlertCircle, Sparkles, Volume2 } from 'lucide-react';
 import { Product } from '../types';
 import { soundManager } from '../utils/sound';
+import { requestCameraPermissionOnDemand } from '../utils/androidPermissions';
 
 interface BarcodeScannerModalProps {
   isOpen: boolean;
@@ -50,6 +51,8 @@ export default function BarcodeScannerModal({
   const startCamera = async () => {
     setCameraError('');
     try {
+      await requestCameraPermissionOnDemand();
+
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         setCameraError('⚠️ الكاميرا غير مدعومة في هذا المتصفح. استخدم وضع المحاكاة المباشر بالأسفل.');
         return;

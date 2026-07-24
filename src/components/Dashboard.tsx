@@ -69,6 +69,9 @@ export default function Dashboard({
   // High urgency debts (> 50,000 or top debtors)
   const highDebtCustomers = activeCustomers.filter(c => c.totalDebt >= 50000);
 
+  const deviceMode = settings.deviceMode || 'mobile';
+  const isMobileMode = deviceMode === 'mobile';
+
   // Format currency with Privacy mode support
   const fmt = (num: number) => {
     if (isPrivacyMode) return '**** ' + settings.currency;
@@ -218,7 +221,7 @@ export default function Dashboard({
       )}
 
       {/* 3. KPI Financial Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5">
+      <div className={isMobileMode ? "grid grid-cols-2 gap-3" : "grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5"}>
         
         {/* Total Sales */}
         <div className="p-4 md:p-5 rounded-2xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 hover:border-emerald-400/50 transition-all duration-300 shadow-md group">
@@ -416,60 +419,102 @@ export default function Dashboard({
           </button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-right text-xs">
-            <thead>
-              <tr className="border-b border-slate-200 dark:border-gray-800 text-slate-400">
-                <th className="pb-3 pr-2">تفاصيل العملية</th>
-                <th className="pb-3 text-center">التاريخ والوقت</th>
-                <th className="pb-3 text-center">النوع</th>
-                <th className="pb-3 pl-2 text-left">المبلغ</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-gray-800/50">
-              {transactions.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="py-8 text-center text-slate-400">
-                    لا توجد أي قيود مسجلة بعد.
-                  </td>
-                </tr>
-              ) : (
-                [...transactions].reverse().slice(0, 5).map(t => (
-                  <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/20">
-                    <td className="py-3 pr-2 font-bold text-slate-800 dark:text-gray-200">
-                      {t.description}
-                    </td>
-                    <td className="py-3 text-center text-slate-400 font-mono">
-                      {new Date(t.date).toLocaleString('ar-YE', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </td>
-                    <td className="py-3 text-center">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+        {/* Mobile Mode Card View vs Desktop Table View */}
+        {isMobileMode ? (
+          <div className="space-y-2.5">
+            {transactions.length === 0 ? (
+              <div className="py-8 text-center text-slate-400 text-xs bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200">
+                لا توجد أي قيود مسجلة بعد.
+              </div>
+            ) : (
+              [...transactions].reverse().slice(0, 5).map(t => (
+                <div 
+                  key={t.id} 
+                  className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-sky-900/30 flex items-center justify-between text-xs transition hover:bg-white"
+                >
+                  <div className="space-y-1">
+                    <div className="font-bold text-slate-900 dark:text-gray-100">{t.description}</div>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold ${
                         t.type === 'sale' 
-                          ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' 
+                          ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 border border-emerald-200' 
                           : t.type === 'payment'
-                          ? 'bg-sky-50 dark:bg-sky-950 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800'
-                          : 'bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+                          ? 'bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-400 border border-sky-200'
+                          : 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border border-amber-200'
                       }`}>
                         {t.type === 'sale' ? 'مبيعات' : t.type === 'payment' ? 'سداد ديون' : 'مصروف'}
                       </span>
-                    </td>
-                    <td className={`py-3 pl-2 text-left font-black font-mono ${
-                      t.type === 'sale' ? 'text-emerald-600 dark:text-emerald-400' : 'text-sky-600 dark:text-sky-400'
-                    }`}>
-                      {t.type === 'sale' ? '+' : ''}{fmt(t.amount)}
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {new Date(t.date).toLocaleTimeString('ar-YE', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className={`text-left font-black font-mono text-sm ${
+                    t.type === 'sale' ? 'text-emerald-600 dark:text-emerald-400' : 'text-sky-600 dark:text-sky-400'
+                  }`}>
+                    {t.type === 'sale' ? '+' : ''}{fmt(t.amount)}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-right text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-gray-800 text-slate-400">
+                  <th className="pb-3 pr-2">تفاصيل العملية</th>
+                  <th className="pb-3 text-center">التاريخ والوقت</th>
+                  <th className="pb-3 text-center">النوع</th>
+                  <th className="pb-3 pl-2 text-left">المبلغ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-gray-800/50">
+                {transactions.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-slate-400">
+                      لا توجد أي قيود مسجلة بعد.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                ) : (
+                  [...transactions].reverse().slice(0, 5).map(t => (
+                    <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/20">
+                      <td className="py-3 pr-2 font-bold text-slate-800 dark:text-gray-200">
+                        {t.description}
+                      </td>
+                      <td className="py-3 text-center text-slate-400 font-mono">
+                        {new Date(t.date).toLocaleString('ar-YE', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </td>
+                      <td className="py-3 text-center">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                          t.type === 'sale' 
+                            ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' 
+                            : t.type === 'payment'
+                            ? 'bg-sky-50 dark:bg-sky-950 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800'
+                            : 'bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+                        }`}>
+                          {t.type === 'sale' ? 'مبيعات' : t.type === 'payment' ? 'سداد ديون' : 'مصروف'}
+                        </span>
+                      </td>
+                      <td className={`py-3 pl-2 text-left font-black font-mono ${
+                        t.type === 'sale' ? 'text-emerald-600 dark:text-emerald-400' : 'text-sky-600 dark:text-sky-400'
+                      }`}>
+                        {t.type === 'sale' ? '+' : ''}{fmt(t.amount)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Zara AI Financial Assistant Modal */}

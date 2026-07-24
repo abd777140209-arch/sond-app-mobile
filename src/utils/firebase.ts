@@ -21,6 +21,8 @@ export interface CloudLicense {
   key: string;
   hwid: string;
   customerName: string;
+  phone?: string;
+  createdAt?: string;
   expiresAt: string;
   type: 'monthly' | 'yearly' | 'lifetime' | 'trial';
   status: 'active' | 'suspended';
@@ -240,7 +242,7 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
 }
 
 // Activate/Bind license to device HWID on Cloud / Local Mock Database
-export async function activateLicenseOnCloud(key: string, hwid: string, customerName?: string): Promise<{ success: boolean; message: string }> {
+export async function activateLicenseOnCloud(key: string, hwid: string, customerName?: string, phone?: string): Promise<{ success: boolean; message: string }> {
   try {
     const db = getFirestoreDb();
     if (db) {
@@ -260,7 +262,8 @@ export async function activateLicenseOnCloud(key: string, hwid: string, customer
           const updatedLicense = {
             ...license,
             hwid: hwid,
-            customerName: customerName || license.customerName
+            customerName: customerName || license.customerName,
+            phone: phone || license.phone
           };
           await setDoc(docRef, updatedLicense);
           return { success: true, message: 'ACTIVATED_SUCCESSFULLY' };
@@ -286,6 +289,9 @@ export async function activateLicenseOnCloud(key: string, hwid: string, customer
       license.hwid = hwid;
       if (customerName) {
         license.customerName = customerName;
+      }
+      if (phone) {
+        license.phone = phone;
       }
       localDb[key] = license;
       saveMockDb(localDb);
@@ -370,6 +376,37 @@ export async function deleteLicenseFromCloud(key: string): Promise<boolean> {
     return true;
   } catch (error) {
     console.warn('SaaS deletion fallback:', error);
+    return false;
+  }
+}
+
+// Developer Action: Update license Device ID (HWID) for license transfer
+export async function updateLicenseHwidOnCloud(key: string, newHwid: string): Promise<boolean> {
+  try {
+    const db = getFirestoreDb();
+    if (db) {
+      try {
+        const docRef = doc(db, 'licenses', key);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const current = docSnap.data() as CloudLicense;
+          await setDoc(docRef, { ...current, hwid: newHwid.trim() });
+          return true;
+        }
+      } catch (cloudErr) {
+        console.warn('Firestore update HWID error, trying local DB:', cloudErr);
+      }
+    }
+
+    const localDb = getMockDb();
+    if (localDb[key]) {
+      localDb[key].hwid = newHwid.trim();
+      saveMockDb(localDb);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.warn('SaaS HWID update fallback:', error);
     return false;
   }
 }

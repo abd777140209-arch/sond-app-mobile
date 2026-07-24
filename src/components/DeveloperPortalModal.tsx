@@ -22,11 +22,15 @@ import {
   Share2,
   Globe,
   RotateCcw,
-  AlertTriangle
+  AlertTriangle,
+  Phone,
+  Edit3,
+  Save,
+  Smartphone
 } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { LicenseInfo, generateLicenseKey, getExpiryDate } from '../utils/licensing';
-import { isFirebaseConfigured, checkLicenseOnCloud, activateLicenseOnCloud, createLicenseOnCloud, CloudLicense, getAllLicensesFromCloud, deleteLicenseFromCloud, resetCloudData, resetClientCloudData } from '../utils/firebase';
+import { isFirebaseConfigured, checkLicenseOnCloud, activateLicenseOnCloud, createLicenseOnCloud, CloudLicense, getAllLicensesFromCloud, deleteLicenseFromCloud, updateLicenseHwidOnCloud, resetCloudData, resetClientCloudData } from '../utils/firebase';
 
 interface DeveloperPortalModalProps {
   isOpen: boolean;
@@ -44,15 +48,23 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
   // Developer key generator states
   const [genType, setGenType] = useState<'monthly' | 'yearly' | 'lifetime' | 'trial'>('monthly');
   const [genCustomer, setGenCustomer] = useState('');
+  const [genPhone, setGenPhone] = useState('');
   const [genHwid, setGenHwid] = useState('');
   const [generatedKey, setGeneratedKey] = useState('');
   const [lastGeneratedInfo, setLastGeneratedInfo] = useState<{
     key: string;
     customer: string;
+    phone: string;
     type: 'monthly' | 'yearly' | 'lifetime' | 'trial';
+    createdAt: string;
     expiresAt: string;
   } | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' | null }>({ text: '', type: null });
+
+  // Update Device ID (HWID) modal state
+  const [editingHwidLicense, setEditingHwidLicense] = useState<CloudLicense | null>(null);
+  const [newHwidInput, setNewHwidInput] = useState('');
+  const [isSavingHwid, setIsSavingHwid] = useState(false);
 
   // Developer keys history list (Local database synced with LocalStorage/Cloud)
   const [allLicenseKeys, setAllLicenseKeys] = useState<{ [key: string]: CloudLicense }>({});
@@ -117,11 +129,14 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
 
     const newKey = generateLicenseKey(genType);
     const expiresAt = getExpiryDate(genType);
+    const createdAt = new Date().toISOString();
 
     const newLicense: CloudLicense = {
       key: newKey,
       hwid: genHwid.trim(), // Pre-bind if provided
       customerName: genCustomer.trim(),
+      phone: genPhone.trim(),
+      createdAt,
       expiresAt,
       type: genType,
       status: 'active'
@@ -131,10 +146,13 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
     setLastGeneratedInfo({
       key: newKey,
       customer: genCustomer.trim(),
+      phone: genPhone.trim(),
       type: genType,
+      createdAt,
       expiresAt
     });
     setGenCustomer('');
+    setGenPhone('');
     setGenHwid('');
     soundManager.playSuccessChime();
 
@@ -151,6 +169,33 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
       console.error(e);
       setStatusMessage({ text: `✓ تم توليد الكود محلياً (خطأ اتصال بالخادم السحابي)`, type: 'info' });
       await handleFetchCloudLicenses();
+    }
+  };
+
+  // Developer action: Update License Device ID (HWID)
+  const handleUpdateHwid = async () => {
+    if (!editingHwidLicense) return;
+    setIsSavingHwid(true);
+    try {
+      const success = await updateLicenseHwidOnCloud(editingHwidLicense.key, newHwidInput.trim());
+      if (success) {
+        soundManager.playSuccessChime();
+        setStatusMessage({
+          text: `✓ تم تحديث معرف الجهاز (Device ID) بنجاح للعميل (${editingHwidLicense.customerName})! يمكن للعميل الآن تسجيل الدخول والتفعيل فوراً من جهازه الجديد.`,
+          type: 'success'
+        });
+        await handleFetchCloudLicenses();
+      } else {
+        soundManager.playWarningBeep();
+        setStatusMessage({ text: `❌ فشل تحديث معرف الجهاز.`, type: 'error' });
+      }
+    } catch (e) {
+      console.error(e);
+      setStatusMessage({ text: `❌ حدث خطأ أثناء تحديث معرف الجهاز.`, type: 'error' });
+    } finally {
+      setIsSavingHwid(false);
+      setEditingHwidLicense(null);
+      setNewHwidInput('');
     }
   };
 
@@ -339,8 +384,8 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
               <div className="p-4 bg-[#0d121f] border border-gray-800 rounded-xl space-y-4">
                 <h4 className="font-bold text-xs text-gray-300">توليد وإصدار رخصة جديدة لعميل:</h4>
                 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
-                  <div className="md:col-span-2">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                  <div>
                     <label className="text-[10px] text-gray-400 block mb-1">اسم العميل / المحل التجاري:</label>
                     <input
                       type="text"
@@ -353,7 +398,18 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                   </div>
 
                   <div>
-                    <label className="text-[10px] text-amber-400 block mb-1">بصمة جهاز العميل (HWID) - اختياري لربط فوري:</label>
+                    <label className="text-[10px] text-cyan-400 block mb-1">رقم هاتف المستخدم / العميل 📱:</label>
+                    <input
+                      type="tel"
+                      value={genPhone}
+                      onChange={(e) => setGenPhone(e.target.value)}
+                      placeholder="مثال: 777140209"
+                      className="w-full bg-[#04060b] border border-gray-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C5A862] font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-amber-400 block mb-1">بصمة جهاز العميل (HWID) - اختياري:</label>
                     <input
                       type="text"
                       value={genHwid}
@@ -391,17 +447,22 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                 </div>
 
                 {generatedKey && lastGeneratedInfo && (
-                  <div className="p-4 bg-green-500/5 border border-green-500/20 rounded-xl space-y-4 text-center max-w-xl mx-auto">
+                  <div className="p-4 bg-green-500/5 border border-green-500/20 rounded-xl space-y-4 text-center max-w-2xl mx-auto">
                     <div>
                       <span className="text-xs text-green-400 font-bold block mb-1">✓ تم توليد كود التفعيل السحابي الجديد بنجاح:</span>
                       <div className="font-mono text-lg font-extrabold text-yellow-400 select-all bg-black py-2.5 rounded-lg tracking-widest border border-[#C5A862]/30 my-2">
                         {generatedKey}
                       </div>
-                      <div className="text-[11px] text-gray-400">
-                        العميل: <span className="text-white font-bold">{lastGeneratedInfo.customer}</span> | 
-                        نوع الترخيص: <span className="text-amber-400 font-bold">
+                      <div className="text-[11px] text-gray-300 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-slate-900/80 p-2.5 rounded-lg border border-gray-800">
+                        <span>العميل: <strong className="text-white">{lastGeneratedInfo.customer}</strong></span>
+                        <span>•</span>
+                        <span>رقم الهاتف: <strong className="text-cyan-400 font-mono">{lastGeneratedInfo.phone || 'غير مدخل'}</strong></span>
+                        <span>•</span>
+                        <span>النوع: <strong className="text-amber-400">
                           {lastGeneratedInfo.type === 'trial' ? 'تجريبي (7 أيام)' : lastGeneratedInfo.type === 'monthly' ? 'شهري (30 يوماً)' : lastGeneratedInfo.type === 'yearly' ? 'سنوي (365 يوماً)' : 'دائم (مدى الحياة)'}
-                        </span>
+                        </strong></span>
+                        <span>•</span>
+                        <span>إنشاء: <strong className="text-gray-300">{new Date(lastGeneratedInfo.createdAt).toLocaleDateString('ar-YE')}</strong></span>
                       </div>
                     </div>
 
@@ -426,12 +487,14 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                             `*نظام سند الذكي المحاسبي* 📱💼\n` +
                             `مرحباً بك يا غالي! لقد تم إصدار كود التفعيل الخاص بك بنجاح:\n\n` +
                             `👤 *العميل:* ${lastGeneratedInfo.customer}\n` +
+                            `📱 *رقم الهاتف:* ${lastGeneratedInfo.phone || 'غير محدد'}\n` +
                             `🔑 *كود التفعيل (Serial):* \`${generatedKey}\`\n` +
-                            `📅 *نوع الاشتراك وصلاحيته:* ${typeAr} (${expiresAr})\n\n` +
+                            `📅 *تاريخ الإنشاء:* ${new Date(lastGeneratedInfo.createdAt).toLocaleDateString('ar-YE')}\n` +
+                            `⏳ *نوع الاشتراك وصلاحيته:* ${typeAr} (${expiresAr})\n\n` +
                             `*طريقة التفعيل السهلة:*\n` +
-                            `1. افتح تطبيق نظام سند الذكي المحاسبي على جهاز الكمبيوتر الخاص بك.\n` +
-                            `2. انسخ كود التفعيل أعلاه والصقه في خانة "مفتاح التفعيل".\n` +
-                            `3. اكتب اسم محلك واضغط على زر "تفعيل البرنامج وفك القفل".\n\n` +
+                            `1. افتح تطبيق نظام سند الذكي المحاسبي على جهازك.\n` +
+                            `2. أدخل رقم هاتفك وكود التفعيل أعلاه في شاشة التفعيل.\n` +
+                            `3. اضغط على زر "تفعيل البرنامج وفك القفل".\n\n` +
                             `شكراً لثقتكم بنا! 🌹\n` +
                             `م. عبدالمجيد المحواشي (هاتف: 777140209)\n`;
                           navigator.clipboard.writeText(message);
@@ -451,13 +514,14 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                             `نظام سند الذكي المحاسبي - ترخيص الاستخدام\n` +
                             `================================================\n` +
                             `اسم العميل/المحل: ${lastGeneratedInfo.customer}\n` +
+                            `رقم هاتف المستخدم: ${lastGeneratedInfo.phone || 'غير مدخل'}\n` +
                             `كود التفعيل (Serial Key): ${generatedKey}\n` +
-                            `نوع الاشتراك وصلاحيته: ${typeAr} (${expiresAr})\n` +
-                            `تاريخ الإصدار: ${new Date().toLocaleDateString('ar-YE')}\n\n` +
+                            `تاريخ الإنشاء: ${new Date(lastGeneratedInfo.createdAt).toLocaleDateString('ar-YE')}\n` +
+                            `نوع الاشتراك وصلاحيته: ${typeAr} (${expiresAr})\n\n` +
                             `طريقة التفعيل:\n` +
                             `1. افتح برنامج نظام سند الذكي المحاسبي على جهازك.\n` +
                             `2. قم بنسخ كود التفعيل أعلاه ولصقه في حقل (مفتاح التفعيل).\n` +
-                            `3. اكتب اسم محلك واضغط على زر "تفعيل البرنامج وفك القفل".\n\n` +
+                            `3. أدخل رقم هاتفك واضغط على زر "تفعيل البرنامج وفك القفل".\n\n` +
                             `مع تحيات مبرمج النظام: م. عبدالمجيد المحواشي (هاتف: 777140209)\n`;
                           
                           const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
@@ -589,21 +653,22 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                 </div>
                 
                 <div className="border border-gray-800 rounded-xl overflow-hidden">
-                  <div className="max-h-[250px] overflow-y-auto">
+                  <div className="max-h-[280px] overflow-y-auto">
                     <table className="w-full text-right text-[11px] font-sans">
                       <thead className="bg-[#0e131f] text-gray-400 sticky top-0 border-b border-gray-800">
                         <tr>
                           <th className="p-3 text-right">المحل/العميل</th>
+                          <th className="p-3 text-right">رقم الهاتف</th>
                           <th className="p-3 text-right">كود الترخيص</th>
-                          <th className="p-3 text-right font-mono">بصمة الجهاز (HWID)</th>
+                          <th className="p-3 text-right font-mono">معرف الجهاز (Device ID)</th>
                           <th className="p-3 text-right">نوع الاشتراك / الصلاحية</th>
-                          <th className="p-3 text-center">خيارات</th>
+                          <th className="p-3 text-center">خيارات الإدارة</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-800/60 bg-[#060a12]/80">
                         {Object.keys(allLicenseKeys).length === 0 ? (
                           <tr>
-                            <td colSpan={5} className="p-8 text-center text-gray-500 font-sans">
+                            <td colSpan={6} className="p-8 text-center text-gray-500 font-sans">
                               لا توجد تراخيص مسجلة في السجل حالياً. يرجى الضغط على "تحديث البيانات" أو توليد رخصة جديدة.
                             </td>
                           </tr>
@@ -612,11 +677,20 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                             return (
                               <tr key={lk.key} className="hover:bg-slate-900/60 transition">
                                 <td className="p-3 text-white font-bold">{lk.customerName}</td>
+                                <td className="p-3">
+                                  {lk.phone ? (
+                                    <span className="text-cyan-300 font-mono text-[10.5px] inline-flex items-center gap-1 bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-500/20">
+                                      <Phone className="w-3 h-3 text-cyan-400" /> {lk.phone}
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-600 text-[10px] font-sans">غير مدخل</span>
+                                  )}
+                                </td>
                                 <td className="p-3 text-yellow-400 font-bold font-mono select-all tracking-wider">{lk.key}</td>
                                 <td className="p-3">
                                   {lk.hwid ? (
                                     <span className="text-green-400 text-[10px] bg-green-950/40 px-2.5 py-1 rounded-full border border-green-500/10 font-mono inline-flex items-center gap-1">
-                                      <Laptop className="w-3 h-3" /> {lk.hwid}
+                                      <Laptop className="w-3 h-3 text-green-400" /> {lk.hwid}
                                     </span>
                                   ) : (
                                     <span className="text-gray-500 text-[10px] bg-slate-900 px-2.5 py-1 rounded-full font-sans">⏳ غير مربوط بجهاز بعد</span>
@@ -629,7 +703,20 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                                   {lk.type === 'lifetime' ? 'صلاحية دائمة' : new Date(lk.expiresAt).toLocaleDateString('ar-YE')}
                                 </td>
                                 <td className="p-3 text-center">
-                                  <div className="flex items-center justify-center gap-1.5">
+                                  <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                    <button
+                                      onClick={() => {
+                                        soundManager.playSuccessChime();
+                                        setEditingHwidLicense(lk);
+                                        setNewHwidInput(lk.hwid || '');
+                                      }}
+                                      className="px-2 py-1 rounded bg-blue-950/80 hover:bg-blue-900 border border-blue-500/40 text-blue-300 hover:text-white text-[10px] font-bold transition flex items-center gap-1 cursor-pointer shadow-sm"
+                                      title="تعديل معرف الجهاز (Update Device ID) لنقل الترخيص لجهاز جديد"
+                                    >
+                                      <Edit3 className="w-3 h-3 text-blue-400" />
+                                      <span>تعديل Device ID</span>
+                                    </button>
+
                                     <button
                                       onClick={() => {
                                         soundManager.playWarningBeep();
@@ -640,7 +727,7 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                                       title="تصفير حساب وسجل بيانات هذا العميل فقط"
                                     >
                                       <RotateCcw className="w-3 h-3 text-red-400" />
-                                      <span>تصفير حساب العميل</span>
+                                      <span>تصفير العميل</span>
                                     </button>
 
                                     <button
@@ -869,6 +956,83 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                   className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-lg cursor-pointer transition text-xs border border-gray-700"
                 >
                   إلغاء وتراجع ❌
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal for Updating License Device ID (HWID) */}
+        {editingHwidLicense && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+            <div className="w-full max-w-md bg-[#090d16] border border-blue-500/40 rounded-2xl p-6 text-right space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Laptop className="w-4 h-4 text-blue-400" /> نقل الترخيص وتعديل معرف الجهاز (Device ID)
+                </h3>
+                <button
+                  onClick={() => { setEditingHwidLicense(null); setNewHwidInput(''); }}
+                  className="text-gray-400 hover:text-white cursor-pointer"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="text-[11px] text-gray-300 space-y-1.5 bg-blue-950/30 p-3 rounded-xl border border-blue-500/20">
+                <div>العميل: <span className="text-white font-bold">{editingHwidLicense.customerName}</span></div>
+                <div>رقم الهاتف: <span className="text-cyan-400 font-mono font-bold">{editingHwidLicense.phone || 'غير مدخل'}</span></div>
+                <div>كود الترخيص: <span className="text-yellow-400 font-mono font-bold">{editingHwidLicense.key}</span></div>
+                <div>المعرف الحالي: <span className="text-green-400 font-mono font-bold">{editingHwidLicense.hwid || 'غير مربوط بعد (Unbound)'}</span></div>
+                <div className="text-gray-400 text-[10px] pt-1">
+                  * عند تعديل الـ Device ID وحفظه، يتاح للعميل التفعيل والدخول فوراً على جهازه الجديد.
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] text-gray-300 font-bold block">
+                  معرف الجهاز الجديد (Device ID / HWID):
+                </label>
+                <input
+                  type="text"
+                  value={newHwidInput}
+                  onChange={(e) => setNewHwidInput(e.target.value)}
+                  placeholder="أدخل بصمة الجهاز الجديد أو اتركه فارغاً لفك الربط"
+                  className="w-full bg-[#04060b] border border-gray-800 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-blue-400"
+                  autoFocus
+                />
+                <div className="flex gap-2 text-[10px] pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setNewHwidInput('')}
+                    className="text-amber-400 hover:underline cursor-pointer"
+                  >
+                    🧹 مسح المعرف (إتاحة الكود للعميل ليستخدمه على أي جهاز جديد)
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end pt-2">
+                <button
+                  disabled={isSavingHwid}
+                  onClick={handleUpdateHwid}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg cursor-pointer transition text-xs flex items-center gap-1.5"
+                >
+                  {isSavingHwid ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> جاري الحفظ...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5" /> حفظ الـ Device ID الجديد 💾
+                    </>
+                  )}
+                </button>
+                <button
+                  disabled={isSavingHwid}
+                  onClick={() => { setEditingHwidLicense(null); setNewHwidInput(''); }}
+                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-lg cursor-pointer transition text-xs"
+                >
+                  إلغاء ❌
                 </button>
               </div>
             </div>

@@ -89,7 +89,7 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
         
         if (response.success && response.data) {
           if (!response.data.hwid || isUnboundHwid(response.data.hwid)) {
-            const bindResult = await activateLicenseOnCloud(key, license.hwid, storeName);
+            const bindResult = await activateLicenseOnCloud(key, license.hwid, storeName, phone);
             if (!bindResult.success) {
               soundManager.playWarningBeep();
               setStatusMessage({ text: '❌ فشل ربط مفتاح التفعيل بقاعدة البيانات السحابية. يرجى المحاولة لاحقاً.', type: 'error' });
@@ -116,7 +116,7 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
         } else {
           soundManager.playWarningBeep();
           if (response.message === 'KEY_NOT_FOUND') {
-            const activationResult = await activateLicenseOnCloud(key, license.hwid, storeName);
+            const activationResult = await activateLicenseOnCloud(key, license.hwid, storeName, phone);
             if (activationResult.success) {
               const recheck = await checkLicenseOnCloud(key, license.hwid);
               if (recheck.success && recheck.data) {
