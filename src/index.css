@@ -55,3 +55,124 @@ body {
   }
 }
 
+/* ========================================================
+   THEMES & LAYOUTS CUSTOMIZATION STYLES
+   ======================================================== */
+
+/* 1. Dark Luxury Theme */
+.theme-dark-luxury {
+  background-color: #0B141F !important;
+  color: #F8FAFC !important;
+}
+
+.theme-dark-luxury header#desktop_topbar,
+.theme-dark-luxury aside#desktop_navigation_rail,
+.theme-dark-luxury div.bg-white,
+.theme-dark-luxury section.bg-white,
+.theme-dark-luxury aside.bg-white {
+  background-color: #0E1825 !important;
+  border-color: #1E293B !important;
+  color: #F8FAFC !important;
+}
+
+.theme-dark-luxury h1,
+.theme-dark-luxury h2,
+.theme-dark-luxury h3,
+.theme-dark-luxury h4,
+.theme-dark-luxury .text-slate-900,
+.theme-dark-luxury .text-slate-800,
+.theme-dark-luxury .text-slate-700 {
+  color: #F1F5F9 !important;
+}
+
+.theme-dark-luxury .text-slate-500,
+.theme-dark-luxury .text-slate-600 {
+  color: #94A3B8 !important;
+}
+
+.theme-dark-luxury .bg-slate-50 {
+  background-color: #121E2E !important;
+  color: #F1F5F9 !important;
+}
+
+.theme-dark-luxury .border-slate-200 {
+  border-color: #1E293B !important;
+}
+
+.theme-dark-luxury input:not([type="checkbox"]),
+.theme-dark-luxury select,
+.theme-dark-luxury textarea {
+  background-color: #121E2E !important;
+  border-color: #334155 !important;
+  color: #FFFFFF !important;
+}
+
+/* 2. Emerald Green Theme */
+.theme-emerald-green .text-blue-600 {
+  color: #059669 !important;
+}
+.theme-emerald-green .bg-blue-600 {
+  background-color: #059669 !important;
+}
+.theme-emerald-green .bg-blue-50 {
+  background-color: #ECFDF5 !important;
+}
+.theme-emerald-green .border-blue-600 {
+  border-color: #059669 !important;
+}
+
+/* 3. Warm Amber / Gold Theme */
+.theme-warm-amber .text-blue-600 {
+  color: #D97706 !important;
+}
+.theme-warm-amber .bg-blue-600 {
+  background-color: #D97706 !important;
+}
+.theme-warm-amber .bg-blue-50 {
+  background-color: #FFFBEB !important;
+}
+.theme-warm-amber .border-blue-600 {
+  border-color: #D97706 !important;
+}
+
+/* 4. Card Shapes: Sharp */
+.shape-sharp .rounded-2xl,
+.shape-sharp .rounded-xl,
+.shape-sharp .rounded-lg {
+  border-radius: 2px !important;
+}
+
+/* 5. Card Shapes: Glassmorphism */
+.shape-glass .rounded-2xl,
+.shape-glass .rounded-xl {
+  backdrop-filter: blur(12px) !important;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.08) !important;
+}
+
+/* 6. Display Density: Compact */
+.density-compact .p-5 {
+  padding: 0.85rem !important;
+}
+.density-compact .p-4 {
+  padding: 0.7rem !important;
+}
+.density-compact .p-3 {
+  padding: 0.5rem !important;
+}
+.density-compact .py-3 {
+  padding-top: 0.4rem !important;
+  padding-bottom: 0.4rem !important;
+}
+.density-compact .gap-6 {
+  gap: 1rem !important;
+}
+.density-compact .gap-4 {
+  gap: 0.75rem !important;
+}
+.density-compact table td,
+.density-compact table th {
+  padding-top: 0.35rem !important;
+  padding-bottom: 0.35rem !important;
+  font-size: 0.75rem !important;
+}
+

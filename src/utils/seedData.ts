@@ -11,7 +11,12 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   address: "صنعاء - شارع صخر - بجوار محطة الكهرباء",
   phone: "+967777714020",
   pinCode: "1234",
-  isPinEnabled: true
+  isPinEnabled: true,
+  privacyPinCode: "1234",
+  isPrivacyPinEnabled: true,
+  appTheme: 'financial-blue',
+  cardShape: 'soft',
+  density: 'comfortable'
 };
 
 export const SEED_PRODUCTS: Product[] = [

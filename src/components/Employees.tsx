@@ -96,20 +96,20 @@ export default function Employees({
   return (
     <div className="space-y-6">
       {/* Top Header Card */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#0B141F] p-5 rounded-2xl border border-[#C5A862]/30 shadow-lg">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
         <div>
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <Users className="w-6 h-6 text-[#C5A862]" />
+          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+            <Users className="w-6 h-6 text-blue-600" />
             <span>إدارة الموظفين والرواتب والسُلف</span>
           </h2>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             تسجيل العمال، متابعة سلف العمال والمكافآت، وصرف الرواتب الشهرية وتثبيتها بالقيود.
           </p>
         </div>
 
         <button
           onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 bg-gradient-to-r from-[#C5A862] to-[#A38641] hover:from-[#d4b771] hover:to-[#b3954f] text-black font-bold px-4 py-2.5 rounded-xl shadow-md transition cursor-pointer text-xs"
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2.5 rounded-xl shadow-xs transition cursor-pointer text-xs"
         >
           <UserPlus className="w-4 h-4" />
           <span>إضافة موظف جديد</span>
@@ -118,36 +118,36 @@ export default function Employees({
 
       {/* KPI Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-[#0E1825] p-4 rounded-xl border border-gray-800 flex items-center justify-between">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <span className="text-xs text-gray-400">إجمالي الموظفين</span>
-            <div className="text-2xl font-black text-white mt-1">{activeEmployees.length}</div>
+            <span className="text-xs text-slate-500 font-medium">إجمالي الموظفين</span>
+            <div className="text-2xl font-black text-slate-900 mt-1">{activeEmployees.length}</div>
           </div>
-          <div className="p-3 rounded-xl bg-blue-950/60 border border-blue-800/40 text-blue-400">
+          <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-600">
             <Users className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="bg-[#0E1825] p-4 rounded-xl border border-gray-800 flex items-center justify-between">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <span className="text-xs text-gray-400">إجمالي الرواتب الشهرية</span>
-            <div className="text-2xl font-black text-emerald-400 mt-1 font-mono">
-              {totalMonthlySalaries.toLocaleString()} <span className="text-xs">{currency}</span>
+            <span className="text-xs text-slate-500 font-medium">إجمالي الرواتب الشهرية</span>
+            <div className="text-2xl font-black text-emerald-600 mt-1 font-mono">
+              {totalMonthlySalaries.toLocaleString()} <span className="text-xs text-slate-400 font-normal">{currency}</span>
             </div>
           </div>
-          <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-800/40 text-emerald-400">
+          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600">
             <DollarSign className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="bg-[#0E1825] p-4 rounded-xl border border-gray-800 flex items-center justify-between">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <span className="text-xs text-gray-400">إجمالي السُلف المتبقية</span>
-            <div className="text-2xl font-black text-amber-400 mt-1 font-mono">
-              {totalOutstandingAdvances.toLocaleString()} <span className="text-xs">{currency}</span>
+            <span className="text-xs text-slate-500 font-medium">إجمالي السُلف المتبقية</span>
+            <div className="text-2xl font-black text-amber-600 mt-1 font-mono">
+              {totalOutstandingAdvances.toLocaleString()} <span className="text-xs text-slate-400 font-normal">{currency}</span>
             </div>
           </div>
-          <div className="p-3 rounded-xl bg-amber-950/60 border border-amber-800/40 text-amber-400">
+          <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-600">
             <Wallet className="w-6 h-6" />
           </div>
         </div>
@@ -155,13 +155,13 @@ export default function Employees({
 
       {/* Search Input */}
       <div className="relative">
-        <Search className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+        <Search className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
           type="text"
           placeholder="بحث بالاسم، المسمى الوظيفي أو رقم الهاتف..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-4 pr-10 py-3 rounded-xl bg-[#0B141F] border border-gray-800 text-sm text-white focus:outline-none focus:border-[#C5A862]"
+          className="w-full pl-4 pr-10 py-3 rounded-xl bg-white border border-slate-300 text-xs text-slate-900 focus:outline-none focus:border-blue-600 shadow-xs"
         />
       </div>
 
@@ -170,17 +170,17 @@ export default function Employees({
         {filteredEmployees.map((employee) => (
           <div
             key={employee.id}
-            className="bg-[#0E1825] p-5 rounded-2xl border border-gray-800 hover:border-[#C5A862]/40 transition space-y-4 shadow-md flex flex-col justify-between"
+            className="bg-white p-5 rounded-2xl border border-slate-200 hover:border-blue-300 transition space-y-4 shadow-xs flex flex-col justify-between"
           >
             <div>
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#1E2E44] to-[#121E2E] border border-[#C5A862]/30 flex items-center justify-center font-bold text-[#C5A862] text-sm">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center font-bold text-blue-700 text-sm">
                     {employee.name.charAt(0)}
                   </div>
                   <div>
-                    <h3 className="font-bold text-white text-sm">{employee.name}</h3>
-                    <p className="text-xs text-[#C5A862] font-medium">{employee.jobTitle}</p>
+                    <h3 className="font-bold text-slate-900 text-sm">{employee.name}</h3>
+                    <p className="text-xs text-blue-600 font-bold">{employee.jobTitle}</p>
                   </div>
                 </div>
 
@@ -190,27 +190,27 @@ export default function Employees({
                       onDeleteEmployee(employee.id);
                     }
                   }}
-                  className="p-1.5 text-gray-500 hover:text-red-400 transition"
+                  className="p-1.5 text-slate-400 hover:text-red-500 transition"
                   title="حذف الموظف"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-gray-800/80 space-y-2 text-xs text-gray-300">
+              <div className="mt-4 pt-3 border-t border-slate-100 space-y-2 text-xs text-slate-700">
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-400">الهاتف:</span>
+                  <span className="text-slate-500">الهاتف:</span>
                   <span className="font-mono">{employee.phone}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-400">الراتب الشهري:</span>
-                  <span className="font-mono font-bold text-emerald-400">
+                  <span className="text-slate-500">الراتب الشهري:</span>
+                  <span className="font-mono font-bold text-emerald-600">
                     {employee.monthlySalary.toLocaleString()} {currency}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-400">رصيد السُلف:</span>
-                  <span className={`font-mono font-bold ${employee.totalAdvances > 0 ? 'text-amber-400' : 'text-gray-400'}`}>
+                  <span className="text-slate-500">رصيد السُلف:</span>
+                  <span className={`font-mono font-bold ${employee.totalAdvances > 0 ? 'text-amber-600' : 'text-slate-500'}`}>
                     {employee.totalAdvances.toLocaleString()} {currency}
                   </span>
                 </div>
@@ -218,13 +218,13 @@ export default function Employees({
             </div>
 
             {/* Employee Actions */}
-            <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-800/80">
+            <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100">
               <button
                 onClick={() => {
                   setSelectedEmployee(employee);
                   setModalType('advance');
                 }}
-                className="py-2 px-3 rounded-xl bg-amber-950/40 border border-amber-600/30 text-amber-300 hover:bg-amber-900/40 text-xs font-bold transition flex items-center justify-center gap-1"
+                className="py-2 px-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
               >
                 <Wallet className="w-3.5 h-3.5" />
                 <span>تسجيل سلفة</span>
@@ -235,7 +235,7 @@ export default function Employees({
                   setSelectedEmployee(employee);
                   setModalType('salary');
                 }}
-                className="py-2 px-3 rounded-xl bg-emerald-950/40 border border-emerald-600/30 text-emerald-300 hover:bg-emerald-900/40 text-xs font-bold transition flex items-center justify-center gap-1"
+                className="py-2 px-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 hover:bg-emerald-100 text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
               >
                 <DollarSign className="w-3.5 h-3.5" />
                 <span>صرف راتب</span>
@@ -248,38 +248,38 @@ export default function Employees({
       {/* Modal: Add Employee */}
       <AnimatePresence>
         {showAddModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-[#0B141F] border border-[#C5A862]/40 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4"
+              className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 text-slate-900"
             >
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <UserPlus className="w-5 h-5 text-[#C5A862]" />
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-blue-600" />
                 <span>إضافة موظف جديد</span>
               </h3>
 
               <form onSubmit={handleAddSubmit} className="space-y-4">
                 <div>
-                  <label className="text-xs text-gray-300 block mb-1">اسم الموظف الكامل *</label>
+                  <label className="text-xs text-slate-600 block mb-1">اسم الموظف الكامل *</label>
                   <input
                     type="text"
                     required
                     placeholder="مثال: محمد أحمد العبسي"
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
-                    className="w-full p-2.5 rounded-xl bg-[#121E2C] border border-gray-700 text-sm text-white focus:outline-none focus:border-[#C5A862]"
+                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-300 text-xs text-slate-900 focus:outline-none focus:border-blue-600"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-gray-300 block mb-1">المسمى الوظيفي</label>
+                    <label className="text-xs text-slate-600 block mb-1">المسمى الوظيفي</label>
                     <select
                       value={newJobTitle}
                       onChange={(e) => setNewJobTitle(e.target.value)}
-                      className="w-full p-2.5 rounded-xl bg-[#121E2C] border border-gray-700 text-sm text-white focus:outline-none focus:border-[#C5A862]"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-300 text-xs text-slate-900 focus:outline-none focus:border-blue-600"
                     >
                       <option value="كاشير">كاشير مبيعات</option>
                       <option value="فني صيانة">فني صيانة وتصليح</option>
@@ -290,40 +290,40 @@ export default function Employees({
                   </div>
 
                   <div>
-                    <label className="text-xs text-gray-300 block mb-1">رقم الهاتف</label>
+                    <label className="text-xs text-slate-600 block mb-1">رقم الهاتف</label>
                     <input
                       type="text"
                       placeholder="770000000"
                       value={newPhone}
                       onChange={(e) => setNewPhone(e.target.value)}
-                      className="w-full p-2.5 rounded-xl bg-[#121E2C] border border-gray-700 text-sm text-white focus:outline-none focus:border-[#C5A862]"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-300 text-xs text-slate-900 focus:outline-none focus:border-blue-600"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-xs text-gray-300 block mb-1">الراتب الشهري المتفق عليه ({currency}) *</label>
+                  <label className="text-xs text-slate-600 block mb-1">الراتب الشهري المتفق عليه ({currency}) *</label>
                   <input
                     type="number"
                     required
                     placeholder="150000"
                     value={newSalary}
                     onChange={(e) => setNewSalary(e.target.value)}
-                    className="w-full p-2.5 rounded-xl bg-[#121E2C] border border-gray-700 text-sm text-white font-mono focus:outline-none focus:border-[#C5A862]"
+                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-300 text-xs font-mono text-slate-900 focus:outline-none focus:border-blue-600"
                   />
                 </div>
 
-                <div className="flex justify-end gap-2 pt-3 border-t border-gray-800">
+                <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
                   <button
                     type="button"
                     onClick={() => setShowAddModal(false)}
-                    className="px-4 py-2 rounded-xl bg-gray-800 text-gray-300 text-xs hover:bg-gray-700 transition"
+                    className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs hover:bg-slate-200 transition cursor-pointer"
                   >
                     إلغاء
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 rounded-xl bg-[#C5A862] text-black font-bold text-xs hover:bg-[#d4b771] transition"
+                    className="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 transition cursor-pointer shadow-xs"
                   >
                     حفظ الموظف
                   </button>
@@ -337,79 +337,79 @@ export default function Employees({
       {/* Modal: Advance or Salary Payment */}
       <AnimatePresence>
         {modalType && selectedEmployee && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-[#0B141F] border border-[#C5A862]/40 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4"
+              className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 text-slate-900"
             >
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 {modalType === 'advance' ? (
                   <>
-                    <Wallet className="w-5 h-5 text-amber-400" />
+                    <Wallet className="w-5 h-5 text-amber-600" />
                     <span>تسجيل سلفة للموظف: {selectedEmployee.name}</span>
                   </>
                 ) : (
                   <>
-                    <DollarSign className="w-5 h-5 text-emerald-400" />
+                    <DollarSign className="w-5 h-5 text-emerald-600" />
                     <span>صرف راتب للموظف: {selectedEmployee.name}</span>
                   </>
                 )}
               </h3>
 
-              <div className="p-3 bg-[#121E2C] rounded-xl border border-gray-800 text-xs space-y-1 text-gray-300">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1 text-slate-700">
                 <div className="flex justify-between">
                   <span>الراتب المحدد:</span>
-                  <span className="font-mono text-emerald-400 font-bold">{selectedEmployee.monthlySalary.toLocaleString()} {currency}</span>
+                  <span className="font-mono text-emerald-600 font-bold">{selectedEmployee.monthlySalary.toLocaleString()} {currency}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>إجمالي السُلف الحالية:</span>
-                  <span className="font-mono text-amber-400 font-bold">{selectedEmployee.totalAdvances.toLocaleString()} {currency}</span>
+                  <span className="font-mono text-amber-600 font-bold">{selectedEmployee.totalAdvances.toLocaleString()} {currency}</span>
                 </div>
               </div>
 
               <form onSubmit={handleActionSubmit} className="space-y-4">
                 <div>
-                  <label className="text-xs text-gray-300 block mb-1">المبلغ المطلوب ({currency}) *</label>
+                  <label className="text-xs text-slate-600 block mb-1">المبلغ المطلوب ({currency}) *</label>
                   <input
                     type="number"
                     required
                     placeholder={modalType === 'salary' ? String(selectedEmployee.monthlySalary - selectedEmployee.totalAdvances) : '20000'}
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    className="w-full p-2.5 rounded-xl bg-[#121E2C] border border-gray-700 text-sm text-white font-mono focus:outline-none focus:border-[#C5A862]"
+                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-300 text-xs font-mono text-slate-900 focus:outline-none focus:border-blue-600"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs text-gray-300 block mb-1">ملاحظة / بيان القيد</label>
+                  <label className="text-xs text-slate-600 block mb-1">ملاحظة / بيان القيد</label>
                   <input
                     type="text"
                     placeholder={modalType === 'advance' ? 'سلفة لحالة طارئة' : 'صرف راتب شهر يوليو'}
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
-                    className="w-full p-2.5 rounded-xl bg-[#121E2C] border border-gray-700 text-sm text-white focus:outline-none focus:border-[#C5A862]"
+                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-300 text-xs text-slate-900 focus:outline-none focus:border-blue-600"
                   />
                 </div>
 
-                <div className="flex justify-end gap-2 pt-3 border-t border-gray-800">
+                <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
                   <button
                     type="button"
                     onClick={() => {
                       setModalType(null);
                       setSelectedEmployee(null);
                     }}
-                    className="px-4 py-2 rounded-xl bg-gray-800 text-gray-300 text-xs hover:bg-gray-700 transition"
+                    className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs hover:bg-slate-200 transition cursor-pointer"
                   >
                     إلغاء
                   </button>
                   <button
                     type="submit"
-                    className={`px-4 py-2 rounded-xl text-black font-bold text-xs transition ${
+                    className={`px-4 py-2 rounded-xl font-bold text-xs transition cursor-pointer shadow-xs ${
                       modalType === 'advance'
-                        ? 'bg-amber-400 hover:bg-amber-300'
-                        : 'bg-emerald-400 hover:bg-emerald-300'
+                        ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                        : 'bg-emerald-600 hover:bg-emerald-700 text-white'
                     }`}
                   >
                     تأكيد وتسجيل القيد
@@ -422,18 +422,18 @@ export default function Employees({
       </AnimatePresence>
 
       {/* Payroll Records History */}
-      <div className="bg-[#0B141F] p-5 rounded-2xl border border-gray-800 space-y-4">
-        <h3 className="text-base font-bold text-white flex items-center gap-2">
-          <FileText className="w-5 h-5 text-[#C5A862]" />
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+        <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+          <FileText className="w-5 h-5 text-blue-600" />
           <span>سجل حركات السلف والرواتب الأخير</span>
         </h3>
 
         {payrollRecords.length === 0 ? (
-          <p className="text-xs text-gray-500 text-center py-6">لا توجد حركات سلف أو رواتب مسجلة بعد.</p>
+          <p className="text-xs text-slate-500 text-center py-6">لا توجد حركات سلف أو رواتب مسجلة بعد.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs text-right text-gray-300">
-              <thead className="bg-[#121E2C] text-[#C5A862] border-b border-gray-800">
+            <table className="w-full text-xs text-right text-slate-700">
+              <thead className="bg-slate-50 text-slate-900 font-bold border-b border-slate-200">
                 <tr>
                   <th className="p-3">التاريخ</th>
                   <th className="p-3">اسم الموظف</th>
@@ -442,24 +442,24 @@ export default function Employees({
                   <th className="p-3">الملاحظة</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-800/60">
+              <tbody className="divide-y divide-slate-100">
                 {payrollRecords.slice().reverse().map((record) => (
-                  <tr key={record.id} className="hover:bg-[#121E2C]/50">
-                    <td className="p-3 font-mono text-gray-400">{new Date(record.date).toLocaleDateString('ar-YE')}</td>
-                    <td className="p-3 font-bold text-white">{record.employeeName}</td>
+                  <tr key={record.id} className="hover:bg-slate-50/80 transition">
+                    <td className="p-3 font-mono text-slate-500">{new Date(record.date).toLocaleDateString('ar-YE')}</td>
+                    <td className="p-3 font-bold text-slate-900">{record.employeeName}</td>
                     <td className="p-3">
                       <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
                         record.type === 'advance'
-                          ? 'bg-amber-950 text-amber-400 border border-amber-800/50'
-                          : 'bg-emerald-950 text-emerald-400 border border-emerald-800/50'
+                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                          : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                       }`}>
                         {record.type === 'advance' ? 'سلفة' : 'صرف راتب'}
                       </span>
                     </td>
-                    <td className="p-3 font-mono font-bold text-white">
+                    <td className="p-3 font-mono font-bold text-slate-900">
                       {record.amount.toLocaleString()} {currency}
                     </td>
-                    <td className="p-3 text-gray-400">{record.note || '-'}</td>
+                    <td className="p-3 text-slate-500">{record.note || '-'}</td>
                   </tr>
                 ))}
               </tbody>

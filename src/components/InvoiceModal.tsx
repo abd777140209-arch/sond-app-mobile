@@ -4,7 +4,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Printer, Download, X, ShieldCheck, Heart, Smartphone, SlidersHorizontal, MessageCircle } from 'lucide-react';
+import { Printer, Download, X, ShieldCheck, Heart, Smartphone, SlidersHorizontal, MessageCircle, FileDown, Loader2, Share2, Bluetooth, QrCode } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
+import { QRCodeSVG } from 'qrcode.react';
 import { Invoice, SystemSettings, Customer } from '../types';
 import { soundManager } from '../utils/sound';
 
@@ -23,6 +26,7 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
 
   const [showWhatsAppForm, setShowWhatsAppForm] = useState(false);
   const [phoneInput, setPhoneInput] = useState('');
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
 
   useEffect(() => {
     if (invoice && customers) {
@@ -37,9 +41,104 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
 
   if (!invoice) return null;
 
+  const [isBluetoothConnecting, setIsBluetoothConnecting] = useState(false);
+
   const handlePrint = () => {
     soundManager.playSuccessChime();
     window.print();
+  };
+
+  const handleBluetoothPrint = async () => {
+    soundManager.playSuccessChime();
+    setIsBluetoothConnecting(true);
+    try {
+      if (typeof navigator !== 'undefined' && 'bluetooth' in navigator) {
+        const device = await (navigator as any).bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb', '49535343-fe7d-4ae5-8fa9-9fafd205e455']
+        });
+        if (device) {
+          alert(`✅ تم الاقتران بطابعة البلوتوث الحرارية (${device.name || 'طابعة البلوتوث'}). جاري إرسال البيانات مباشرة...`);
+          window.print();
+        }
+      } else {
+        alert('ℹ️ تقنية البلوتوث المباشر (Web Bluetooth) تدعم متصفحات Chrome/Edge على الأجهزة المحمولة والكمبيوتر. يتم تحويل الأمر للطباعة المباشرة.');
+        window.print();
+      }
+    } catch (err) {
+      console.log('Bluetooth thermal print:', err);
+      window.print();
+    } finally {
+      setIsBluetoothConnecting(false);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    if (isExportingPDF) return;
+    soundManager.playSuccessChime();
+    setIsExportingPDF(true);
+
+    try {
+      const element = document.getElementById('invoice-printable-card');
+      if (!element) return;
+
+      // Store scroll position and temporarily expand element height for full canvas capture
+      const originalMaxHeight = element.style.maxHeight;
+      const originalOverflow = element.style.overflow;
+      element.style.maxHeight = 'none';
+      element.style.overflow = 'visible';
+
+      const canvas = await html2canvas(element, {
+        scale: 3,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      });
+
+      // Restore original styling
+      element.style.maxHeight = originalMaxHeight;
+      element.style.overflow = originalOverflow;
+
+      const imgData = canvas.toDataURL('image/png');
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+
+      const pdfWidth = paperSize === '80mm' ? 80 : 58;
+      const pdfHeight = (imgHeight * pdfWidth) / imgWidth;
+
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [pdfWidth, pdfHeight + 2],
+      });
+
+      pdf.addImage(imgData, 'PNG', 0, 1, pdfWidth, pdfHeight);
+      const fileName = `فاتورة_${invoice.invoiceNumber}.pdf`;
+
+      const pdfBlob = pdf.output('blob');
+      const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+
+      // Check if direct sharing API is supported (e.g. mobile devices/modern browsers)
+      if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+        try {
+          await navigator.share({
+            title: `فاتورة ${invoice.invoiceNumber}`,
+            text: `فاتورة مبيعات من ${settings.storeName} - رقم ${invoice.invoiceNumber}`,
+            files: [pdfFile],
+          });
+        } catch (shareErr) {
+          if ((shareErr as Error)?.name !== 'AbortError') {
+            pdf.save(fileName);
+          }
+        }
+      } else {
+        pdf.save(fileName);
+      }
+    } catch (error) {
+      console.error('فشل تصدير الفاتورة كـ PDF:', error);
+    } finally {
+      setIsExportingPDF(false);
+    }
   };
 
   // Auto-route print when invoice loads if configured
@@ -232,7 +331,7 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
         </div>
 
         {/* PRINTABLE BILL CANVAS AREA */}
-        <div className="p-5 bg-white overflow-y-auto max-h-[380px] font-sans print-area" style={{ direction: 'rtl' }}>
+        <div id="invoice-printable-card" className="p-5 bg-white overflow-y-auto max-h-[380px] font-sans print-area" style={{ direction: 'rtl' }}>
           
           <div className="text-center space-y-1">
             {/* Store Name & Branding */}
@@ -347,6 +446,27 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
                 ))}
               </div>
             </div>
+            {/* ZATCA / Standard Electronic Invoice QR Code */}
+            <div className="flex flex-col items-center justify-center my-3 pt-2 border-t border-dashed border-gray-300">
+              <div className="p-1 bg-white border border-gray-300 rounded-lg shadow-xs">
+                <QRCodeSVG
+                  value={JSON.stringify({
+                    seller: settings.storeName,
+                    vatNumber: "300012345600003",
+                    timestamp: invoice.date,
+                    total: invoice.finalAmount,
+                    currency: settings.currency,
+                    invoiceNum: invoice.invoiceNumber
+                  })}
+                  size={88}
+                  level="M"
+                />
+              </div>
+              <span className="text-[8px] font-bold text-gray-500 mt-1 flex items-center gap-0.5">
+                <QrCode className="w-2.5 h-2.5 text-blue-600" /> رمز الفاتورة الإلكترونية المعتمد (QR Code)
+              </span>
+            </div>
+
             <p className="text-[8px] text-gray-400 flex items-center justify-center gap-0.5">
               سعدنا بزيارتكم الكريمة <Heart className="w-2 text-red-500 fill-red-500" /> طاب يومكم
             </p>
@@ -384,28 +504,71 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
                 إرسال 💬
               </button>
             </div>
-            <p className="text-[10px] text-gray-500">
-              سيتم تهيئة رسالة الفاتورة المنسقة وفتح واتساب لإرسالها مباشرة للعميل.
-            </p>
+
+            <div className="flex items-center justify-between pt-1 border-t border-gray-800/60 text-[11px]">
+              <span className="text-gray-400">مشاركة ملف PDF مباشرة:</span>
+              <button
+                onClick={handleExportPDF}
+                disabled={isExportingPDF}
+                className="text-[#C5A862] hover:underline flex items-center gap-1 cursor-pointer font-bold disabled:opacity-50"
+              >
+                {isExportingPDF ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3" />}
+                <span>تحميل PDF للرفق</span>
+              </button>
+            </div>
           </div>
         )}
 
         {/* Modal Bottom Actions (Non-printed) */}
-        <div className="p-4 bg-slate-900 border-t border-gray-800 flex gap-2">
+        <div className="p-3.5 bg-slate-900 border-t border-gray-800 grid grid-cols-2 sm:grid-cols-5 gap-2 no-print">
           <button
             id="print_thermal_invoice_btn"
             onClick={handlePrint}
-            className="flex-1 py-2 rounded-xl text-xs font-bold bg-green-500 text-black hover:bg-green-600 cursor-pointer flex items-center justify-center gap-1 shadow transition"
+            className="py-2.5 px-2 rounded-xl text-xs font-bold bg-emerald-500 text-black hover:bg-emerald-400 cursor-pointer flex items-center justify-center gap-1.5 shadow transition"
+            title="طباعة حرارية مباشرة عبر النظام"
           >
-            <Printer className="w-3.5 h-3.5" /> طباعة
+            <Printer className="w-3.5 h-3.5 shrink-0" />
+            <span>طباعة</span>
+          </button>
+
+          <button
+            id="print_bluetooth_invoice_btn"
+            onClick={handleBluetoothPrint}
+            disabled={isBluetoothConnecting}
+            className="py-2.5 px-2 rounded-xl text-xs font-bold bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5 shadow transition"
+            title="طباعة مباشرة عبر اقتران البلوتوث (Web Bluetooth)"
+          >
+            {isBluetoothConnecting ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+            ) : (
+              <Bluetooth className="w-3.5 h-3.5 shrink-0 text-blue-200" />
+            )}
+            <span>بلوتوث 🖨️</span>
+          </button>
+
+          <button
+            id="export_pdf_invoice_btn"
+            onClick={handleExportPDF}
+            disabled={isExportingPDF}
+            className="py-2.5 px-2 rounded-xl text-xs font-bold bg-rose-600 text-white hover:bg-rose-500 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5 shadow transition"
+            title="تصدير الفاتورة كملف PDF للمشاركة أو الحفظ"
+          >
+            {isExportingPDF ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+            ) : (
+              <FileDown className="w-3.5 h-3.5 shrink-0" />
+            )}
+            <span>تصدير PDF</span>
           </button>
           
           <button
             id="download_text_invoice_btn"
             onClick={handleDownload}
-            className="flex-1 py-2 rounded-xl text-xs font-bold bg-[#C5A862] text-black hover:bg-[#A0813D] cursor-pointer flex items-center justify-center gap-1 shadow transition"
+            className="py-2.5 px-2 rounded-xl text-xs font-bold bg-[#C5A862] text-black hover:bg-[#A0813D] cursor-pointer flex items-center justify-center gap-1.5 shadow transition"
+            title="تحميل إيصال نصي خفيف (TXT)"
           >
-            <Download className="w-3.5 h-3.5" /> تحميل
+            <Download className="w-3.5 h-3.5 shrink-0" />
+            <span>نصي TXT</span>
           </button>
 
           <button
@@ -414,13 +577,15 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
               soundManager.playScanBeep();
               setShowWhatsAppForm(!showWhatsAppForm);
             }}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold cursor-pointer flex items-center justify-center gap-1 shadow transition ${
+            className={`py-2.5 px-2 rounded-xl text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 shadow transition ${
               showWhatsAppForm 
                 ? 'bg-green-600 text-white' 
                 : 'bg-slate-800 text-green-400 hover:bg-slate-700'
             }`}
+            title="إرسال بيانات الفاتورة عبر الواتساب"
           >
-            <MessageCircle className="w-3.5 h-3.5" /> واتساب
+            <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+            <span>واتساب</span>
           </button>
         </div>
 

@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
-import { TrendingUp, Users, Package, Wallet, ArrowDownLeft, AlertCircle, Award, Phone, BarChart3, ArrowLeft, Bell, AlertTriangle, ShieldAlert, Sparkles } from 'lucide-react';
+import React, { useState } from 'react';
+import { TrendingUp, Users, Package, Wallet, ArrowDownLeft, AlertCircle, Award, Phone, BarChart3, ArrowLeft, Bell, AlertTriangle, ShieldAlert, Sparkles, X, Volume2, Bot, CheckCircle2 } from 'lucide-react';
 import { Product, Customer, Invoice, Payment, Transaction, SystemSettings } from '../types';
+import { soundManager } from '../utils/sound';
 
 interface DashboardProps {
   products: Product[];
@@ -29,6 +30,8 @@ export default function Dashboard({
   isPrivacyMode = false
 }: DashboardProps) {
 
+  const [showZaraModal, setShowZaraModal] = useState(false);
+
   // Speech synthesis audio summary
   const handleSpeakSummary = () => {
     if (!('speechSynthesis' in window)) {
@@ -36,7 +39,7 @@ export default function Dashboard({
       return;
     }
     window.speechSynthesis.cancel();
-    const text = `مرحباً بك في نشاطك التجاري ${settings.storeName || 'سند'}. إجمالي المبيعات بلغ ${totalSales.toLocaleString()} ${settings.currency}. إجمالي ديون العملاء المتبقية ${totalDebts.toLocaleString()} ${settings.currency}. عدد الأصناف في المخزن ${activeProducts.length} صنف.`;
+    const text = `أهلاً بك! أنا زارا، المساعد المحاسبي الذكي لنظام سند في نشاطك التجاري ${settings.storeName || 'سند'}. إليك التقرير المالي الصوتي المباشر: إجمالي المبيعات بلغ ${totalSales.toLocaleString()} ${settings.currency}. إجمالي ديون العملاء المتبقية ${totalDebts.toLocaleString()} ${settings.currency}. عدد الأصناف بالمخزن ${activeProducts.length} صنف بقيمة أرباح متوقعة قدرها ${expectedProfit.toLocaleString()} ${settings.currency}. شكراً لاستخدامك نظام سند المحاسبي.`;
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'ar-SA';
     utterance.rate = 0.95;
@@ -98,9 +101,31 @@ export default function Dashboard({
 
         {/* Developer Credit & Profit Report Shortcut */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          {/* Zara AI Assistant Button */}
+          <button
+            onClick={() => {
+              soundManager.playSuccessChime();
+              setShowZaraModal(true);
+            }}
+            className="flex items-center gap-2 bg-gradient-to-r from-amber-500 via-amber-600 to-[#C5A862] hover:from-amber-400 hover:to-[#d4b771] text-black px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-amber-500/20 active:scale-95"
+            title="المساعد المحاسبي الذكي زارا"
+          >
+            <div className="w-6 h-6 rounded-xl bg-black/20 flex items-center justify-center font-black text-xs">
+              ✨
+            </div>
+            <div className="text-right">
+              <div className="font-extrabold text-black flex items-center gap-1">
+                <span>زارا</span>
+                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-black/20 text-black">AI</span>
+              </div>
+              <div className="text-[9px] text-black/80 font-bold">المساعد المحاسبي الذكي</div>
+            </div>
+          </button>
+
+          {/* Voice Report Button */}
           <button
             onClick={handleSpeakSummary}
-            className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 text-white px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-blue-500/20"
+            className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 text-white px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-blue-500/20 active:scale-95"
             title="استمع للملخص المالي صوتاً"
           >
             <span className="text-base">🔊</span>
@@ -446,6 +471,127 @@ export default function Dashboard({
           </table>
         </div>
       </div>
+
+      {/* Zara AI Financial Assistant Modal */}
+      {showZaraModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="w-full max-w-lg bg-[#0F1824] border border-[#C5A862]/50 rounded-3xl p-6 shadow-2xl text-right relative space-y-5 animate-in fade-in zoom-in duration-200">
+            <button
+              onClick={() => setShowZaraModal(false)}
+              className="absolute top-4 left-4 text-gray-400 hover:text-white p-1.5 rounded-full bg-slate-800/60 hover:bg-slate-700 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Modal Header */}
+            <div className="flex items-center gap-3 border-b border-gray-800 pb-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-[#C5A862] flex items-center justify-center text-black font-black text-xl shadow-lg">
+                ✨
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white flex items-center gap-2">
+                  <span>زارا - المساعد المحاسبي الذكي</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    نظام سند v2.4
+                  </span>
+                </h3>
+                <p className="text-xs text-gray-400">
+                  تحليلات وإرشادات فورية ذكية لوحة التحكم المالي والمبيعات
+                </p>
+              </div>
+            </div>
+
+            {/* Zara Welcome Voice Prompt */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-950/60 to-indigo-950/60 border border-blue-800/40 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sky-300 font-bold text-xs">
+                  <Bot className="w-4 h-4 text-sky-400" />
+                  <span>رسالة المساعد الذكي زارا:</span>
+                </div>
+                <button
+                  onClick={handleSpeakSummary}
+                  className="flex items-center gap-1 px-3 py-1 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-sm cursor-pointer"
+                >
+                  <Volume2 className="w-3.5 h-3.5" />
+                  <span>قراءة صوتاً 🔊</span>
+                </button>
+              </div>
+              <p className="text-xs text-gray-200 leading-relaxed font-medium">
+                "أهلاً بك! أنا زارا، المساعد المحاسبي الذكي لنظام سند في نشاطك التجاري <strong className="text-amber-400">{settings.storeName || 'سند'}</strong>. يسعدني متابعة أداء مؤسستك وتزويدك بالتقارير المباشرة."
+              </p>
+            </div>
+
+            {/* Real-Time Financial Cards */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3.5 rounded-2xl bg-[#132030] border border-gray-800">
+                <div className="text-[11px] text-gray-400 font-bold mb-1">إجمالي المبيعات الموثقة</div>
+                <div className="text-base font-black text-emerald-400">{fmt(totalSales)}</div>
+                <div className="text-[10px] text-emerald-300/80 mt-1">من واقع {invoices.length} فاتورة</div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-[#132030] border border-gray-800">
+                <div className="text-[11px] text-gray-400 font-bold mb-1">ديون العملاء المتبقية</div>
+                <div className="text-base font-black text-rose-400">{fmt(totalDebts)}</div>
+                <div className="text-[10px] text-rose-300/80 mt-1">على {topDebtors.length} عملاء متأخرين</div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-[#132030] border border-gray-800">
+                <div className="text-[11px] text-gray-400 font-bold mb-1">الأصناف المسجلة بالمخزن</div>
+                <div className="text-base font-black text-sky-400">{activeProducts.length} صنف</div>
+                <div className="text-[10px] text-sky-300/80 mt-1">بقيمة {fmt(inventoryRetailValue)}</div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-[#132030] border border-gray-800">
+                <div className="text-[11px] text-gray-400 font-bold mb-1">الأرباح المتوقعة من المخزون</div>
+                <div className="text-base font-black text-[#C5A862]">{fmt(expectedProfit)}</div>
+                <div className="text-[10px] text-[#C5A862]/80 mt-1">هامش الأرباح التقديري</div>
+              </div>
+            </div>
+
+            {/* Zara Recommendations */}
+            <div className="p-3.5 rounded-2xl bg-amber-950/20 border border-amber-800/40 space-y-2 text-xs">
+              <div className="font-bold text-amber-300 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <span>توصيات زارا الذكية لهذا اليوم:</span>
+              </div>
+              <ul className="space-y-1 text-gray-300 text-[11px] list-disc list-inside">
+                {highDebtCustomers.length > 0 ? (
+                  <li>تنبيه: توجد ديون كبيرة تفوق 50,000 {settings.currency}. يرجى التواصل مع العملاء لتحصيل المستحقات.</li>
+                ) : (
+                  <li>الديون تحت السيطرة ضمن الحدود الآمنة.</li>
+                )}
+                {lowStockProducts.length > 0 ? (
+                  <li>تنبيه: يوجد عدد {lowStockProducts.length} أصناف وصلت للحد الأدنى من المخزون. يفضل إعادة الطلب.</li>
+                ) : (
+                  <li>مستويات المخزون ممتازة لجميع الأصناف.</li>
+                )}
+                <li>يمكنك الانتقال لقسم "جرد وحصر المنشأة" لمطابقة الكميات الميدانية تلقائياً.</li>
+              </ul>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setShowZaraModal(false);
+                  setActiveTab('stock_audit');
+                }}
+                className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-[#C5A862] hover:from-amber-400 hover:to-[#d4b771] text-black font-extrabold text-xs shadow-lg transition cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>الانتقال لجرد وحصر المنشأة 📦</span>
+              </button>
+              
+              <button
+                onClick={() => setShowZaraModal(false)}
+                className="px-5 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-gray-300 text-xs font-bold transition cursor-pointer"
+              >
+                إغلاق
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

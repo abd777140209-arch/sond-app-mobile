@@ -19,10 +19,14 @@ import {
   X,
   Filter,
   CheckCircle2,
-  Tag
+  Tag,
+  Printer,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { Product } from '../types';
 import { soundManager } from '../utils/sound';
+import BarcodeLabelPrinterModal from './BarcodeLabelPrinterModal';
 
 interface InventoryProps {
   products: Product[];
@@ -30,6 +34,8 @@ interface InventoryProps {
   onUpdateProduct: (product: Product) => void;
   onDeleteProduct: (productId: string) => void;
   currency: string;
+  storeName?: string;
+  isPrivacyMode?: boolean;
 }
 
 export default function Inventory({
@@ -37,8 +43,11 @@ export default function Inventory({
   onAddProduct,
   onUpdateProduct,
   onDeleteProduct,
-  currency
+  currency,
+  storeName = 'سند',
+  isPrivacyMode = false
 }: InventoryProps) {
+  const [showLabelPrinterModal, setShowLabelPrinterModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLowStock, setFilterLowStock] = useState(false);
 
@@ -148,6 +157,12 @@ export default function Inventory({
     return matchesSearch && matchesLowStock && matchesCategory;
   });
 
+  // Format currency helper respecting Privacy Mode
+  const fmt = (num: number) => {
+    if (isPrivacyMode) return '**** ' + currency;
+    return num.toLocaleString() + ' ' + currency;
+  };
+
   // Calculate statistics
   const totalStockCount = activeProductsList.reduce((acc, p) => acc + p.stock, 0);
   const totalCostValue = activeProductsList.reduce((acc, p) => acc + (p.costPrice * p.stock), 0);
@@ -157,7 +172,7 @@ export default function Inventory({
   return (
     <div id="inventory_tab_view" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       
-      {/* 1. TOP STATISTICAL BAR */}
+      {/* 1. TOP STATISTICAL BAR (أعلى قسم المخزون) */}
       <div className="lg:col-span-12 grid grid-cols-2 md:grid-cols-4 gap-4">
         
         <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
@@ -171,11 +186,14 @@ export default function Inventory({
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between relative overflow-hidden">
           <div>
-            <span className="text-xs font-bold text-slate-500">قيمة المخزون بسعر التكلفة</span>
-            <h3 className="text-lg font-black text-slate-900 mt-1 dir-ltr text-right">
-              {totalCostValue.toLocaleString()} <span className="text-xs font-normal text-slate-400">{currency}</span>
+            <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
+              <span>قيمة المخزون بسعر التكلفة</span>
+              {isPrivacyMode && <EyeOff className="w-3 h-3 text-amber-500 inline" />}
+            </span>
+            <h3 className="text-lg font-black text-slate-900 mt-1 dir-ltr text-right font-mono">
+              {fmt(totalCostValue)}
             </h3>
             <span className="text-[10px] text-slate-400">رأس المال المستثمر بالمخزن</span>
           </div>
@@ -184,11 +202,14 @@ export default function Inventory({
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between relative overflow-hidden">
           <div>
-            <span className="text-xs font-bold text-slate-500">الأرباح المتوقعة عند البيع</span>
-            <h3 className="text-lg font-black text-emerald-600 mt-1 dir-ltr text-right">
-              +{totalPotentialProfit.toLocaleString()} <span className="text-xs font-normal text-slate-400">{currency}</span>
+            <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
+              <span>الأرباح المتوقعة عند البيع</span>
+              {isPrivacyMode && <EyeOff className="w-3 h-3 text-amber-500 inline" />}
+            </span>
+            <h3 className="text-lg font-black text-emerald-600 mt-1 dir-ltr text-right font-mono">
+              {isPrivacyMode ? '**** ' + currency : '+' + totalPotentialProfit.toLocaleString() + ' ' + currency}
             </h3>
             <span className="text-[10px] text-slate-400">هامش الربح الإجمالي</span>
           </div>
@@ -257,6 +278,17 @@ export default function Inventory({
             >
               <AlertTriangle className="w-3.5 h-3.5" />
               <span>المنتهية والمنخفضة فقط</span>
+            </button>
+
+            <button
+              onClick={() => {
+                soundManager.playScanBeep();
+                setShowLabelPrinterModal(true);
+              }}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5 text-blue-600" />
+              <span>طباعة ملصقات الباركود (بلوتوث) 🖨️</span>
             </button>
           </div>
         </div>
@@ -560,8 +592,10 @@ export default function Inventory({
                       <tr key={p.id} className="hover:bg-slate-50 transition">
                         <td className="py-3 pr-2">
                           <div className="font-bold text-slate-900">{p.name}</div>
-                          <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1 mt-0.5">
-                            <Barcode className="w-3 h-3 text-slate-400" /> {p.barcode}
+                          <div className="text-[10px] text-slate-400 font-mono flex items-center gap-2 mt-0.5">
+                            <span className="flex items-center gap-1"><Barcode className="w-3 h-3 text-slate-400" /> {p.barcode}</span>
+                            <span className="text-slate-300">•</span>
+                            <span className="text-slate-400">التكلفة: {isPrivacyMode ? '****' : p.costPrice.toLocaleString() + ' ' + currency}</span>
                           </div>
                         </td>
                         <td className="py-3 text-center">
@@ -579,7 +613,7 @@ export default function Inventory({
                           )}
                         </td>
                         <td className="py-3 text-center font-mono font-bold text-blue-600">
-                          {p.sellingPrice.toLocaleString()} {currency}
+                          {fmt(p.sellingPrice)}
                         </td>
                         <td className="py-3 pl-2 text-left flex justify-end gap-1.5">
                           <button
@@ -615,6 +649,14 @@ export default function Inventory({
           </div>
         </div>
       </div>
+
+      <BarcodeLabelPrinterModal
+        isOpen={showLabelPrinterModal}
+        onClose={() => setShowLabelPrinterModal(false)}
+        products={products}
+        storeName={storeName}
+        currency={currency}
+      />
 
     </div>
   );

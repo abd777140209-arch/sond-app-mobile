@@ -26,10 +26,11 @@ export interface CloudLicense {
   status: 'active' | 'suspended';
 }
 
-// Check if Firebase configuration is provided
+// Check if Firebase configuration is provided with a valid API key
 export function isFirebaseConfigured(): boolean {
-  // Since we have direct hardcoded configurations, Firebase is always considered configured
-  return true;
+  const env = (import.meta as any).env || {};
+  const apiKey = env.VITE_FIREBASE_API_KEY || "";
+  return Boolean(apiKey && !apiKey.includes("...") && apiKey.trim().length > 10);
 }
 
 export enum OperationType {
@@ -72,22 +73,24 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.warn('Firestore Operation Warning: ', JSON.stringify(errInfo));
 }
 
 // Lazy initialization of Firestore with multi-tab offline persistence
 let firestoreDb: any = null;
 
 export function getFirestoreDb() {
+  if (!isFirebaseConfigured()) {
+    // If Firebase isn't configured with a valid API key, return null so app uses robust local state
+    return null;
+  }
+
   if (!firestoreDb) {
     try {
       const env = (import.meta as any).env || {};
       
-      // Configuration details hardcoded as requested by user to run smoothly on Cloud Run.
-      // Falls back to .env variables if they are supplied in the future.
       const firebaseConfig = {
-        apiKey: env.VITE_FIREBASE_API_KEY || "AIzaSyDLx5jrNwfmsiC...", // يرجى استبداله بمفتاح الـ API الكامل الخاص بك إذا لم يكن مفعلاً بالبيئة
+        apiKey: env.VITE_FIREBASE_API_KEY,
         authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || "abdh-518ab.firebaseapp.com",
         projectId: env.VITE_FIREBASE_PROJECT_ID || "abdh-518ab",
         storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || "abdh-518ab.firebasestorage.app",
@@ -110,7 +113,8 @@ export function getFirestoreDb() {
         firestoreDb = getFirestore(app);
       }
     } catch (e) {
-      console.error("Failed to initialize Firebase:", e);
+      console.warn("Failed to initialize Firebase:", e);
+      return null;
     }
   }
   return firestoreDb;

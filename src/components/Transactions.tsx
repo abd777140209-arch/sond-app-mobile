@@ -32,6 +32,7 @@ interface TransactionsProps {
   onRefundInvoice: (id: string) => void;
   onViewInvoice: (invoice: Invoice) => void;
   currency: string;
+  isPrivacyMode?: boolean;
 }
 
 export default function Transactions({
@@ -41,7 +42,8 @@ export default function Transactions({
   onDeleteTransaction,
   onRefundInvoice,
   onViewInvoice,
-  currency
+  currency,
+  isPrivacyMode = false
 }: TransactionsProps) {
   const [subTab, setSubTab] = useState<'ledger' | 'invoices'>('ledger');
   const [searchQuery, setSearchQuery] = useState('');
@@ -110,7 +112,10 @@ export default function Transactions({
   // Cash Liquid register equation
   const netCashFlow = totalSales + totalPayments + totalMaintenance - totalExpenses - totalRefunds;
 
-  const fmt = (num: number) => num.toLocaleString() + ' ' + currency;
+  const fmt = (num: number) => {
+    if (isPrivacyMode) return '**** ' + currency;
+    return num.toLocaleString() + ' ' + currency;
+  };
 
   // Filter transactions
   const filteredTransactions = transactions.filter(t => {

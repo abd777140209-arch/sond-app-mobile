@@ -21,6 +21,9 @@ export interface Customer {
   phone: string;
   totalDebt: number;
   createdAt: string;
+  debtDueDate?: string; // تاريخ استحقاق الدين
+  loyaltyPoints?: number; // نقاط الولاء
+  notes?: string;
   isDeleted?: boolean;
   isActive?: boolean;
 }
@@ -80,6 +83,10 @@ export interface Transaction {
   description: string;
 }
 
+export type AppTheme = 'financial-blue' | 'emerald-green' | 'warm-amber' | 'dark-luxury';
+export type CardShape = 'soft' | 'sharp' | 'glass';
+export type DisplayDensity = 'comfortable' | 'compact';
+
 export interface SystemSettings {
   storeName: string;
   currency: string;
@@ -87,12 +94,18 @@ export interface SystemSettings {
   phone: string;
   pinCode: string;
   isPinEnabled: boolean;
+  privacyPinCode?: string;
+  isPrivacyPinEnabled?: boolean;
   storeLogoUrl?: string;
+  debtReminderTemplate?: string;
   exchangeRates?: {
     YER: number;
     SAR: number;
     USD: number;
   };
+  appTheme?: AppTheme;
+  cardShape?: CardShape;
+  density?: DisplayDensity;
 }
 
 export interface Employee {

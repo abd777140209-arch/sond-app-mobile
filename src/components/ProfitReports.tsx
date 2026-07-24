@@ -47,6 +47,7 @@ interface ProfitReportsProps {
   transactions: Transaction[];
   customers: Customer[];
   currency: string;
+  isPrivacyMode?: boolean;
 }
 
 type PeriodPreset = 'today' | 'week' | 'month' | '30days' | 'year' | 'custom' | 'all';
@@ -59,7 +60,8 @@ export default function ProfitReports({
   products,
   transactions,
   customers,
-  currency
+  currency,
+  isPrivacyMode = false
 }: ProfitReportsProps) {
   // Filter States
   const [period, setPeriod] = useState<PeriodPreset>('month');
@@ -244,6 +246,7 @@ export default function ProfitReports({
   ].filter(d => d.value > 0), [stats.totalCashRevenue, stats.totalDebtRevenue]);
 
   const fmt = (num: number) => {
+    if (isPrivacyMode) return '**** ' + currency;
     return Math.round(num).toLocaleString('ar-YE') + ' ' + currency;
   };
 

@@ -14,6 +14,7 @@ import {
   BarChart3,
   Settings as SettingsIcon, 
   Lock, 
+  Unlock,
   Clock, 
   Smartphone, 
   AlertCircle,
@@ -22,7 +23,9 @@ import {
   Eye,
   EyeOff,
   Download,
-  Briefcase
+  Briefcase,
+  ClipboardCheck,
+  Boxes
 } from 'lucide-react';
 
 import { Product, Customer, Invoice, Payment, Transaction, SystemSettings, MaintenanceOrder, Employee, PayrollRecord } from './types';
@@ -41,6 +44,7 @@ import Dashboard from './components/Dashboard';
 import POS from './components/POS';
 import Customers from './components/Customers';
 import Inventory from './components/Inventory';
+import StockAudit from './components/StockAudit';
 import Transactions from './components/Transactions';
 import Settings from './components/Settings';
 import InvoiceModal from './components/InvoiceModal';
@@ -52,6 +56,7 @@ import SaaSActivator from './components/SaaSActivator';
 import BiometricLockModal from './components/BiometricLockModal';
 import FloatingCalculator from './components/FloatingCalculator';
 import DeveloperPortalModal from './components/DeveloperPortalModal';
+import PinCheckModal from './components/PinCheckModal';
 
 import { LicenseInfo, loadLicenseLocally, saveLicenseLocally } from './utils/licensing';
 import { findLicenseByHwid } from './utils/firebase';
@@ -134,6 +139,19 @@ export default function App() {
   const [isPrivacyMode, setIsPrivacyMode] = useState<boolean>(() => {
     return localStorage.getItem('smart_accounting_privacy_mode') === 'true';
   });
+  const [showPrivacyPinModal, setShowPrivacyPinModal] = useState<boolean>(false);
+
+  // Cashier Mode state (Locks Settings and Profit Reports with PIN)
+  const [isCashierMode, setIsCashierMode] = useState<boolean>(() => {
+    return localStorage.getItem('smart_accounting_cashier_mode') === 'true';
+  });
+
+  const [showPinCheckModal, setShowPinCheckModal] = useState<boolean>(false);
+  const [pendingProtectedTab, setPendingProtectedTab] = useState<string | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem('smart_accounting_cashier_mode', String(isCashierMode));
+  }, [isCashierMode]);
 
   // APK Download Modal
   const [showApkModal, setShowApkModal] = useState<boolean>(false);
@@ -147,18 +165,31 @@ export default function App() {
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const [swipeHint, setSwipeHint] = useState<string | null>(null);
 
-  const ALL_TABS = ['dashboard', 'pos', 'inventory', 'customers', 'employees', 'transactions', 'reports', 'maintenance', 'settings'];
+  const ALL_TABS = ['dashboard', 'pos', 'inventory', 'stock_audit', 'customers', 'employees', 'transactions', 'reports', 'maintenance', 'settings'];
 
   const TAB_LABELS: Record<string, string> = {
     dashboard: 'الرئيسية',
     pos: 'المبيعات',
     inventory: 'المخزن',
+    stock_audit: 'جرد المنشأة',
     customers: 'العملاء',
     employees: 'العمال والرواتب',
     transactions: 'القيود',
     reports: 'التقارير والأرباح',
     maintenance: 'الصيانة',
     settings: 'الإعدادات'
+  };
+
+  const handleTabSelect = (tab: string) => {
+    const isRestricted = (tab === 'settings' || tab === 'reports') && (isCashierMode || settings.isPinEnabled);
+    if (isRestricted) {
+      soundManager.playWarningBeep();
+      setPendingProtectedTab(tab);
+      setShowPinCheckModal(true);
+    } else {
+      soundManager.playScanBeep();
+      setActiveTab(tab);
+    }
   };
 
 
@@ -575,6 +606,9 @@ export default function App() {
       id: `c-${Date.now()}`,
       name: custData.name,
       phone: custData.phone,
+      debtDueDate: custData.debtDueDate,
+      notes: custData.notes,
+      loyaltyPoints: custData.loyaltyPoints || 0,
       totalDebt: 0,
       createdAt: new Date().toISOString()
     };
@@ -582,6 +616,15 @@ export default function App() {
       saveStoreDocument(license.licenseKey, 'customers', newCustomer.id, newCustomer);
     } else {
       setCustomers(prev => [...prev, newCustomer]);
+    }
+  };
+
+  // Action: Update customer
+  const handleUpdateCustomer = (updatedCustomer: Customer) => {
+    if (license.licenseKey) {
+      saveStoreDocument(license.licenseKey, 'customers', updatedCustomer.id, updatedCustomer);
+    } else {
+      setCustomers(prev => prev.map(c => c.id === updatedCustomer.id ? updatedCustomer : c));
     }
   };
 
@@ -676,6 +719,21 @@ export default function App() {
       saveStoreDocument(license.licenseKey, 'products', productId, softDeleted);
     } else {
       setProducts(prev => prev.map(p => p.id === productId ? softDeleted : p));
+    }
+  };
+
+  // Action: Direct product stock reconciliation (Stock Audit)
+  const handleUpdateProductStock = (productId: string, newStock: number) => {
+    const prod = products.find(p => p.id === productId);
+    if (!prod) return;
+    const updated: Product = {
+      ...prod,
+      stock: newStock
+    };
+    if (license.licenseKey) {
+      saveStoreDocument(license.licenseKey, 'products', productId, updated);
+    } else {
+      setProducts(prev => prev.map(p => p.id === productId ? updated : p));
     }
   };
 
@@ -1052,7 +1110,7 @@ export default function App() {
   // Standalone Developer Portal Route
   if (isDevRoute) {
     return (
-      <div className="min-h-screen bg-[#070C12] text-slate-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex items-center justify-center p-4 font-sans">
         <DeveloperPortalModal
           isOpen={true}
           onClose={() => {
@@ -1101,45 +1159,60 @@ export default function App() {
   // Count low stocks for dynamic red badge on sidemenu
   const lowStockCount = products.filter(p => p.stock <= p.minStock && p.isDeleted !== true).length;
 
+  const themeClass = `theme-${settings.appTheme || 'financial-blue'}`;
+  const shapeClass = `shape-${settings.cardShape || 'soft'}`;
+  const densityClass = `density-${settings.density || 'comfortable'}`;
+
   return (
-    <div id="application_root_container" className="min-h-screen bg-[#070C12] text-slate-100 flex flex-col">
+    <div 
+      id="application_root_container" 
+      className={`min-h-screen bg-[#F8FAFC] text-slate-800 flex flex-col font-sans transition-colors duration-200 ${themeClass} ${shapeClass} ${densityClass}`}
+    >
       
       {/* 1. TOP ACCESS BAR (Non-printed) */}
-      <header id="desktop_topbar" className="no-print h-14 md:h-16 bg-[#0B141F] border-b border-[#C5A862]/30 px-3 md:px-6 flex justify-between items-center z-40 shadow-md">
+      <header id="desktop_topbar" className="no-print h-16 bg-white border-b border-slate-200 px-4 md:px-6 flex justify-between items-center z-40 shadow-sm">
         
         {/* System Branding & Store / Customer Info */}
-        <div className="flex items-center gap-2.5">
-          <div className="p-1.5 md:p-2 rounded-xl bg-gradient-to-br from-[#1E2E44] to-[#121E2E] border border-[#C5A862]/40 shadow-inner shrink-0">
-            <Smartphone className="w-4 h-4 md:w-5 md:h-5 text-[#C5A862]" />
-          </div>
+        <div className="flex items-center gap-3">
+          {settings.storeLogoUrl ? (
+            <img 
+              src={settings.storeLogoUrl} 
+              alt="شعار المتجر" 
+              className="w-9 h-9 rounded-xl object-contain border border-slate-200 shadow-sm bg-white" 
+            />
+          ) : (
+            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white shadow-sm flex items-center justify-center font-bold text-base shrink-0">
+              🏪
+            </div>
+          )}
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xs md:text-sm font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-[#F3E7C4] to-[#C5A862] flex items-center gap-1">
-                <span className="text-[#C5A862]">🏪</span> {license.customerName || settings.storeName || 'النشاط التجاري'}
+              <h1 className="text-sm md:text-base font-black text-slate-900 flex items-center gap-1.5">
+                <span>{settings.storeName || license.customerName || 'النشاط التجاري'}</span>
               </h1>
               {license.phone && (
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-blue-950/80 border border-blue-500/40 text-blue-300 font-mono font-bold flex items-center gap-1 shadow-sm">
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] bg-blue-50 border border-blue-200 text-blue-700 font-mono font-bold flex items-center gap-1 shadow-xs">
                   <span>📱</span> {license.phone}
                 </span>
               )}
             </div>
-            <p className="hidden md:block text-[10px] text-gray-400 font-mono tracking-widest leading-none mt-0.5 select-none">
-              نظام سند المحاسبي • موثق برقم الهاتف
+            <p className="hidden md:block text-[10px] text-slate-500 font-mono tracking-wider leading-none mt-0.5 select-none">
+              نظام سند الذكي المحاسبي • موثق برقم الهاتف
             </p>
           </div>
         </div>
 
         {/* Cloud Sync Status Badge */}
         {license.licenseKey && isActivated && (
-          <div className="flex items-center gap-1.5 bg-emerald-950/60 border border-emerald-800/50 px-2.5 py-1 md:px-4 md:py-1.5 rounded-xl text-[10px] md:text-xs text-emerald-300 font-bold select-none shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+          <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl text-xs text-emerald-700 font-bold select-none shadow-xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
             <span>متصل سحابياً ⚡</span>
           </div>
         )}
 
         {/* Live Active Clock Widget */}
-        <div className="hidden md:flex items-center gap-2 bg-[#101A27] border border-gray-800 px-4 py-1.5 rounded-xl text-xs text-gray-400 font-medium">
-          <Clock className="w-4 h-4 text-[#C5A862]" />
+        <div className="hidden md:flex items-center gap-2 bg-slate-50 border border-slate-200 px-3.5 py-1.5 rounded-xl text-xs text-slate-600 font-medium">
+          <Clock className="w-4 h-4 text-blue-600" />
           <span className="font-mono mt-0.5">{currentTime}</span>
         </div>
 
@@ -1149,7 +1222,7 @@ export default function App() {
           {/* APK Download Button */}
           <button
             onClick={() => setShowApkModal(true)}
-            className="p-1.5 md:p-2 rounded-xl bg-gradient-to-r from-[#C5A862] to-[#A38641] hover:from-[#d4b771] hover:to-[#b3954f] text-black font-bold transition cursor-pointer text-[11px] md:text-xs flex items-center gap-1 shadow-md"
+            className="p-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition cursor-pointer text-xs flex items-center gap-1.5 shadow-sm active:scale-95"
             title="تنزيل تطبيق أندرويد APK"
           >
             <Download className="w-3.5 h-3.5" />
@@ -1159,25 +1232,59 @@ export default function App() {
           {/* Privacy mode toggle */}
           <button
             onClick={() => {
-              soundManager.playScanBeep();
-              setIsPrivacyMode(!isPrivacyMode);
+              if (isPrivacyMode) {
+                // Currently hidden -> Require PIN if enabled to show prices/amounts
+                if (settings.isPrivacyPinEnabled !== false) {
+                  soundManager.playWarningBeep();
+                  setShowPrivacyPinModal(true);
+                } else {
+                  soundManager.playScanBeep();
+                  setIsPrivacyMode(false);
+                }
+              } else {
+                // Currently visible -> Instantly hide for privacy
+                soundManager.playScanBeep();
+                setIsPrivacyMode(true);
+              }
             }}
-            className={`p-1.5 md:p-2 rounded-xl border transition cursor-pointer text-[11px] md:text-xs flex items-center gap-1 ${
+            className={`p-2 rounded-xl border transition cursor-pointer text-xs flex items-center gap-1.5 ${
               isPrivacyMode
-                ? 'bg-amber-950/60 border-amber-500/60 text-amber-300'
-                : 'bg-slate-800/40 border-gray-800 text-gray-400 hover:text-white'
+                ? 'bg-amber-50 border-amber-300 text-amber-800'
+                : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900'
             }`}
-            title={isPrivacyMode ? 'إظهار المبالغ والخصومات' : 'إخفاء المبالغ المالية (وضع الخصوصية)'}
+            title={isPrivacyMode ? 'إظهار المبالغ والخصومات (يتطلب كلمة السر)' : 'إخفاء المبالغ المالية (وضع الخصوصية)'}
           >
             {isPrivacyMode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
             <span className="hidden sm:inline">{isPrivacyMode ? 'مخفي 👁️‍🗨️' : 'خصوصية 👁️'}</span>
+          </button>
+
+          {/* Cashier Mode toggle */}
+          <button
+            onClick={() => {
+              if (isCashierMode) {
+                setPendingProtectedTab(null);
+                setShowPinCheckModal(true);
+              } else {
+                soundManager.playSuccessChime();
+                setIsCashierMode(true);
+              }
+            }}
+            className={`p-2 rounded-xl border transition cursor-pointer text-xs flex items-center gap-1.5 font-bold ${
+              isCashierMode
+                ? 'bg-amber-50 border-amber-300 text-amber-800'
+                : 'bg-emerald-50 border-emerald-300 text-emerald-800'
+            }`}
+            title={isCashierMode ? 'فك قفل وضع الكاشير برمز PIN' : 'تفعيل وضع الكاشير لحماية الأرباح والإعدادات'}
+          >
+            {isCashierMode ? <Lock className="w-3.5 h-3.5 text-amber-600" /> : <Unlock className="w-3.5 h-3.5 text-emerald-600" />}
+            <span className="hidden sm:inline">{isCashierMode ? 'وضع الكاشير 🔐' : 'وضع المدير 🔓'}</span>
           </button>
 
           {/* Diagnostic beep test */}
           <button
             id="sound_test_btn"
             onClick={() => soundManager.playScanBeep()}
-            className="p-1.5 md:p-2 rounded-xl bg-slate-800/40 border border-gray-800 hover:border-[#C5A862]/40 text-gray-400 hover:text-[#C5A862] transition cursor-pointer text-[11px] md:text-xs flex items-center gap-1"
+            className="p-2 rounded-xl bg-slate-50 border border-slate-200 hover:border-blue-300 text-slate-600 hover:text-blue-600 transition cursor-pointer text-xs flex items-center gap-1"
             title="فحص صوت الباركود"
           >
             🔊 <span className="hidden sm:inline">صوت</span>
@@ -1191,7 +1298,7 @@ export default function App() {
                 handleLogout();
               }
             }}
-            className="p-1.5 px-2.5 md:p-2 md:px-3 rounded-xl bg-red-950/30 hover:bg-red-900/30 border border-red-500/20 hover:border-red-500/50 text-red-400 hover:text-red-300 transition cursor-pointer text-[11px] md:text-xs flex items-center gap-1"
+            className="p-2 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 transition cursor-pointer text-xs flex items-center gap-1 font-bold"
             title="تسجيل الخروج"
           >
             <LogOut className="w-3.5 h-3.5" />
@@ -1200,18 +1307,20 @@ export default function App() {
 
         </div>
 
-
       </header>
 
       {/* 2. MAIN WORKSPACE CONTAINER */}
       <div id="desktop_workspace" className="flex-1 flex flex-col md:flex-row">
         
         {/* SIDEMENU NAVIGATION RAIL (Desktop only) */}
-        <aside id="desktop_navigation_rail" className="no-print hidden md:block w-64 bg-[#0A121D] border-l border-[#C5A862]/10 p-4 space-y-2 shrink-0">
+        <aside id="desktop_navigation_rail" className="no-print hidden md:block w-64 bg-white border-l border-slate-200 p-4 space-y-2 shrink-0 shadow-sm">
           
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider px-3.5 mb-3">لوحات التحكم والتنفيذ</p>
+          <div className="flex items-center justify-between px-2 mb-3">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">القائمة الرئيسية</p>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="النظام نشط" />
+          </div>
           
-          <nav className="flex flex-col gap-1">
+          <nav className="flex flex-col gap-1.5">
             
             {/* Dashboard tab */}
             <button
@@ -1220,13 +1329,19 @@ export default function App() {
                 soundManager.playScanBeep();
                 setActiveTab('dashboard');
               }}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer w-full text-right ${
+              className={`group flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all cursor-pointer w-full text-right ${
                 activeTab === 'dashboard'
-                  ? 'bg-gradient-to-l from-[#1B2C3F] to-[#0F1924] text-[#C5A862] border-r-2 border-[#C5A862]'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#121E2C]/40'
+                  ? 'bg-indigo-50/90 text-indigo-950 font-bold border-r-4 border-indigo-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
               }`}
             >
-              <LayoutDashboard className="w-4 h-4 shrink-0" />
+              <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                activeTab === 'dashboard'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white'
+              }`}>
+                <LayoutDashboard className="w-4 h-4" />
+              </div>
               <span>الرئيسية والملخص</span>
             </button>
 
@@ -1237,14 +1352,72 @@ export default function App() {
                 soundManager.playScanBeep();
                 setActiveTab('pos');
               }}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer w-full text-right ${
+              className={`group flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all cursor-pointer w-full text-right ${
                 activeTab === 'pos'
-                  ? 'bg-gradient-to-l from-[#1B2C3F] to-[#0F1924] text-[#C5A862] border-r-2 border-[#C5A862]'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#121E2C]/40'
+                  ? 'bg-emerald-50/90 text-emerald-950 font-bold border-r-4 border-emerald-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
               }`}
             >
-              <ShoppingCart className="w-4 h-4 shrink-0" />
+              <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                activeTab === 'pos'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white'
+              }`}>
+                <ShoppingCart className="w-4 h-4" />
+              </div>
               <span>شاشة المبيعات (POS)</span>
+            </button>
+
+            {/* Inventory tab */}
+            <button
+              id="tab_trigger_inventory"
+              onClick={() => handleTabSelect('inventory')}
+              className={`group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs transition-all cursor-pointer w-full text-right ${
+                activeTab === 'inventory'
+                  ? 'bg-purple-50/90 text-purple-950 font-bold border-r-4 border-purple-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                  activeTab === 'inventory'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'
+                }`}>
+                  <Package className="w-4 h-4" />
+                </div>
+                <span>المستودع والمخزن</span>
+              </div>
+              {lowStockCount > 0 && (
+                <span className="px-2 py-0.5 text-[9px] font-extrabold bg-amber-500 text-white rounded-full animate-bounce shadow-xs">
+                  {lowStockCount}
+                </span>
+              )}
+            </button>
+
+            {/* Stock Audit & Facility Reconciliation tab */}
+            <button
+              id="tab_trigger_stock_audit"
+              onClick={() => handleTabSelect('stock_audit')}
+              className={`group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs transition-all cursor-pointer w-full text-right ${
+                activeTab === 'stock_audit'
+                  ? 'bg-amber-50/90 text-amber-950 font-bold border-r-4 border-amber-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                  activeTab === 'stock_audit'
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-amber-50 text-amber-600 group-hover:bg-amber-600 group-hover:text-white'
+                }`}>
+                  <ClipboardCheck className="w-4 h-4" />
+                </div>
+                <span>جرد وحصر المنشأة</span>
+              </div>
+              <span className="px-1.5 py-0.5 text-[8.5px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300 rounded-md">
+                مستقل ✨
+              </span>
             </button>
 
             {/* Customers tab */}
@@ -1254,13 +1427,19 @@ export default function App() {
                 soundManager.playScanBeep();
                 setActiveTab('customers');
               }}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer w-full text-right ${
+              className={`group flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all cursor-pointer w-full text-right ${
                 activeTab === 'customers'
-                  ? 'bg-gradient-to-l from-[#1B2C3F] to-[#0F1924] text-[#C5A862] border-r-2 border-[#C5A862]'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#121E2C]/40'
+                  ? 'bg-sky-50/90 text-sky-950 font-bold border-r-4 border-sky-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
               }`}
             >
-              <Users className="w-4 h-4 shrink-0" />
+              <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                activeTab === 'customers'
+                  ? 'bg-sky-600 text-white'
+                  : 'bg-sky-50 text-sky-600 group-hover:bg-sky-600 group-hover:text-white'
+              }`}>
+                <Users className="w-4 h-4" />
+              </div>
               <span>العملاء والديون (الذمم)</span>
             </button>
 
@@ -1271,120 +1450,123 @@ export default function App() {
                 soundManager.playScanBeep();
                 setActiveTab('employees');
               }}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer w-full text-right ${
+              className={`group flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all cursor-pointer w-full text-right ${
                 activeTab === 'employees'
-                  ? 'bg-gradient-to-l from-[#1B2C3F] to-[#0F1924] text-[#C5A862] border-r-2 border-[#C5A862]'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#121E2C]/40'
+                  ? 'bg-teal-50/90 text-teal-950 font-bold border-r-4 border-teal-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
               }`}
             >
-              <Briefcase className="w-4 h-4 shrink-0 text-[#C5A862]" />
-              <span>قسم العمال والرواتب</span>
-            </button>
-
-
-            {/* Inventory tab */}
-            <button
-              id="tab_trigger_inventory"
-              onClick={() => {
-                soundManager.playScanBeep();
-                setActiveTab('inventory');
-              }}
-              className={`flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer w-full text-right ${
-                activeTab === 'inventory'
-                  ? 'bg-gradient-to-l from-[#1B2C3F] to-[#0F1924] text-[#C5A862] border-r-2 border-[#C5A862]'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#121E2C]/40'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Package className="w-4 h-4 shrink-0" />
-                <span>المستودع والمخزن</span>
+              <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                activeTab === 'employees'
+                  ? 'bg-teal-600 text-white'
+                  : 'bg-teal-50 text-teal-600 group-hover:bg-teal-600 group-hover:text-white'
+              }`}>
+                <Briefcase className="w-4 h-4" />
               </div>
-              {lowStockCount > 0 && (
-                <span className="px-2 py-0.5 text-[9px] font-bold bg-amber-500 text-black rounded-full animate-bounce">
-                  {lowStockCount}
-                </span>
-              )}
+              <span>قسم العمال والرواتب</span>
             </button>
 
             {/* Transactions history tab */}
             <button
               id="tab_trigger_transactions"
-              onClick={() => {
-                soundManager.playScanBeep();
-                setActiveTab('transactions');
-              }}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer w-full text-right ${
+              onClick={() => handleTabSelect('transactions')}
+              className={`group flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all cursor-pointer w-full text-right ${
                 activeTab === 'transactions'
-                  ? 'bg-gradient-to-l from-[#1B2C3F] to-[#0F1924] text-[#C5A862] border-r-2 border-[#C5A862]'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#121E2C]/40'
+                  ? 'bg-blue-50/90 text-blue-950 font-bold border-r-4 border-blue-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
               }`}
             >
-              <History className="w-4 h-4 shrink-0" />
+              <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                activeTab === 'transactions'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white'
+              }`}>
+                <History className="w-4 h-4" />
+              </div>
               <span>القيود والتحصيلات</span>
             </button>
 
-            {/* Graphical Profit Reports tab */}
+            {/* Graphical Profit Reports tab (Protected by PIN in Cashier mode) */}
             <button
               id="tab_trigger_reports"
-              onClick={() => {
-                soundManager.playScanBeep();
-                setActiveTab('reports');
-              }}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer w-full text-right ${
+              onClick={() => handleTabSelect('reports')}
+              className={`group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs transition-all cursor-pointer w-full text-right ${
                 activeTab === 'reports'
-                  ? 'bg-gradient-to-l from-[#1B2C3F] to-[#0F1924] text-[#C5A862] border-r-2 border-[#C5A862]'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#121E2C]/40'
+                  ? 'bg-rose-50/90 text-rose-950 font-bold border-r-4 border-rose-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
               }`}
             >
-              <BarChart3 className="w-4 h-4 shrink-0 text-[#C5A862]" />
-              <span>الأرباح والتقارير البيانية</span>
+              <div className="flex items-center gap-3">
+                <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                  activeTab === 'reports'
+                    ? 'bg-rose-600 text-white'
+                    : 'bg-rose-50 text-rose-600 group-hover:bg-rose-600 group-hover:text-white'
+                }`}>
+                  <BarChart3 className="w-4 h-4" />
+                </div>
+                <span>الأرباح والتقارير البيانية</span>
+              </div>
+              {(isCashierMode || settings.isPinEnabled) && (
+                <Lock className="w-3.5 h-3.5 text-amber-500" />
+              )}
             </button>
 
             {/* Maintenance & Programming tab */}
             <button
               id="tab_trigger_maintenance"
-              onClick={() => {
-                soundManager.playScanBeep();
-                setActiveTab('maintenance');
-              }}
-              className={`flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer w-full text-right ${
+              onClick={() => handleTabSelect('maintenance')}
+              className={`group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs transition-all cursor-pointer w-full text-right ${
                 activeTab === 'maintenance'
-                  ? 'bg-gradient-to-l from-[#1B2C3F] to-[#0F1924] text-[#C5A862] border-r-2 border-[#C5A862]'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#121E2C]/40'
+                  ? 'bg-orange-50/90 text-orange-950 font-bold border-r-4 border-orange-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
               }`}
             >
               <div className="flex items-center gap-3">
-                <Wrench className="w-4 h-4 shrink-0" />
+                <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                  activeTab === 'maintenance'
+                    ? 'bg-orange-600 text-white'
+                    : 'bg-orange-50 text-orange-600 group-hover:bg-orange-600 group-hover:text-white'
+                }`}>
+                  <Wrench className="w-4 h-4" />
+                </div>
                 <span>قسم الصيانة والبرمجة</span>
               </div>
               {maintenanceOrders.filter(o => o.status === 'received' || o.status === 'repairing').length > 0 && (
-                <span className="px-2 py-0.5 text-[9px] font-bold bg-amber-500 text-black rounded-full">
+                <span className="px-2 py-0.5 text-[9px] font-bold bg-amber-500 text-white rounded-full">
                   {maintenanceOrders.filter(o => o.status === 'received' || o.status === 'repairing').length}
                 </span>
               )}
             </button>
 
-            {/* Settings config tab */}
+            {/* Settings config tab (Protected by PIN in Cashier mode) */}
             <button
               id="tab_trigger_settings"
-              onClick={() => {
-                soundManager.playScanBeep();
-                setActiveTab('settings');
-              }}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer w-full text-right ${
+              onClick={() => handleTabSelect('settings')}
+              className={`group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs transition-all cursor-pointer w-full text-right ${
                 activeTab === 'settings'
-                  ? 'bg-gradient-to-l from-[#1B2C3F] to-[#0F1924] text-[#C5A862] border-r-2 border-[#C5A862]'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#121E2C]/40'
+                  ? 'bg-slate-100 text-slate-900 font-bold border-r-4 border-slate-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
               }`}
             >
-              <SettingsIcon className="w-4 h-4 shrink-0" />
-              <span>إعدادات النظام</span>
+              <div className="flex items-center gap-3">
+                <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                  activeTab === 'settings'
+                    ? 'bg-slate-700 text-white'
+                    : 'bg-slate-100 text-slate-700 group-hover:bg-slate-700 group-hover:text-white'
+                }`}>
+                  <SettingsIcon className="w-4 h-4" />
+                </div>
+                <span>إعدادات النظام</span>
+              </div>
+              {(isCashierMode || settings.isPinEnabled) && (
+                <Lock className="w-3.5 h-3.5 text-amber-500" />
+              )}
             </button>
 
           </nav>
 
           {/* Sidebar Logout button */}
-          <div className="pt-2 border-t border-[#C5A862]/10">
+          <div className="pt-2 border-t border-slate-200">
             <button
               id="sidebar_logout_btn"
               onClick={() => {
@@ -1392,20 +1574,19 @@ export default function App() {
                   handleLogout();
                 }
               }}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-950/20 transition-all cursor-pointer text-right"
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition-all cursor-pointer text-right"
             >
               <LogOut className="w-4 h-4 shrink-0" />
               <span>تسجيل الخروج</span>
             </button>
           </div>
 
-          {/* Quick Help Section (PC Specs) */}
-          <div className="p-4 mt-8 rounded-xl bg-slate-900/40 border border-slate-800/60 text-[10px] text-gray-500 space-y-1.5">
-            <div className="font-semibold text-gray-400 flex items-center gap-1">
-              <AlertCircle className="w-3.5 h-3.5 text-[#C5A862]" /> معلومات النظام
+          {/* Quick Help Section */}
+          <div className="p-3.5 mt-6 rounded-2xl bg-slate-50 border border-slate-200 text-[10px] text-slate-500 space-y-1">
+            <div className="font-bold text-slate-700 flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5 text-blue-600" /> معلومات النظام
             </div>
-            <p>المخزن المحلي: نشط ومحفوظ</p>
-            <p>لوحة المفاتيح: مدعومة ومسجلة</p>
+            <p>المخزن المحلي: نشط ومحفوظ 100%</p>
             <p>المهندس: عبدالمجيد المحواشي</p>
           </div>
 
@@ -1416,7 +1597,7 @@ export default function App() {
           id="desktop_sub_view_hub" 
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
-          className="flex-1 p-3 md:p-6 pb-20 md:pb-6 overflow-y-auto bg-[#070C12] relative"
+          className="flex-1 p-3 md:p-6 pb-20 md:pb-6 overflow-y-auto bg-[#F8FAFC] relative"
         >
           {/* Floating Mobile Swipe Toast Hint */}
           <AnimatePresence>
@@ -1450,6 +1631,7 @@ export default function App() {
                   transactions={transactions}
                   settings={settings}
                   setActiveTab={setActiveTab}
+                  isPrivacyMode={isPrivacyMode}
                 />
               )}
 
@@ -1459,6 +1641,8 @@ export default function App() {
                   customers={customers}
                   onCompleteSale={handleCompleteSale}
                   currency={settings.currency}
+                  storeName={settings.storeName}
+                  settings={settings}
                 />
               )}
 
@@ -1466,10 +1650,22 @@ export default function App() {
                 <Customers
                   customers={customers}
                   payments={payments}
+                  invoices={invoices}
                   onAddCustomer={handleAddCustomer}
+                  onUpdateCustomer={handleUpdateCustomer}
                   onPayDebt={handlePayDebt}
                   onDeleteCustomer={handleDeleteCustomer}
                   currency={settings.currency}
+                  storeName={settings.storeName}
+                  isPrivacyMode={isPrivacyMode}
+                  debtReminderTemplate={settings.debtReminderTemplate}
+                  onSaveReminderTemplate={(tmpl) => {
+                    const updated = { ...settings, debtReminderTemplate: tmpl };
+                    setSettings(updated);
+                    if (license.licenseKey) {
+                      saveStoreSettings(license.licenseKey, updated);
+                    }
+                  }}
                 />
               )}
 
@@ -1493,6 +1689,19 @@ export default function App() {
                   onUpdateProduct={handleUpdateProduct}
                   onDeleteProduct={handleDeleteProduct}
                   currency={settings.currency}
+                  storeName={settings.storeName}
+                  isPrivacyMode={isPrivacyMode}
+                />
+              )}
+
+              {activeTab === 'stock_audit' && (
+                <StockAudit
+                  products={products}
+                  invoices={invoices}
+                  onUpdateProductStock={handleUpdateProductStock}
+                  currency={settings.currency}
+                  storeName={settings.storeName}
+                  isPrivacyMode={isPrivacyMode}
                 />
               )}
 
@@ -1505,6 +1714,7 @@ export default function App() {
                   onRefundInvoice={handleRefundInvoice}
                   onViewInvoice={setActiveInvoice}
                   currency={settings.currency}
+                  isPrivacyMode={isPrivacyMode}
                 />
               )}
 
@@ -1515,6 +1725,7 @@ export default function App() {
                   transactions={transactions}
                   customers={customers}
                   currency={settings.currency}
+                  isPrivacyMode={isPrivacyMode}
                 />
               )}
 
@@ -1561,7 +1772,6 @@ export default function App() {
         storeName={settings.storeName}
       />
 
-
       {(showDevPortal || isDevRoute) && (
         <DeveloperPortalModal
           isOpen={showDevPortal || isDevRoute}
@@ -1585,7 +1795,7 @@ export default function App() {
       )}
 
       {/* 4. MOBILE BOTTOM NAVIGATION BAR (Non-printed, Mobile view only) */}
-      <nav id="mobile_bottom_nav" className="no-print md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0B141F]/95 backdrop-blur-md border-t border-[#C5A862]/30 px-1 py-1 flex justify-around items-center shadow-[0_-5px_20px_rgba(0,0,0,0.6)] select-none overflow-x-auto scrollbar-none">
+      <nav id="mobile_bottom_nav" className="no-print md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200 px-1 py-1.5 flex justify-around items-center shadow-lg select-none overflow-x-auto scrollbar-none">
         
         {/* Dashboard */}
         <button
@@ -1594,13 +1804,13 @@ export default function App() {
             setActiveTab('dashboard');
           }}
           className={`relative flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all min-w-[46px] shrink-0 ${
-            activeTab === 'dashboard' ? 'text-[#C5A862] font-bold scale-105' : 'text-gray-400 hover:text-gray-200'
+            activeTab === 'dashboard' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
           }`}
         >
           {activeTab === 'dashboard' && (
             <motion.div
               layoutId="mobileActiveTabBg"
-              className="absolute inset-0 bg-[#1B2C3F] border border-[#C5A862]/40 rounded-xl -z-10 shadow-sm"
+              className="absolute inset-0 bg-blue-50 border border-blue-200 rounded-xl -z-10 shadow-xs"
               transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             />
           )}
@@ -1615,13 +1825,13 @@ export default function App() {
             setActiveTab('pos');
           }}
           className={`relative flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all min-w-[46px] shrink-0 ${
-            activeTab === 'pos' ? 'text-[#C5A862] font-bold scale-105' : 'text-gray-400 hover:text-gray-200'
+            activeTab === 'pos' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
           }`}
         >
           {activeTab === 'pos' && (
             <motion.div
               layoutId="mobileActiveTabBg"
-              className="absolute inset-0 bg-[#1B2C3F] border border-[#C5A862]/40 rounded-xl -z-10 shadow-sm"
+              className="absolute inset-0 bg-blue-50 border border-blue-200 rounded-xl -z-10 shadow-xs"
               transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             />
           )}
@@ -1636,25 +1846,43 @@ export default function App() {
             setActiveTab('inventory');
           }}
           className={`relative flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all min-w-[46px] shrink-0 ${
-            activeTab === 'inventory' ? 'text-[#C5A862] font-bold scale-105' : 'text-gray-400 hover:text-gray-200'
+            activeTab === 'inventory' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
           }`}
         >
           {activeTab === 'inventory' && (
             <motion.div
               layoutId="mobileActiveTabBg"
-              className="absolute inset-0 bg-[#1B2C3F] border border-[#C5A862]/40 rounded-xl -z-10 shadow-sm"
+              className="absolute inset-0 bg-blue-50 border border-blue-200 rounded-xl -z-10 shadow-xs"
               transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             />
           )}
           <div className="relative">
             <Package className="w-4 h-4 mb-0.5" />
             {lowStockCount > 0 && (
-              <span className="absolute -top-1 -right-1.5 w-3.5 h-3.5 text-[8px] font-bold bg-amber-500 text-black rounded-full flex items-center justify-center animate-pulse">
+              <span className="absolute -top-1 -right-1.5 w-3.5 h-3.5 text-[8px] font-bold bg-amber-500 text-white rounded-full flex items-center justify-center animate-pulse">
                 {lowStockCount}
               </span>
             )}
           </div>
           <span className="text-[8.5px]">المخزن</span>
+        </button>
+
+        {/* Stock Audit */}
+        <button
+          onClick={() => handleTabSelect('stock_audit')}
+          className={`relative flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all min-w-[46px] shrink-0 ${
+            activeTab === 'stock_audit' ? 'text-amber-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          {activeTab === 'stock_audit' && (
+            <motion.div
+              layoutId="mobileActiveTabBg"
+              className="absolute inset-0 bg-amber-50 border border-amber-200 rounded-xl -z-10 shadow-xs"
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            />
+          )}
+          <ClipboardCheck className="w-4 h-4 mb-0.5 text-[#C5A862]" />
+          <span className="text-[8.5px]">جرد المنشأة</span>
         </button>
 
         {/* Customers */}
@@ -1664,13 +1892,13 @@ export default function App() {
             setActiveTab('customers');
           }}
           className={`relative flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all min-w-[46px] shrink-0 ${
-            activeTab === 'customers' ? 'text-[#C5A862] font-bold scale-105' : 'text-gray-400 hover:text-gray-200'
+            activeTab === 'customers' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
           }`}
         >
           {activeTab === 'customers' && (
             <motion.div
               layoutId="mobileActiveTabBg"
-              className="absolute inset-0 bg-[#1B2C3F] border border-[#C5A862]/40 rounded-xl -z-10 shadow-sm"
+              className="absolute inset-0 bg-blue-50 border border-blue-200 rounded-xl -z-10 shadow-xs"
               transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             />
           )}
@@ -1685,20 +1913,19 @@ export default function App() {
             setActiveTab('employees');
           }}
           className={`relative flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all min-w-[46px] shrink-0 ${
-            activeTab === 'employees' ? 'text-[#C5A862] font-bold scale-105' : 'text-gray-400 hover:text-gray-200'
+            activeTab === 'employees' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
           }`}
         >
           {activeTab === 'employees' && (
             <motion.div
               layoutId="mobileActiveTabBg"
-              className="absolute inset-0 bg-[#1B2C3F] border border-[#C5A862]/40 rounded-xl -z-10 shadow-sm"
+              className="absolute inset-0 bg-blue-50 border border-blue-200 rounded-xl -z-10 shadow-xs"
               transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             />
           )}
           <Briefcase className="w-4 h-4 mb-0.5" />
           <span className="text-[8.5px]">العمال</span>
         </button>
-
 
         {/* Transactions */}
         <button
@@ -1707,13 +1934,13 @@ export default function App() {
             setActiveTab('transactions');
           }}
           className={`relative flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all min-w-[46px] shrink-0 ${
-            activeTab === 'transactions' ? 'text-[#C5A862] font-bold scale-105' : 'text-gray-400 hover:text-gray-200'
+            activeTab === 'transactions' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
           }`}
         >
           {activeTab === 'transactions' && (
             <motion.div
               layoutId="mobileActiveTabBg"
-              className="absolute inset-0 bg-[#1B2C3F] border border-[#C5A862]/40 rounded-xl -z-10 shadow-sm"
+              className="absolute inset-0 bg-blue-50 border border-blue-200 rounded-xl -z-10 shadow-xs"
               transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             />
           )}
@@ -1728,13 +1955,13 @@ export default function App() {
             setActiveTab('reports');
           }}
           className={`relative flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all min-w-[46px] shrink-0 ${
-            activeTab === 'reports' ? 'text-[#C5A862] font-bold scale-105' : 'text-gray-400 hover:text-gray-200'
+            activeTab === 'reports' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
           }`}
         >
           {activeTab === 'reports' && (
             <motion.div
               layoutId="mobileActiveTabBg"
-              className="absolute inset-0 bg-[#1B2C3F] border border-[#C5A862]/40 rounded-xl -z-10 shadow-sm"
+              className="absolute inset-0 bg-blue-50 border border-blue-200 rounded-xl -z-10 shadow-xs"
               transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             />
           )}
@@ -1749,20 +1976,20 @@ export default function App() {
             setActiveTab('maintenance');
           }}
           className={`relative flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all min-w-[46px] shrink-0 ${
-            activeTab === 'maintenance' ? 'text-[#C5A862] font-bold scale-105' : 'text-gray-400 hover:text-gray-200'
+            activeTab === 'maintenance' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
           }`}
         >
           {activeTab === 'maintenance' && (
             <motion.div
               layoutId="mobileActiveTabBg"
-              className="absolute inset-0 bg-[#1B2C3F] border border-[#C5A862]/40 rounded-xl -z-10 shadow-sm"
+              className="absolute inset-0 bg-blue-50 border border-blue-200 rounded-xl -z-10 shadow-xs"
               transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             />
           )}
           <div className="relative">
             <Wrench className="w-4 h-4 mb-0.5" />
             {maintenanceOrders.filter(o => o.status === 'received' || o.status === 'repairing').length > 0 && (
-              <span className="absolute -top-1 -right-1.5 w-3.5 h-3.5 text-[8px] font-bold bg-amber-500 text-black rounded-full flex items-center justify-center">
+              <span className="absolute -top-1 -right-1.5 w-3.5 h-3.5 text-[8px] font-bold bg-amber-500 text-white rounded-full flex items-center justify-center">
                 {maintenanceOrders.filter(o => o.status === 'received' || o.status === 'repairing').length}
               </span>
             )}
@@ -1772,18 +1999,15 @@ export default function App() {
 
         {/* Settings */}
         <button
-          onClick={() => {
-            soundManager.playScanBeep();
-            setActiveTab('settings');
-          }}
+          onClick={() => handleTabSelect('settings')}
           className={`relative flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all min-w-[46px] shrink-0 ${
-            activeTab === 'settings' ? 'text-[#C5A862] font-bold scale-105' : 'text-gray-400 hover:text-gray-200'
+            activeTab === 'settings' ? 'text-blue-600 font-bold scale-105' : 'text-slate-500 hover:text-slate-800'
           }`}
         >
           {activeTab === 'settings' && (
             <motion.div
               layoutId="mobileActiveTabBg"
-              className="absolute inset-0 bg-[#1B2C3F] border border-[#C5A862]/40 rounded-xl -z-10 shadow-sm"
+              className="absolute inset-0 bg-blue-50 border border-blue-200 rounded-xl -z-10 shadow-xs"
               transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             />
           )}
@@ -1794,13 +2018,45 @@ export default function App() {
       </nav>
 
       {/* 5. FOOTER (Non-printed, Desktop) */}
-      <footer id="desktop_footer" className="no-print hidden md:flex h-8 bg-[#090E14] border-t border-gray-800 px-6 justify-between items-center text-[10px] text-gray-500">
+      <footer id="desktop_footer" className="no-print hidden md:flex h-8 bg-white border-t border-slate-200 px-6 justify-between items-center text-[10px] text-slate-500 font-medium">
         <span>نظام سند الذكي المحاسبي • نسخة الهواتف والكمبيوتر</span>
         <span>برمجة وتطوير: عبدالمجيد المحواشي (الجمهورية اليمنية) © 2026</span>
       </footer>
 
       {/* Floating Calculator Widget */}
       <FloatingCalculator />
+
+      {/* PIN Verification Modal for Cashier / Manager Mode */}
+      <PinCheckModal
+        isOpen={showPinCheckModal}
+        onClose={() => {
+          setShowPinCheckModal(false);
+          setPendingProtectedTab(null);
+        }}
+        onSuccess={() => {
+          setShowPinCheckModal(false);
+          if (pendingProtectedTab) {
+            setActiveTab(pendingProtectedTab);
+            setPendingProtectedTab(null);
+          } else {
+            setIsCashierMode(false);
+          }
+        }}
+        pinCode={settings.pinCode || '1234'}
+      />
+
+      {/* PIN Verification Modal for Privacy Mode Unlocking */}
+      <PinCheckModal
+        isOpen={showPrivacyPinModal}
+        onClose={() => setShowPrivacyPinModal(false)}
+        onSuccess={() => {
+          setShowPrivacyPinModal(false);
+          setIsPrivacyMode(false);
+        }}
+        pinCode={settings.privacyPinCode || settings.pinCode || '1234'}
+        title="كلمة سر وضع الخصوصية 👁️"
+        subtitle="يرجى إدخال رمز PIN لإلغاء إخفاء المبالغ وإظهار القيم والأسعار المالية"
+      />
 
     </div>
   );
