@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   ClipboardCheck, 
   Boxes, 
@@ -26,10 +26,26 @@ import {
   Clock,
   ChevronDown,
   Volume2,
-  Bot
+  Bot,
+  FileUp,
+  FileDown,
+  FileSpreadsheet,
+  Download,
+  Upload,
+  Info
 } from 'lucide-react';
 import { Product, Invoice } from '../types';
 import { soundManager } from '../utils/sound';
+
+interface ImportedAuditRow {
+  productId?: string;
+  barcode: string;
+  name: string;
+  systemStock: number;
+  importedPhysicalStock: number;
+  diff: number;
+  status: 'matched' | 'not_found';
+}
 
 interface StockAuditProps {
   products: Product[];
@@ -53,6 +69,180 @@ export default function StockAudit({
   const [selectedCategory, setSelectedCategory] = useState<string>('الكل');
   const [filterDiscrepancy, setFilterDiscrepancy] = useState<'all' | 'deficit' | 'surplus' | 'match'>('all');
   const [showZaraAuditModal, setShowZaraAuditModal] = useState<boolean>(false);
+
+  // CSV Import/Export States & Refs
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showImportPreviewModal, setShowImportPreviewModal] = useState<boolean>(false);
+  const [importedRows, setImportedRows] = useState<ImportedAuditRow[]>([]);
+
+  // Export Stock Audit Sheet to CSV / Excel
+  const handleExportCSV = () => {
+    soundManager.playSuccessChime();
+    let csv = '\ufeff'; // UTF-8 BOM for Excel Arabic support
+    csv += 'الباركود,اسم السلعة,التصنيف,كمية النظام,الكمية الفعلية الميدانية,سعر التكلفة,سعر البيع\n';
+
+    activeProducts.forEach(p => {
+      const physical = physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : p.stock;
+      const cleanName = p.name.replace(/"/g, '""');
+      const cleanCategory = (p.category || 'عام').replace(/"/g, '""');
+      const barcode = p.barcode ? `"${p.barcode}"` : '""';
+
+      csv += `${barcode},"${cleanName}","${cleanCategory}",${p.stock},${physical},${p.costPrice},${p.sellingPrice}\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const todayStr = new Date().toISOString().split('T')[0];
+    link.setAttribute('download', `كشف_جرد_المستودع_${storeName}_${todayStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Helper to parse CSV line handling quotes
+  const parseCSVLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current);
+    return result;
+  };
+
+  // Import Stock Audit Sheet from CSV
+  const handleFileImportChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        if (!text) return;
+
+        const lines = text.split(/\r\n|\n/).map(l => l.trim()).filter(l => l.length > 0);
+        if (lines.length <= 1) {
+          alert('ملف CSV فارغ أو لا يحتوي على بيانات جرد كافية.');
+          return;
+        }
+
+        const rows: ImportedAuditRow[] = [];
+
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i];
+          if (!line) continue;
+
+          const columns = parseCSVLine(line);
+          if (columns.length < 2) continue;
+
+          const rawBarcode = columns[0]?.trim().replace(/^"|"$/g, '') || '';
+          const rawName = columns[1]?.trim().replace(/^"|"$/g, '') || '';
+
+          // Determine column containing physical stock:
+          let physicalValStr = '';
+          if (columns.length >= 5) {
+            physicalValStr = columns[4]?.trim().replace(/^"|"$/g, '') || '';
+          } else if (columns.length >= 4) {
+            physicalValStr = columns[3]?.trim().replace(/^"|"$/g, '') || '';
+          } else if (columns.length >= 2) {
+            physicalValStr = columns[columns.length - 1]?.trim().replace(/^"|"$/g, '') || '';
+          }
+
+          const importedStock = parseInt(physicalValStr, 10);
+
+          const matchedProd = activeProducts.find(p => 
+            (rawBarcode && p.barcode.toLowerCase() === rawBarcode.toLowerCase()) ||
+            (rawName && p.name.toLowerCase() === rawName.toLowerCase())
+          );
+
+          if (matchedProd && !isNaN(importedStock)) {
+            rows.push({
+              productId: matchedProd.id,
+              barcode: matchedProd.barcode,
+              name: matchedProd.name,
+              systemStock: matchedProd.stock,
+              importedPhysicalStock: Math.max(0, importedStock),
+              diff: Math.max(0, importedStock) - matchedProd.stock,
+              status: 'matched'
+            });
+          } else if (rawBarcode || rawName) {
+            rows.push({
+              barcode: rawBarcode,
+              name: rawName || 'غير معروف',
+              systemStock: 0,
+              importedPhysicalStock: isNaN(importedStock) ? 0 : importedStock,
+              diff: 0,
+              status: 'not_found'
+            });
+          }
+        }
+
+        if (rows.length === 0) {
+          alert('لم يتم العثور على أي منتجات مطابقة في ملف CSV المرفق.');
+          return;
+        }
+
+        setImportedRows(rows);
+        setShowImportPreviewModal(true);
+        soundManager.playSuccessChime();
+
+      } catch (err) {
+        console.error('CSV Import Error:', err);
+        alert('حدث خطأ أثناء قراءة ملف CSV. يرجى التأكد من المنسق الصحيح.');
+      } finally {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+
+    reader.readAsText(file, 'UTF-8');
+  };
+
+  const handleApplyImportAsDraft = () => {
+    const matched = importedRows.filter(r => r.status === 'matched' && r.productId);
+    const newCounts: Record<string, number> = { ...physicalCounts };
+    matched.forEach(r => {
+      if (r.productId) {
+        newCounts[r.productId] = r.importedPhysicalStock;
+      }
+    });
+    setPhysicalCounts(newCounts);
+    setShowImportPreviewModal(false);
+    soundManager.playSuccessChime();
+    alert(`✓ تم تحميل ${matched.length} كمية جرد إلى جدول المطابقة كمسودة للمراجعة والاعتماد.`);
+  };
+
+  const handleApplyImportDirectly = () => {
+    const matched = importedRows.filter(r => r.status === 'matched' && r.productId);
+    if (matched.length === 0) {
+      alert('لا توجد أصناف مطابقة للتحديث.');
+      return;
+    }
+    if (confirm(`هل أنت متأكد من تحديث واعتماد المخزون فوراً لعدد ${matched.length} صنف في قاعدة البيانات؟`)) {
+      matched.forEach(r => {
+        if (r.productId) {
+          onUpdateProductStock(r.productId, r.importedPhysicalStock);
+          setAppliedReconciliations(prev => ({ ...prev, [r.productId]: true }));
+        }
+      });
+      setShowImportPreviewModal(false);
+      soundManager.playSuccessChime();
+      alert(`✓ تم تحديث واعتماد المخزون بنجاح لـ ${matched.length} صنف!`);
+    }
+  };
 
   // Privacy Mode currency formatter
   const fmt = (num: number) => {
@@ -289,11 +479,39 @@ export default function StockAudit({
 
           <button
             onClick={handlePrintAuditSheet}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition border border-slate-300 cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition border border-slate-300 cursor-pointer"
           >
             <Printer className="w-4 h-4 text-slate-600" />
-            <span>طباعة التقرير</span>
+            <span>طباعة</span>
           </button>
+
+          {/* Export CSV Button */}
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold transition border border-emerald-300 cursor-pointer shadow-xs"
+            title="تصدير كشف الجرد إلى ملف Excel / CSV"
+          >
+            <FileDown className="w-4 h-4 text-emerald-600" />
+            <span>تصدير CSV / Excel</span>
+          </button>
+
+          {/* Import CSV Button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 text-xs font-bold transition border border-purple-300 cursor-pointer shadow-xs"
+            title="استيراد كشف الجرد الميداني وتحديث الكميات بشكل جماعي"
+          >
+            <FileUp className="w-4 h-4 text-purple-600" />
+            <span>استيراد ملف الجرد</span>
+          </button>
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileImportChange}
+            accept=".csv, .txt"
+            className="hidden"
+          />
           
           <button
             onClick={handleBulkReconcile}
@@ -832,6 +1050,149 @@ export default function StockAudit({
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* CSV Import Preview & Reconciliation Modal */}
+      {showImportPreviewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl text-right relative space-y-5 animate-in fade-in zoom-in duration-200 max-h-[90vh] flex flex-col">
+            <button
+              onClick={() => setShowImportPreviewModal(false)}
+              className="absolute top-4 left-4 text-slate-400 hover:text-slate-700 p-1.5 rounded-full bg-slate-100 hover:bg-slate-200 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="flex items-center gap-3 border-b border-slate-200 pb-4 shrink-0">
+              <div className="w-12 h-12 rounded-2xl bg-purple-100 border border-purple-200 flex items-center justify-center text-purple-700 font-black text-xl shadow-xs">
+                <FileSpreadsheet className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                  <span>معاينة وتأكيد استيراد كشف الجرد الميداني</span>
+                  <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300 font-bold">
+                    CSV / Excel
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  تمت قراءة البيانات بنجاح، يرجى مراجعة الكميات والفروقات قبل الاعتماد النهائي
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Summary Cards */}
+            <div className="grid grid-cols-3 gap-3 shrink-0">
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-center">
+                <div className="text-[10px] text-slate-500 font-bold">إجمالي الأسطر المقروءة</div>
+                <div className="text-lg font-black text-slate-900 font-mono mt-0.5">{importedRows.length} صنف</div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-center">
+                <div className="text-[10px] text-emerald-800 font-bold">أصناف مطابقة بالنظام</div>
+                <div className="text-lg font-black text-emerald-700 font-mono mt-0.5">
+                  {importedRows.filter(r => r.status === 'matched').length} صنف
+                </div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-center">
+                <div className="text-[10px] text-amber-800 font-bold">أصناف فيها فارق كمية</div>
+                <div className="text-lg font-black text-amber-700 font-mono mt-0.5">
+                  {importedRows.filter(r => r.status === 'matched' && r.diff !== 0).length} صنف
+                </div>
+              </div>
+            </div>
+
+            {/* Table list */}
+            <div className="flex-1 overflow-y-auto border border-slate-200 rounded-2xl">
+              <table className="w-full text-xs text-right text-slate-700">
+                <thead className="bg-slate-50 text-slate-900 font-bold sticky top-0 border-b border-slate-200">
+                  <tr>
+                    <th className="p-3">السلعة والباركود</th>
+                    <th className="p-3 text-center">الكمية بالنظام</th>
+                    <th className="p-3 text-center">الكمية المستوردة</th>
+                    <th className="p-3 text-center">الفارق</th>
+                    <th className="p-3 text-center">الحالة</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {importedRows.map((row, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition">
+                      <td className="p-3 font-bold text-slate-900">
+                        <div>{row.name}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">{row.barcode}</div>
+                      </td>
+
+                      <td className="p-3 text-center font-mono font-bold text-slate-700">
+                        {row.systemStock}
+                      </td>
+
+                      <td className="p-3 text-center font-mono font-bold text-purple-700 bg-purple-50/50">
+                        {row.importedPhysicalStock}
+                      </td>
+
+                      <td className="p-3 text-center font-mono font-bold">
+                        {row.status === 'not_found' ? (
+                          <span className="text-slate-400">-</span>
+                        ) : row.diff === 0 ? (
+                          <span className="text-slate-400">0 (متطابق)</span>
+                        ) : row.diff < 0 ? (
+                          <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-600 border border-rose-200 text-[10px]">
+                            {row.diff} (عجز)
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-200 text-[10px]">
+                            +{row.diff} (زيادة)
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="p-3 text-center">
+                        {row.status === 'matched' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            مطابق بالنظام
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                            غير مسجل بالنظام
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="flex flex-col sm:flex-row items-center gap-2 pt-2 border-t border-slate-100 shrink-0">
+              <button
+                type="button"
+                onClick={handleApplyImportAsDraft}
+                className="w-full sm:flex-1 py-2.5 px-3 rounded-2xl bg-purple-50 hover:bg-purple-100 text-purple-900 font-extrabold text-xs border border-purple-300 transition cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <span>تحميل كمسودة في جدول الجرد للمراجعة 📝</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleApplyImportDirectly}
+                className="w-full sm:flex-1 py-2.5 px-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md transition cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>تحديث واعتماد المخزون فوراً 🚀</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowImportPreviewModal(false)}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+              >
+                إلغاء
+              </button>
+            </div>
           </div>
         </div>
       )}
