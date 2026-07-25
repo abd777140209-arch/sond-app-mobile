@@ -66,7 +66,7 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
   const [newHwidInput, setNewHwidInput] = useState('');
   const [isSavingHwid, setIsSavingHwid] = useState(false);
 
-  // Developer keys history list
+  // Developer keys history list (Local database synced with LocalStorage/Cloud)
   const [allLicenseKeys, setAllLicenseKeys] = useState<{ [key: string]: CloudLicense }>({});
   const [licenseToDelete, setLicenseToDelete] = useState<string | null>(null);
 
@@ -108,7 +108,7 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
   // Developer portal unlocking handler
   const handleUnlockDeveloperPortal = (e: React.FormEvent) => {
     e.preventDefault();
-    if (devPassword === '1997615' || devPassword === '771234' || devPassword.toLowerCase() === 'admin') {
+    if (devPassword === '1997615' || devPassword.toLowerCase() === 'admin') {
       soundManager.playSuccessChime();
       setIsDevUnlocked(true);
       setDevPassword('');
@@ -133,7 +133,7 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
 
     const newLicense: CloudLicense = {
       key: newKey,
-      hwid: genHwid.trim(),
+      hwid: genHwid.trim(), // Pre-bind if provided
       customerName: genCustomer.trim(),
       phone: genPhone.trim(),
       createdAt,
@@ -156,6 +156,7 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
     setGenHwid('');
     soundManager.playSuccessChime();
 
+    // Persist on cloud or mock db
     try {
       const success = await createLicenseOnCloud(newKey, newLicense);
       if (success) {
@@ -180,7 +181,7 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
       if (success) {
         soundManager.playSuccessChime();
         setStatusMessage({
-          text: `✓ تم تحديث معرف الجهاز (Device ID) بنجاح للعميل (${editingHwidLicense.customerName})!`,
+          text: `✓ تم تحديث معرف الجهاز (Device ID) بنجاح للعميل (${editingHwidLicense.customerName})! يمكن للعميل الآن تسجيل الدخول والتفعيل فوراً من جهازه الجديد.`,
           type: 'success'
         });
         await handleFetchCloudLicenses();
@@ -220,9 +221,11 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
     }
   };
 
-  // Developer action: Reset Cloud Data
+  // Developer action: Reset Cloud Data (Clear products, sales, purchases, customers, suppliers)
   const handlePerformResetCloudData = async () => {
-    if (resetConfirmText.trim() !== 'تصفير') return;
+    if (resetConfirmText.trim() !== 'تصفير') {
+      return;
+    }
 
     setIsResetting(true);
     soundManager.playWarningBeep();
@@ -232,16 +235,24 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
       if (result.success) {
         soundManager.playSuccessChime();
         setStatusMessage({
-          text: `✓ تم تصفير البيانات السحابية بنجاح!`,
+          text: `✓ تم تصفير البيانات السحابية بنجاح! تم إفراغ وتصفير وثائق المجموعات (المنتجات، المبيعات، المشتريات، العملاء، والموردين).`,
           type: 'success'
         });
-        if (onResetCloudComplete) onResetCloudComplete();
+        if (onResetCloudComplete) {
+          onResetCloudComplete();
+        }
       } else {
-        setStatusMessage({ text: `❌ حدث خطأ: ${result.message}`, type: 'error' });
+        setStatusMessage({
+          text: `❌ حدث خطأ أثناء تصفير البيانات السحابية: ${result.message}`,
+          type: 'error'
+        });
       }
     } catch (e: any) {
       console.error(e);
-      setStatusMessage({ text: `❌ حدث خطأ غير متوقع أثناء التصفير.`, type: 'error' });
+      setStatusMessage({
+        text: `❌ حدث خطأ غير متوقع أثناء تصفير البيانات السحابية.`,
+        type: 'error'
+      });
     } finally {
       setIsResetting(false);
       setShowResetModal(false);
@@ -262,16 +273,24 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
       if (result.success) {
         soundManager.playSuccessChime();
         setStatusMessage({
-          text: `✓ تم تصفير بيانات العميل (${clientToReset.customerName || clientToReset.key}) بنجاح!`,
+          text: `✓ تم تصفير بيانات العميل (${clientToReset.customerName || clientToReset.key}) بنجاح! تم إفراغ وتصفير المنتجات، المبيعات، والمشتريات الخاصة برخصته من السحابة.`,
           type: 'success'
         });
-        if (onResetCloudComplete) onResetCloudComplete();
+        if (onResetCloudComplete) {
+          onResetCloudComplete();
+        }
       } else {
-        setStatusMessage({ text: `❌ حدث خطأ أثناء التصفير: ${result.message}`, type: 'error' });
+        setStatusMessage({
+          text: `❌ حدث خطأ أثناء تصفير بيانات العميل: ${result.message}`,
+          type: 'error'
+        });
       }
     } catch (e: any) {
       console.error(e);
-      setStatusMessage({ text: `❌ حدث خطأ غير متوقع أثناء تصفير البيانات.`, type: 'error' });
+      setStatusMessage({
+        text: `❌ حدث خطأ غير متوقع أثناء تصفير بيانات العميل.`,
+        type: 'error'
+      });
     } finally {
       setIsResettingClient(false);
       setClientToReset(null);
@@ -283,6 +302,10 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm transition-all" dir="rtl">
       <div className="w-full max-w-4xl bg-[#090d16] border border-[#C5A862]/30 rounded-2xl shadow-2xl overflow-hidden relative flex flex-col max-h-[90vh]">
         
+        {/* Shiny corner accents */}
+        <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-[#C5A862]/40 rounded-tr-xl pointer-events-none"></div>
+        <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-[#C5A862]/40 rounded-tl-xl pointer-events-none"></div>
+
         {/* Header */}
         <div className="p-5 border-b border-gray-800 flex justify-between items-center bg-[#0d1320]">
           <div className="flex items-center gap-2">
@@ -305,6 +328,7 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
         {/* Scrollable Content Container */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
           
+          {/* Status Alert Area */}
           {statusMessage.text && (
             <div className={`p-3 rounded-xl border text-xs text-center ${
               statusMessage.type === 'success' ? 'bg-green-950/20 border-green-500/20 text-green-300' :
@@ -346,6 +370,7 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
           ) : (
             <div className="space-y-6">
               
+              {/* Dev Header Info */}
               <div className="flex justify-between items-center bg-gray-900/40 p-3 rounded-xl border border-[#C5A862]/20">
                 <span className="font-bold text-green-400 flex items-center gap-1.5 text-xs">
                   <Sparkles className="w-4 h-4 animate-bounce text-yellow-400" /> مرحباً بك مجدداً يا مهندس عبدالمجيد المحواشي!
@@ -428,6 +453,17 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                       <div className="font-mono text-lg font-extrabold text-yellow-400 select-all bg-black py-2.5 rounded-lg tracking-widest border border-[#C5A862]/30 my-2">
                         {generatedKey}
                       </div>
+                      <div className="text-[11px] text-gray-300 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-slate-900/80 p-2.5 rounded-lg border border-gray-800">
+                        <span>العميل: <strong className="text-white">{lastGeneratedInfo.customer}</strong></span>
+                        <span>•</span>
+                        <span>رقم الهاتف: <strong className="text-cyan-400 font-mono">{lastGeneratedInfo.phone || 'غير مدخل'}</strong></span>
+                        <span>•</span>
+                        <span>النوع: <strong className="text-amber-400">
+                          {lastGeneratedInfo.type === 'trial' ? 'تجريبي (7 أيام)' : lastGeneratedInfo.type === 'monthly' ? 'شهري (30 يوماً)' : lastGeneratedInfo.type === 'yearly' ? 'سنوي (365 يوماً)' : 'دائم (مدى الحياة)'}
+                        </strong></span>
+                        <span>•</span>
+                        <span>إنشاء: <strong className="text-gray-300">{new Date(lastGeneratedInfo.createdAt).toLocaleDateString('ar-YE')}</strong></span>
+                      </div>
                     </div>
 
                     <div className="flex flex-wrap justify-center gap-3 pt-2">
@@ -441,9 +477,167 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                       >
                         <Copy className="w-3.5 h-3.5" /> نسخ الكود فقط
                       </button>
+
+                      <button
+                        onClick={() => {
+                          soundManager.playSuccessChime();
+                          const typeAr = lastGeneratedInfo.type === 'trial' ? 'تجريبي (7 أيام)' : lastGeneratedInfo.type === 'monthly' ? 'شهري (30 يوماً)' : lastGeneratedInfo.type === 'yearly' ? 'سنوي (365 يوماً)' : 'رخصة دائمة (مدى الحياة)';
+                          const expiresAr = lastGeneratedInfo.type === 'lifetime' ? 'صلاحية دائمة' : new Date(lastGeneratedInfo.expiresAt).toLocaleDateString('ar-YE');
+                          const message = 
+                            `*نظام سند الذكي المحاسبي* 📱💼\n` +
+                            `مرحباً بك يا غالي! لقد تم إصدار كود التفعيل الخاص بك بنجاح:\n\n` +
+                            `👤 *العميل:* ${lastGeneratedInfo.customer}\n` +
+                            `📱 *رقم الهاتف:* ${lastGeneratedInfo.phone || 'غير محدد'}\n` +
+                            `🔑 *كود التفعيل (Serial):* \`${generatedKey}\`\n` +
+                            `📅 *تاريخ الإنشاء:* ${new Date(lastGeneratedInfo.createdAt).toLocaleDateString('ar-YE')}\n` +
+                            `⏳ *نوع الاشتراك وصلاحيته:* ${typeAr} (${expiresAr})\n\n` +
+                            `*طريقة التفعيل السهلة:*\n` +
+                            `1. افتح تطبيق نظام سند الذكي المحاسبي على جهازك.\n` +
+                            `2. أدخل رقم هاتفك وكود التفعيل أعلاه في شاشة التفعيل.\n` +
+                            `3. اضغط على زر "تفعيل البرنامج وفك القفل".\n\n` +
+                            `شكراً لثقتكم بنا! 🌹\n` +
+                            `م. عبدالمجيد المحواشي (هاتف: 777140209)\n`;
+                          navigator.clipboard.writeText(message);
+                          alert('تم نسخ رسالة التفعيل الجاهزة لمشاركتها بالواتساب!');
+                        }}
+                        className="px-3 py-1.5 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#25D366] font-semibold rounded-lg text-xs cursor-pointer transition flex items-center gap-1.5 border border-[#25D366]/30"
+                      >
+                        <Copy className="w-3.5 h-3.5" /> نسخ رسالة الواتساب الجاهزة 💬
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          soundManager.playSuccessChime();
+                          const typeAr = lastGeneratedInfo.type === 'trial' ? 'تجريبي' : lastGeneratedInfo.type === 'monthly' ? 'شهري' : lastGeneratedInfo.type === 'yearly' ? 'سنوي' : 'مدى الحياة';
+                          const expiresAr = lastGeneratedInfo.type === 'lifetime' ? 'صلاحية دائمة' : new Date(lastGeneratedInfo.expiresAt).toLocaleDateString('ar-YE');
+                          const content = 
+                            `نظام سند الذكي المحاسبي - ترخيص الاستخدام\n` +
+                            `================================================\n` +
+                            `اسم العميل/المحل: ${lastGeneratedInfo.customer}\n` +
+                            `رقم هاتف المستخدم: ${lastGeneratedInfo.phone || 'غير مدخل'}\n` +
+                            `كود التفعيل (Serial Key): ${generatedKey}\n` +
+                            `تاريخ الإنشاء: ${new Date(lastGeneratedInfo.createdAt).toLocaleDateString('ar-YE')}\n` +
+                            `نوع الاشتراك وصلاحيته: ${typeAr} (${expiresAr})\n\n` +
+                            `طريقة التفعيل:\n` +
+                            `1. افتح برنامج نظام سند الذكي المحاسبي على جهازك.\n` +
+                            `2. قم بنسخ كود التفعيل أعلاه ولصقه في حقل (مفتاح التفعيل).\n` +
+                            `3. أدخل رقم هاتفك واضغط على زر "تفعيل البرنامج وفك القفل".\n\n` +
+                            `مع تحيات مبرمج النظام: م. عبدالمجيد المحواشي (هاتف: 777140209)\n`;
+                          
+                          const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+                          const url = URL.createObjectURL(blob);
+                          const link = document.createElement('a');
+                          link.href = url;
+                          link.download = `ترخيص_${lastGeneratedInfo.customer.replace(/\s+/g, '_')}.txt`;
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                          URL.revokeObjectURL(url);
+                        }}
+                        className="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-500 text-black font-extrabold rounded-lg text-xs cursor-pointer transition flex items-center gap-1.5"
+                      >
+                        <Download className="w-3.5 h-3.5" /> تحميل ملف الترخيص (.txt) 📄
+                      </button>
+                    </div>
+                    <div className="text-[10px] text-amber-500 font-medium">
+                      * ملاحظة: الكود لا يرتبط بجهازك الشخصي. سيرتبط تلقائياً بجهاز المشترك عند استخدامه لأول مرة!
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Subscriber Try App Link Section */}
+              <div className="p-4 bg-gradient-to-r from-amber-950/10 to-yellow-950/10 border border-[#C5A862]/20 rounded-xl space-y-3.5">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
+                    <Globe className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xs text-amber-400">مشاركة رابط تجربة النظام للمشتركين والعملاء الجدد</h4>
+                    <p className="text-[10px] text-gray-400 mt-0.5">انسخ الرابط ومفتاح التفعيل الموحد لإرسالهما لعملائك لكي يجربوا النظام مباشرة على أي متصفح أو جهاز</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-gray-500 block">رابط تجربة التطبيق العام (للمشاركة):</span>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        readOnly
+                        value="https://ais-pre-z5yeta6zliodlnrwazwoat-575351245128.europe-west2.run.app"
+                        className="flex-1 bg-[#04060b] border border-gray-800 rounded-lg px-3 py-2 text-xs text-gray-300 font-mono focus:outline-none"
+                      />
+                      <button
+                        onClick={() => {
+                          soundManager.playSuccessChime();
+                          navigator.clipboard.writeText("https://ais-pre-z5yeta6zliodlnrwazwoat-575351245128.europe-west2.run.app");
+                          alert('تم نسخ رابط تجربة النظام العام بنجاح!');
+                        }}
+                        className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg cursor-pointer transition font-bold"
+                        title="نسخ الرابط"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-gray-500 block">مفتاح التفعيل التجريبي الموحد (صلاحية 7 أيام لكل جهاز):</span>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        readOnly
+                        value="MHTT-TRIAL-7DAY-FREE"
+                        className="flex-1 bg-[#04060b] border border-gray-800 rounded-lg px-3 py-2 text-xs text-yellow-400 font-mono font-bold tracking-wider text-center focus:outline-none"
+                      />
+                      <button
+                        onClick={() => {
+                          soundManager.playSuccessChime();
+                          navigator.clipboard.writeText('MHTT-TRIAL-7DAY-FREE');
+                          alert('تم نسخ مفتاح التفعيل التجريبي الموحد!');
+                        }}
+                        className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg cursor-pointer transition font-bold"
+                        title="نسخ الكود"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex flex-wrap gap-2.5 justify-end">
+                  <button
+                    onClick={() => {
+                      soundManager.playSuccessChime();
+                      const message = 
+                        `*نظام سند الذكي المحاسبي* 📱💼\n` +
+                        `أهلاً بك يا غالي! يمكنك الآن تجربة النسخة الكاملة لنظام سند الذكي المحاسبي مباشرة من أي متصفح أو جهاز:\n\n` +
+                        `🔗 *رابط التجربة المباشر العام:* https://ais-pre-z5yeta6zliodlnrwazwoat-575351245128.europe-west2.run.app\n\n` +
+                        `🔑 *مفتاح التفعيل التجريبي المجاني (7 أيام):* \`MHTT-TRIAL-7DAY-FREE\`\n\n` +
+                        `*خطوات التشغيل السريعة:*\n` +
+                        `1. اضغط على الرابط المذكور أعلاه.\n` +
+                        `2. قم بنسخ مفتاح التفعيل التجريبي المجاني وصقه في حقل الترخيص.\n` +
+                        `3. اكتب اسم محلك واضغط زر "تفعيل البرنامج وفك القفل".\n\n` +
+                        `شكراً لاهتمامكم وثقتكم بنا! 🌹\n` +
+                        `م. عبدالمجيد المحواشي (هاتف: 777140209)\n`;
+                      navigator.clipboard.writeText(message);
+                      alert('تم نسخ رسالة الدعوة ورابط التجربة العام للواتساب بنجاح! جاهزة للإرسال.');
+                    }}
+                    className="px-4 py-2 bg-[#25D366]/15 hover:bg-[#25D366]/25 text-[#25D366] border border-[#25D366]/30 font-bold rounded-lg text-xs cursor-pointer transition flex items-center gap-1.5"
+                  >
+                    <Share2 className="w-4 h-4" /> نسخ رسالة الدعوة للواتساب 💬
+                  </button>
+
+                  <a
+                    href="https://ais-pre-z5yeta6zliodlnrwazwoat-575351245128.europe-west2.run.app"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-4 py-2 bg-yellow-600/10 hover:bg-yellow-600/20 text-yellow-500 border border-yellow-500/30 font-bold rounded-lg text-xs cursor-pointer transition flex items-center gap-1.5"
+                  >
+                    <ExternalLink className="w-4 h-4" /> فتح الرابط في متصفح جديد 🌐
+                  </a>
+                </div>
               </div>
 
               {/* Licenses Database Table */}
@@ -475,7 +669,7 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                         {Object.keys(allLicenseKeys).length === 0 ? (
                           <tr>
                             <td colSpan={6} className="p-8 text-center text-gray-500 font-sans">
-                              لا توجد تراخيص مسجلة في السجل حالياً.
+                              لا توجد تراخيص مسجلة في السجل حالياً. يرجى الضغط على "تحديث البيانات" أو توليد رخصة جديدة.
                             </td>
                           </tr>
                         ) : (
@@ -483,10 +677,29 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                             return (
                               <tr key={lk.key} className="hover:bg-slate-900/60 transition">
                                 <td className="p-3 text-white font-bold">{lk.customerName}</td>
-                                <td className="p-3 text-cyan-300 font-mono">{lk.phone || 'غير مدخل'}</td>
-                                <td className="p-3 text-yellow-400 font-bold font-mono select-all">{lk.key}</td>
-                                <td className="p-3 text-green-400 font-mono">{lk.hwid || '⏳ غير مربوط'}</td>
+                                <td className="p-3">
+                                  {lk.phone ? (
+                                    <span className="text-cyan-300 font-mono text-[10.5px] inline-flex items-center gap-1 bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-500/20">
+                                      <Phone className="w-3 h-3 text-cyan-400" /> {lk.phone}
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-600 text-[10px] font-sans">غير مدخل</span>
+                                  )}
+                                </td>
+                                <td className="p-3 text-yellow-400 font-bold font-mono select-all tracking-wider">{lk.key}</td>
+                                <td className="p-3">
+                                  {lk.hwid ? (
+                                    <span className="text-green-400 text-[10px] bg-green-950/40 px-2.5 py-1 rounded-full border border-green-500/10 font-mono inline-flex items-center gap-1">
+                                      <Laptop className="w-3 h-3 text-green-400" /> {lk.hwid}
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-500 text-[10px] bg-slate-900 px-2.5 py-1 rounded-full font-sans">⏳ غير مربوط بجهاز بعد</span>
+                                  )}
+                                </td>
                                 <td className="p-3 text-gray-300">
+                                  <span className="font-bold text-[10px] bg-slate-800 px-2 py-0.5 rounded mr-1">
+                                    {lk.type === 'trial' ? 'تجريبي' : lk.type === 'monthly' ? 'شهري' : lk.type === 'yearly' ? 'سنوي' : 'مدى الحياة'}
+                                  </span>
                                   {lk.type === 'lifetime' ? 'صلاحية دائمة' : new Date(lk.expiresAt).toLocaleDateString('ar-YE')}
                                 </td>
                                 <td className="p-3 text-center">
@@ -497,14 +710,30 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                                         setEditingHwidLicense(lk);
                                         setNewHwidInput(lk.hwid || '');
                                       }}
-                                      className="px-2 py-1 rounded bg-blue-950/80 hover:bg-blue-900 text-blue-300 text-[10px] font-bold"
+                                      className="px-2 py-1 rounded bg-blue-950/80 hover:bg-blue-900 border border-blue-500/40 text-blue-300 hover:text-white text-[10px] font-bold transition flex items-center gap-1 cursor-pointer shadow-sm"
+                                      title="تعديل معرف الجهاز (Update Device ID) لنقل الترخيص لجهاز جديد"
                                     >
-                                      تعديل Device ID
+                                      <Edit3 className="w-3 h-3 text-blue-400" />
+                                      <span>تعديل Device ID</span>
+                                    </button>
+
+                                    <button
+                                      onClick={() => {
+                                        soundManager.playWarningBeep();
+                                        setClientToReset(lk);
+                                        setClientResetConfirmText('');
+                                      }}
+                                      className="px-2 py-1 rounded bg-red-950/70 hover:bg-red-900 border border-red-500/40 text-red-300 hover:text-white text-[10px] font-bold transition flex items-center gap-1 cursor-pointer shadow-sm"
+                                      title="تصفير حساب وسجل بيانات هذا العميل فقط"
+                                    >
+                                      <RotateCcw className="w-3 h-3 text-red-400" />
+                                      <span>تصفير العميل</span>
                                     </button>
 
                                     <button
                                       onClick={() => handleDeleteLicenseKey(lk.key)}
-                                      className="p-1 rounded-lg text-red-400 hover:bg-red-950/40"
+                                      className="p-1 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-950/40 transition cursor-pointer"
+                                      title="حذف وإلغاء ترخيص العميل فوراً"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
                                     </button>
@@ -520,6 +749,36 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                 </div>
               </div>
 
+              {/* Reset Cloud Data Danger Zone Section */}
+              <div className="p-4 bg-red-950/20 border border-red-500/30 rounded-xl space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-lg bg-red-950/60 text-red-400 border border-red-500/30">
+                      <RotateCcw className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-xs text-red-400 flex items-center gap-1.5">
+                        إدارة السحابة • تصفير البيانات السحابية (Reset Cloud Data)
+                      </h4>
+                      <p className="text-[10px] text-gray-400 mt-0.5">
+                        إفراغ وتصفير وثائق المجموعات (products, sales, purchases, customers, suppliers) سحابياً مع الحفاظ التام والكامل على التراخيص والمستخدمين والإعدادات.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      soundManager.playWarningBeep();
+                      setResetConfirmText('');
+                      setShowResetModal(true);
+                    }}
+                    className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold rounded-lg text-xs cursor-pointer transition shadow-lg shadow-red-950/50 border border-red-400/30 flex items-center gap-2"
+                  >
+                    <RotateCcw className="w-4 h-4" /> تصفير البيانات السحابية (Reset Cloud Data) 🗑️
+                  </button>
+                </div>
+              </div>
+
             </div>
           )}
 
@@ -529,6 +788,256 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
         <div className="p-4 border-t border-gray-800 text-center text-[10px] text-gray-500 bg-[#070b13]">
           بوابة الإدارة السحابية المركزية الذكية • مبرمج النظام عبدالمجيد المحواشي © 2026
         </div>
+
+        {/* Custom Confirmation Modal for Delete License */}
+        {licenseToDelete && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+            <div className="w-full max-w-md bg-[#090d16] border border-red-500/30 rounded-2xl p-6 text-center space-y-4 shadow-2xl">
+              <div className="inline-flex p-3 rounded-full bg-red-950/40 text-red-400 border border-red-500/20">
+                <ShieldAlert className="w-8 h-8 animate-pulse" />
+              </div>
+              <h3 className="text-sm font-bold text-white">تأكيد حذف الترخيص</h3>
+              <p className="text-[11px] text-gray-300 leading-relaxed">
+                هل أنت متأكد تماماً من حذف ترخيص العميل صاحب المفتاح:
+                <br />
+                <span className="font-mono text-yellow-400 font-bold select-all tracking-wider text-xs block my-2 bg-slate-900 py-1.5 rounded-lg border border-gray-800">
+                  {licenseToDelete}
+                </span>
+                سيتم إزالة الترخيص من قائمة العملاء والأجهزة النشطة.
+              </p>
+              <div className="flex gap-2 justify-center pt-2">
+                <button
+                  onClick={confirmDeleteLicense}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg cursor-pointer transition text-xs"
+                >
+                  نعم، حذف الترخيص 🗑️
+                </button>
+                <button
+                  onClick={() => setLicenseToDelete(null)}
+                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-lg cursor-pointer transition text-xs"
+                >
+                  تراجع وإلغاء ❌
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Double Safety Confirmation Modal for Reset Cloud Data */}
+        {showResetModal && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+            <div className="w-full max-w-md bg-[#0c0812] border border-red-500/50 rounded-2xl p-6 text-center space-y-4 shadow-2xl relative">
+              <div className="inline-flex p-3 rounded-full bg-red-950/80 text-red-400 border border-red-500/30">
+                <AlertTriangle className="w-8 h-8 animate-bounce" />
+              </div>
+
+              <h3 className="text-sm font-bold text-white">⚠️ حماية مضاعفة: تأكيد تصفير البيانات السحابية</h3>
+
+              <div className="text-[11px] text-gray-300 leading-relaxed space-y-2 bg-red-950/30 p-3 rounded-xl border border-red-500/20 text-right">
+                <p className="text-red-300 font-bold">تنبيه أمني شديد الخطورة للمطور:</p>
+                <ul className="list-disc list-inside space-y-1 text-gray-300 text-[10.5px]">
+                  <li>سيتم إفراغ وتصفير مجموعات: <span className="text-amber-400 font-mono font-bold">products, sales, purchases, customers, suppliers</span> نهائياً من السحابة.</li>
+                  <li>سيتم <span className="text-green-400 font-bold">الحفاظ التام</span> ولن يتم مسح: التراخيص (<span className="text-green-400 font-mono">licenses</span>)، المستخدمين (<span className="text-green-400 font-mono">users</span>)، والإعدادات العامة (<span className="text-green-400 font-mono">settings</span>).</li>
+                </ul>
+              </div>
+
+              <div className="space-y-2 text-right pt-1">
+                <label className="text-[11px] text-amber-400 font-bold block">
+                  لتأكيد تنفيذ عملية التصفير السحابي، يرجى كتابة كلمة <span className="text-white bg-red-950 px-2 py-0.5 rounded border border-red-500/40 font-mono font-bold">تصفير</span> في الحقل أدناه:
+                </label>
+                <input
+                  type="text"
+                  value={resetConfirmText}
+                  onChange={(e) => setResetConfirmText(e.target.value)}
+                  placeholder="أكتب كلمة (تصفير) هنا لتأكيد الحذف"
+                  className="w-full bg-[#04060b] border border-red-500/40 rounded-xl px-3 py-2.5 text-xs text-white text-center font-bold focus:outline-none focus:border-red-400"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex gap-2 justify-center pt-2">
+                <button
+                  disabled={resetConfirmText.trim() !== 'تصفير' || isResetting}
+                  onClick={handlePerformResetCloudData}
+                  className={`px-5 py-2.5 rounded-lg font-bold text-xs transition flex items-center justify-center gap-1.5 ${
+                    resetConfirmText.trim() === 'تصفير' && !isResetting
+                      ? 'bg-red-600 hover:bg-red-500 text-white cursor-pointer shadow-lg shadow-red-900/50 border border-red-400/40'
+                      : 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700'
+                  }`}
+                >
+                  {isResetting ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" /> جاري التصفير السحابي...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" /> تأكيد وإجراء التصفير النهائي 🗑️
+                    </>
+                  )}
+                </button>
+
+                <button
+                  disabled={isResetting}
+                  onClick={() => {
+                    setShowResetModal(false);
+                    setResetConfirmText('');
+                  }}
+                  className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-lg cursor-pointer transition text-xs border border-gray-700"
+                >
+                  إلغاء وتراجع ❌
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+
+        {/* Double Safety Confirmation Modal for Resetting Specific Client Cloud Data */}
+        {clientToReset && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+            <div className="w-full max-w-md bg-[#0c0812] border border-red-500/50 rounded-2xl p-6 text-center space-y-4 shadow-2xl relative">
+              <div className="inline-flex p-3 rounded-full bg-red-950/80 text-red-400 border border-red-500/30">
+                <AlertTriangle className="w-8 h-8 animate-bounce" />
+              </div>
+
+              <h3 className="text-sm font-bold text-white">⚠️ تأكيد تصفير بيانات العميل: <span className="text-yellow-400">{clientToReset.customerName || 'عميل'}</span></h3>
+
+              <div className="text-[11px] text-gray-300 leading-relaxed space-y-2 bg-red-950/30 p-3 rounded-xl border border-red-500/20 text-right">
+                <p className="text-red-300 font-bold">تنبيه هام للمطور:</p>
+                <ul className="list-disc list-inside space-y-1 text-gray-300 text-[10.5px]">
+                  <li>اسم العميل/المحل: <span className="text-white font-bold">{clientToReset.customerName}</span></li>
+                  <li>كود الترخيص: <span className="text-yellow-400 font-mono font-bold">{clientToReset.key}</span></li>
+                  <li>سيتم إفراغ وتصفير (المنتجات، المبيعات، المشتريات، العملاء، والموردين) المربوطة بـ <span className="text-yellow-400 font-mono">{clientToReset.key}</span> فقط من السحابة.</li>
+                  <li><span className="text-green-400 font-bold">لن يتم المساس</span> ببيانات أي عميل آخر على السحابة، ولن يتم حذف كود الترخيص.</li>
+                </ul>
+              </div>
+
+              <div className="space-y-2 text-right pt-1">
+                <label className="text-[11px] text-amber-400 font-bold block">
+                  لتأكيد تصفير حساب العميل ({clientToReset.customerName})، أكتب كلمة <span className="text-white bg-red-950 px-2 py-0.5 rounded border border-red-500/40 font-mono font-bold">تصفير</span> في الحقل أدناه:
+                </label>
+                <input
+                  type="text"
+                  value={clientResetConfirmText}
+                  onChange={(e) => setClientResetConfirmText(e.target.value)}
+                  placeholder="أكتب كلمة (تصفير) هنا لتأكيد الحذف"
+                  className="w-full bg-[#04060b] border border-red-500/40 rounded-xl px-3 py-2.5 text-xs text-white text-center font-bold focus:outline-none focus:border-red-400"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex gap-2 justify-center pt-2">
+                <button
+                  disabled={clientResetConfirmText.trim() !== 'تصفير' || isResettingClient}
+                  onClick={handlePerformResetClientCloudData}
+                  className={`px-5 py-2.5 rounded-lg font-bold text-xs transition flex items-center justify-center gap-1.5 ${
+                    clientResetConfirmText.trim() === 'تصفير' && !isResettingClient
+                      ? 'bg-red-600 hover:bg-red-500 text-white cursor-pointer shadow-lg shadow-red-900/50 border border-red-400/40'
+                      : 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700'
+                  }`}
+                >
+                  {isResettingClient ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" /> جاري تصفير حساب العميل...
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="w-4 h-4" /> تأكيد وتصفير بيانات العميل 🗑️
+                    </>
+                  )}
+                </button>
+
+                <button
+                  disabled={isResettingClient}
+                  onClick={() => {
+                    setClientToReset(null);
+                    setClientResetConfirmText('');
+                  }}
+                  className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-lg cursor-pointer transition text-xs border border-gray-700"
+                >
+                  إلغاء وتراجع ❌
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal for Updating License Device ID (HWID) */}
+        {editingHwidLicense && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+            <div className="w-full max-w-md bg-[#090d16] border border-blue-500/40 rounded-2xl p-6 text-right space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Laptop className="w-4 h-4 text-blue-400" /> نقل الترخيص وتعديل معرف الجهاز (Device ID)
+                </h3>
+                <button
+                  onClick={() => { setEditingHwidLicense(null); setNewHwidInput(''); }}
+                  className="text-gray-400 hover:text-white cursor-pointer"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="text-[11px] text-gray-300 space-y-1.5 bg-blue-950/30 p-3 rounded-xl border border-blue-500/20">
+                <div>العميل: <span className="text-white font-bold">{editingHwidLicense.customerName}</span></div>
+                <div>رقم الهاتف: <span className="text-cyan-400 font-mono font-bold">{editingHwidLicense.phone || 'غير مدخل'}</span></div>
+                <div>كود الترخيص: <span className="text-yellow-400 font-mono font-bold">{editingHwidLicense.key}</span></div>
+                <div>المعرف الحالي: <span className="text-green-400 font-mono font-bold">{editingHwidLicense.hwid || 'غير مربوط بعد (Unbound)'}</span></div>
+                <div className="text-gray-400 text-[10px] pt-1">
+                  * عند تعديل الـ Device ID وحفظه، يتاح للعميل التفعيل والدخول فوراً على جهازه الجديد.
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] text-gray-300 font-bold block">
+                  معرف الجهاز الجديد (Device ID / HWID):
+                </label>
+                <input
+                  type="text"
+                  value={newHwidInput}
+                  onChange={(e) => setNewHwidInput(e.target.value)}
+                  placeholder="أدخل بصمة الجهاز الجديد أو اتركه فارغاً لفك الربط"
+                  className="w-full bg-[#04060b] border border-gray-800 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-blue-400"
+                  autoFocus
+                />
+                <div className="flex gap-2 text-[10px] pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setNewHwidInput('')}
+                    className="text-amber-400 hover:underline cursor-pointer"
+                  >
+                    🧹 مسح المعرف (إتاحة الكود للعميل ليستخدمه على أي جهاز جديد)
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end pt-2">
+                <button
+                  disabled={isSavingHwid}
+                  onClick={handleUpdateHwid}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg cursor-pointer transition text-xs flex items-center gap-1.5"
+                >
+                  {isSavingHwid ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> جاري الحفظ...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5" /> حفظ الـ Device ID الجديد 💾
+                    </>
+                  )}
+                </button>
+                <button
+                  disabled={isSavingHwid}
+                  onClick={() => { setEditingHwidLicense(null); setNewHwidInput(''); }}
+                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-lg cursor-pointer transition text-xs"
+                >
+                  إلغاء ❌
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

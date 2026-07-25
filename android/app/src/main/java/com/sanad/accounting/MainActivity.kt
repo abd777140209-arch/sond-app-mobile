@@ -20,13 +20,12 @@ import androidx.core.content.ContextCompat
 
 /**
  * MainActivity for Sanad Accounting (نظام سند الذكي المحاسبي)
- * Configures WebView to load live remote server URL for real-time app updates
- * without requiring APK updates, while granting full Camera, Notifications, and Storage permissions.
+ * Configures WebView to load local bundled offline assets directly from assets/public/index.html.
  */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
-    private val REMOTE_SERVER_URL = "https://ais-dev-z5yeta6zliodlnrwazwoat-575351245128.europe-west2.run.app"
+    private val LOCAL_APP_URL = "file:///android_asset/public/index.html"
     private val PERMISSIONS_REQUEST_CODE = 1001
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -39,7 +38,7 @@ class MainActivity : AppCompatActivity() {
         requestRequiredPermissions()
         configureWebView()
 
-        webView.loadUrl(REMOTE_SERVER_URL)
+        webView.loadUrl(LOCAL_APP_URL)
     }
 
     private fun configureWebView() {
@@ -63,7 +62,7 @@ class MainActivity : AppCompatActivity() {
             ) {
                 super.onReceivedError(view, request, error)
                 if (request?.isForMainFrame == true) {
-                    view?.loadUrl("file:///android_asset/public/index.html")
+                    view?.loadUrl(LOCAL_APP_URL)
                 }
             }
         }
