@@ -123,7 +123,7 @@ export function getFirestoreDb() {
       const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
       
       try {
-        setLogLevel('error');
+        setLogLevel('silent');
       } catch (e) {
         // ignore log level error if already set
       }
