@@ -3,6 +3,7 @@
     <color name="primary_dark">#070C12</color>
     <color name="primary_navy">#0B141F</color>
     <color name="blue_accent">#0284C7</color>
+    <color name="gold_accent">#0284C7</color>
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
 </resources>

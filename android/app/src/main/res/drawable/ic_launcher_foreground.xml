@@ -4,7 +4,27 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#0284C7"
-        android:pathData="M34,34h40v40h-40z"/>
+    <group
+        android:pivotX="54"
+        android:pivotY="54">
+        <group
+            android:pivotX="54"
+            android:pivotY="54"
+            android:rotation="45">
+            <path
+                android:fillColor="#0284C7"
+                android:pathData="M34,50h40a4,4 0 0,1 4,4a4,4 0 0,1 -4,4h-40a4,4 0 0,1 -4,-4a4,4 0 0,1 4,-4z" />
+        </group>
+        <group
+            android:pivotX="54"
+            android:pivotY="54"
+            android:rotation="-45">
+            <path
+                android:fillColor="#0369A1"
+                android:pathData="M36,38h36a4,4 0 0,1 4,4a4,4 0 0,1 -4,4h-36a4,4 0 0,1 -4,-4a4,4 0 0,1 4,-4z" />
+            <path
+                android:fillColor="#38BDF8"
+                android:pathData="M36,62h36a4,4 0 0,1 4,4a4,4 0 0,1 -4,4h-36a4,4 0 0,1 -4,-4a4,4 0 0,1 4,-4z" />
+        </group>
+    </group>
 </vector>
