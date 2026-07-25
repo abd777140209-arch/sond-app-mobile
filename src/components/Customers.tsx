@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { motion } from 'motion/react';
 import { 
   Search, 
   UserPlus, 
@@ -27,7 +28,9 @@ import {
   Calendar,
   Share2,
   Sparkles,
-  Clock
+  Clock,
+  X,
+  Plus
 } from 'lucide-react';
 import { Customer, Payment, Invoice } from '../types';
 import { soundManager } from '../utils/sound';
@@ -74,6 +77,8 @@ export default function Customers({
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
   // New Customer Form States
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [newCustName, setNewCustName] = useState('');
   const [newCustPhone, setNewCustPhone] = useState('');
   const [newCustDueDate, setNewCustDueDate] = useState('');
@@ -131,6 +136,7 @@ export default function Customers({
     setNewCustDueDate('');
     setNewCustNotes('');
     setAddError('');
+    setShowAddModal(false);
     soundManager.playSuccessChime();
   };
 
@@ -164,6 +170,7 @@ export default function Customers({
     setPayNote('');
     setSelectedCustomerId('');
     setPayError('');
+    setShowPaymentModal(false);
     soundManager.playSuccessChime();
   };
 
@@ -189,13 +196,13 @@ export default function Customers({
   };
 
   return (
-    <div id="customers_tab_view" className="space-y-6">
+    <div id="customers_tab_view" className="space-y-3.5 md:space-y-6 pb-20 md:pb-28">
       
       {/* 1. TOP STATISTICAL SUMMARY BAR */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-4">
         
         {/* Card 1: Total Debts */}
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+        <div className="p-2.5 sm:p-4 rounded-xl md:rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-xs font-bold text-slate-500">إجمالي الديون والذمم</span>
             <h3 className="text-lg font-black text-rose-600 mt-1 dir-ltr text-right">
@@ -254,221 +261,91 @@ export default function Customers({
 
       </div>
 
-      {/* 2. MAIN LAYOUT: Forms (Left) & Customer Directory (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      {/* 2. MAIN LAYOUT: Full Width Customer Directory & Top Actions */}
+      <div className="space-y-6">
         
-        {/* LEFT COLUMN: New Customer Form + Payment Receipt (5 Cols) */}
-        <div className="lg:col-span-5 space-y-6">
+        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
           
-          {/* Form 1: New Customer Registration Card */}
-          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-              <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
-                <UserPlus className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">تسجيل عميل جديد بالدفتر</h3>
-                <p className="text-[11px] text-slate-400">إضافة حساب جديد وتحديد تاريخ استحقاق الدين</p>
-              </div>
+          {/* Header & Action Buttons */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div>
+              <h3 className="text-base font-bold text-slate-900">دليل كروت وحسابات العملاء</h3>
+              <p className="text-xs text-slate-400">مجموع الحسابات المعتمدة: {activeCustomers.length} عميل</p>
             </div>
 
-            {addError && (
-              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" /> {addError}
-              </div>
-            )}
-
-            <form onSubmit={handleAddSubmit} className="space-y-3">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">اسم العميل الثلاثي:</label>
-                <input
-                  id="new_cust_name"
-                  type="text"
-                  required
-                  value={newCustName}
-                  onChange={(e) => setNewCustName(e.target.value)}
-                  placeholder="مثال: عبدالمجيد المحواشي..."
-                  className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">رقم الهاتف:</label>
-                  <input
-                    id="new_cust_phone"
-                    type="tel"
-                    value={newCustPhone}
-                    onChange={(e) => setNewCustPhone(e.target.value)}
-                    placeholder="77XXXXXXX"
-                    className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-xl px-3.5 py-2 text-slate-900 placeholder-slate-400 text-right focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">تاريخ الاستحقاق:</label>
-                  <input
-                    type="date"
-                    value={newCustDueDate}
-                    onChange={(e) => setNewCustDueDate(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-xl px-2.5 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
-                  />
-                </div>
-              </div>
+            {/* Action Buttons: Add Customer & Pay Debt */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => {
+                  soundManager.playScanBeep();
+                  setShowAddModal(true);
+                }}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>إضافة عميل جديد</span>
+              </button>
 
               <button
-                id="submit_new_customer_btn"
-                type="submit"
-                className="w-full py-3 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 transition cursor-pointer flex items-center justify-center gap-2"
+                onClick={() => {
+                  soundManager.playScanBeep();
+                  setShowPaymentModal(true);
+                }}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/20 transition flex items-center gap-1.5 cursor-pointer"
               >
-                <UserCheck className="w-4 h-4" />
-                <span>حفظ وتثبيت الحساب الجديد</span>
+                <CreditCard className="w-4 h-4" />
+                <span>سند قبض تسديد</span>
               </button>
-            </form>
-          </div>
 
-          {/* Form 2: Payment Receipt (سند قبض نقدية) Card */}
-          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-              <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
-                <CreditCard className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">سند قبض نقدية (تسديد دين)</h3>
-                <p className="text-[11px] text-slate-400">تنزيل مديونية عميل نقدياً في الصندوق</p>
-              </div>
-            </div>
-
-            {payError && (
-              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" /> {payError}
-              </div>
-            )}
-
-            <form onSubmit={handlePaySubmit} className="space-y-3">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">اختر العميل المدين:</label>
-                <select
-                  id="pay_debt_customer_select"
-                  value={selectedCustomerId}
-                  onChange={(e) => {
-                    setSelectedCustomerId(e.target.value);
-                    const debtor = activeCustomers.find(c => c.id === e.target.value);
-                    setPayAmount(debtor ? debtor.totalDebt : 0);
-                  }}
-                  className="w-full bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+              <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold overflow-x-auto whitespace-nowrap scrollbar-none gap-1 max-w-full">
+                <button
+                  onClick={() => setFilterType('all')}
+                  className={`px-2.5 py-1 rounded-lg transition shrink-0 ${
+                    filterType === 'all' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
                 >
-                  <option value="">-- اختر عميلاً للتسديد --</option>
-                  {debtorCustomers.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} (مدين بـ: {c.totalDebt.toLocaleString()} {currency})
-                    </option>
-                  ))}
-                </select>
+                  الكل
+                </button>
+                <button
+                  onClick={() => setFilterType('debtors')}
+                  className={`px-2.5 py-1 rounded-lg transition shrink-0 ${
+                    filterType === 'debtors' ? 'bg-rose-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  المدينون
+                </button>
+                <button
+                  onClick={() => setFilterType('overdue')}
+                  className={`px-2.5 py-1 rounded-lg transition shrink-0 ${
+                    filterType === 'overdue' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  المتأخرون ⚠️
+                </button>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">المبلغ المسلم نقدياً للتنزيل:</label>
-                <input
-                  id="pay_debt_amount_input"
-                  type="number"
-                  min="1"
-                  required
-                  value={payAmount || ''}
-                  onChange={(e) => setPayAmount(Math.max(0, parseFloat(e.target.value) || 0))}
-                  placeholder="مثال: 50000"
-                  className="w-full bg-slate-50 border border-slate-200 text-xs font-bold font-mono rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">ملاحظات أو رقم السند:</label>
-                <input
-                  id="pay_debt_note_input"
-                  type="text"
-                  value={payNote}
-                  onChange={(e) => setPayNote(e.target.value)}
-                  placeholder="مثال: تسديد جزئي نقدياً لصيانة الشاشات..."
-                  className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
-                />
-              </div>
-
-              <button
-                id="submit_pay_debt_btn"
-                type="submit"
-                className="w-full py-3 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/20 transition cursor-pointer flex items-center justify-center gap-2"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>ترحيل سند المقبوضات نقدياً</span>
-              </button>
-            </form>
-          </div>
-
-        </div>
-
-        {/* RIGHT COLUMN: Interactive Customer Ledger Directory (7 Cols) */}
-        <div className="lg:col-span-7 space-y-6">
-          
-          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
-            
-            {/* Header & Filter Controls */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">دليل كروت وحسابات العملاء</h3>
-                <p className="text-xs text-slate-400">مجموع الحسابات المعتمدة: {activeCustomers.length} عميل</p>
-              </div>
-
-              {/* View Switcher & Quick Filters */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold overflow-x-auto whitespace-nowrap scrollbar-none gap-1 max-w-full">
-                  <button
-                    onClick={() => setFilterType('all')}
-                    className={`px-2.5 py-1 rounded-lg transition shrink-0 ${
-                      filterType === 'all' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    الكل
-                  </button>
-                  <button
-                    onClick={() => setFilterType('debtors')}
-                    className={`px-2.5 py-1 rounded-lg transition shrink-0 ${
-                      filterType === 'debtors' ? 'bg-rose-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    المدينون
-                  </button>
-                  <button
-                    onClick={() => setFilterType('overdue')}
-                    className={`px-2.5 py-1 rounded-lg transition shrink-0 ${
-                      filterType === 'overdue' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    المتأخرون ⚠️
-                  </button>
-                </div>
-
-                <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold">
-                  <button
-                    onClick={() => setViewMode('cards')}
-                    className={`px-2.5 py-1 rounded-lg transition ${
-                      viewMode === 'cards' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500'
-                    }`}
-                  >
-                    كروت 📇
-                  </button>
-                  <button
-                    onClick={() => setViewMode('table')}
-                    className={`px-2.5 py-1 rounded-lg transition ${
-                      viewMode === 'table' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500'
-                    }`}
-                  >
-                    جدول 📋
-                  </button>
-                </div>
+              <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold">
+                <button
+                  onClick={() => setViewMode('cards')}
+                  className={`px-2.5 py-1 rounded-lg transition ${
+                    viewMode === 'cards' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500'
+                  }`}
+                >
+                  كروت 📇
+                </button>
+                <button
+                  onClick={() => setViewMode('table')}
+                  className={`px-2.5 py-1 rounded-lg transition ${
+                    viewMode === 'table' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500'
+                  }`}
+                >
+                  جدول 📋
+                </button>
               </div>
             </div>
+          </div>
 
-            {/* Search Input */}
+          {/* Search Input */}
             <div className="relative">
               <input
                 id="customer_ledger_search"
@@ -777,8 +654,6 @@ export default function Customers({
 
         </div>
 
-      </div>
-
       {/* MODAL 1: Edit Customer Modal */}
       {editingCustomer && (
         <CustomerEditModal
@@ -805,6 +680,197 @@ export default function Customers({
           initialTemplate={debtReminderTemplate}
           onSaveTemplate={onSaveReminderTemplate}
         />
+      )}
+
+      {/* FLOATING ACTION BUTTON (FAB) FOR MOBILE & QUICK ACCESS */}
+      <motion.div 
+        drag
+        dragMomentum={false}
+        whileDrag={{ scale: 1.1 }}
+        className="fixed bottom-6 right-6 z-40 flex flex-col gap-2 touch-none cursor-grab active:cursor-grabbing"
+      >
+        <button
+          onClick={() => {
+            soundManager.playScanBeep();
+            setShowAddModal(true);
+          }}
+          className="w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-2xl flex items-center justify-center transition cursor-pointer border-2 border-white dark:border-slate-800"
+          title="إضافة عميل جديد (يمكنك سحبه وتحريكه)"
+        >
+          <UserPlus className="w-6 h-6" />
+        </button>
+      </motion.div>
+
+      {/* BOTTOM SHEET MODAL 1: ADD NEW CUSTOMER */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-right">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">تسجيل عميل جديد بالدفتر</h3>
+                  <p className="text-[11px] text-slate-400">إضافة حساب جديد وتحديد تاريخ استحقاق الدين</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowAddModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-y-auto">
+              {addError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" /> {addError}
+                </div>
+              )}
+
+              <form onSubmit={handleAddSubmit} className="space-y-3.5">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">اسم العميل الثلاثي:</label>
+                  <input
+                    id="new_cust_name"
+                    type="text"
+                    required
+                    value={newCustName}
+                    onChange={(e) => setNewCustName(e.target.value)}
+                    placeholder="مثال: عبدالمجيد المحواشي..."
+                    className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700">رقم الهاتف:</label>
+                    <input
+                      id="new_cust_phone"
+                      type="tel"
+                      value={newCustPhone}
+                      onChange={(e) => setNewCustPhone(e.target.value)}
+                      placeholder="77XXXXXXX"
+                      className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-xl px-3.5 py-2 text-slate-900 placeholder-slate-400 text-right focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700">تاريخ الاستحقاق:</label>
+                    <input
+                      type="date"
+                      value={newCustDueDate}
+                      onChange={(e) => setNewCustDueDate(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-xl px-2.5 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  id="submit_new_customer_btn"
+                  type="submit"
+                  className="w-full py-3 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 transition cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <UserCheck className="w-4 h-4" />
+                  <span>حفظ وتثبيت الحساب الجديد</span>
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BOTTOM SHEET MODAL 2: PAYMENT RECEIPT */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-right">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
+                  <CreditCard className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">سند قبض نقدية (تسديد دين)</h3>
+                  <p className="text-[11px] text-slate-400">تنزيل مديونية عميل نقدياً في الصندوق</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowPaymentModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-y-auto">
+              {payError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" /> {payError}
+                </div>
+              )}
+
+              <form onSubmit={handlePaySubmit} className="space-y-3.5">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">اختر العميل المدين:</label>
+                  <select
+                    id="pay_debt_customer_select"
+                    value={selectedCustomerId}
+                    onChange={(e) => {
+                      setSelectedCustomerId(e.target.value);
+                      const debtor = activeCustomers.find(c => c.id === e.target.value);
+                      setPayAmount(debtor ? debtor.totalDebt : 0);
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+                  >
+                    <option value="">-- اختر عميلاً للتسديد --</option>
+                    {debtorCustomers.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} (مدين بـ: {c.totalDebt.toLocaleString()} {currency})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">المبلغ المسلم نقدياً للتنزيل:</label>
+                  <input
+                    id="pay_debt_amount_input"
+                    type="number"
+                    min="1"
+                    required
+                    value={payAmount || ''}
+                    onChange={(e) => setPayAmount(Math.max(0, parseFloat(e.target.value) || 0))}
+                    placeholder="مثال: 50000"
+                    className="w-full bg-slate-50 border border-slate-200 text-xs font-bold font-mono rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">ملاحظات أو رقم السند:</label>
+                  <input
+                    id="pay_debt_note_input"
+                    type="text"
+                    value={payNote}
+                    onChange={(e) => setPayNote(e.target.value)}
+                    placeholder="مثال: تسديد جزئي نقدياً لصيانة الشاشات..."
+                    className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+                  />
+                </div>
+
+                <button
+                  id="submit_pay_debt_btn"
+                  type="submit"
+                  className="w-full py-3 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/20 transition cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>ترحيل سند المقبوضات نقدياً</span>
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* MODAL 3: Detailed Customer Account Statement & Print PDF */}

@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { motion } from 'motion/react';
 import { 
   Smartphone, 
   Search, 
@@ -122,37 +123,37 @@ export default function Maintenance({
   const totalIncome = orders.filter(o => o.status === 'delivered' || o.status === 'completed').reduce((sum, o) => sum + o.cost, 0);
 
   return (
-    <div id="maintenance_tab_view" className="space-y-6 pb-12">
+    <div id="maintenance_tab_view" className="space-y-3.5 md:space-y-6 pb-20 md:pb-28">
       
       {/* 1. STATS SUMMARY BAR */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-4">
+        <div className="p-2.5 sm:p-4 rounded-xl md:rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-500">أجهزة تحت الاستلام</span>
-            <h3 className="text-lg font-black text-blue-600 mt-1">{totalReceived} جهاز</h3>
+            <span className="text-[10px] sm:text-xs font-bold text-slate-500">أجهزة استلام</span>
+            <h3 className="text-sm sm:text-lg font-black text-blue-600 mt-0.5">{totalReceived} جهاز</h3>
           </div>
-          <div className="p-2.5 rounded-xl bg-blue-50 text-blue-600">
-            <Clock className="w-5 h-5" />
+          <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-blue-50 text-blue-600">
+            <Clock className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+        <div className="p-2.5 sm:p-4 rounded-xl md:rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-500">جاري الصيانة بالورشة</span>
-            <h3 className="text-lg font-black text-amber-600 mt-1">{totalRepairing} جهاز</h3>
+            <span className="text-[10px] sm:text-xs font-bold text-slate-500">جاري الصيانة</span>
+            <h3 className="text-sm sm:text-lg font-black text-amber-600 mt-0.5">{totalRepairing} جهاز</h3>
           </div>
-          <div className="p-2.5 rounded-xl bg-amber-50 text-amber-600">
-            <Wrench className="w-5 h-5" />
+          <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-amber-50 text-amber-600">
+            <Wrench className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+        <div className="p-2.5 sm:p-4 rounded-xl md:rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-500">جاهزة للاستلام</span>
-            <h3 className="text-lg font-black text-emerald-600 mt-1">{totalCompleted} جهاز</h3>
+            <span className="text-[10px] sm:text-xs font-bold text-slate-500">جاهزة للاستلام</span>
+            <h3 className="text-sm sm:text-lg font-black text-emerald-600 mt-0.5">{totalCompleted} جهاز</h3>
           </div>
-          <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600">
-            <CheckCircle2 className="w-5 h-5" />
+          <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-emerald-50 text-emerald-600">
+            <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </div>
 
@@ -193,96 +194,6 @@ export default function Maintenance({
           </button>
         </div>
 
-        {/* Add New Maintenance Form */}
-        {showAddForm && (
-          <div className="p-4 rounded-2xl bg-slate-50 border border-blue-200 space-y-3 pt-4 animate-fadeIn">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-200">
-              <h3 className="text-xs font-bold text-slate-900">بيانات كرت استلام الجهاز الجديد</h3>
-              <button onClick={() => setShowAddForm(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {formError && (
-              <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
-                {formError}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-3 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">اسم العميل:</label>
-                  <input
-                    type="text"
-                    required
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="مثال: عبدالمجيد المحواشي..."
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">رقم جوال العميل:</label>
-                  <input
-                    type="tel"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    placeholder="77XXXXXXX"
-                    className="w-full bg-white border border-slate-200 font-mono rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-right"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">اسم الجهاز والموديل:</label>
-                  <input
-                    type="text"
-                    required
-                    value={deviceName}
-                    onChange={(e) => setDeviceName(e.target.value)}
-                    placeholder="مثال: Samsung Galaxy S21 Ultra"
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">التكلفة / الأجرة المقدرة:</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={cost || ''}
-                    onChange={(e) => setCost(Math.max(0, parseFloat(e.target.value) || 0))}
-                    placeholder="مثال: 15000"
-                    className="w-full bg-white border border-slate-200 font-bold font-mono rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">وصف المشكلة والأعطال:</label>
-                <input
-                  type="text"
-                  required
-                  value={issueDescription}
-                  onChange={(e) => setIssueDescription(e.target.value)}
-                  placeholder="مثال: الشاشة مكسورة + تغيير منفذ الشحن..."
-                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md transition cursor-pointer"
-              >
-                تثبيت وطباعة كرت الاستلام
-              </button>
-            </form>
-          </div>
-        )}
-
         {/* Filter & Search Controls */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 pt-2">
           
@@ -319,8 +230,80 @@ export default function Maintenance({
 
         </div>
 
-        {/* Orders Table */}
-        <div className="overflow-x-auto max-h-[450px] overflow-y-auto">
+        {/* MOBILE CARDS VIEW (block md:hidden) */}
+        <div className="block md:hidden space-y-3 max-h-[500px] overflow-y-auto pr-1">
+          {filteredOrders.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 text-xs">
+              لا توجد كروت صيانة تطابق خيارات التصفية.
+            </div>
+          ) : (
+            [...filteredOrders].reverse().map(order => (
+              <div key={order.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 shadow-xs">
+                <div className="flex justify-between items-start gap-2">
+                  <div>
+                    <span className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
+                      #{order.orderNumber}
+                    </span>
+                    <h4 className="font-bold text-slate-900 text-sm mt-1">{order.deviceName}</h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5">{order.issueDescription}</p>
+                  </div>
+                  
+                  <select
+                    value={order.status}
+                    onChange={(e) => onUpdateStatus(order.id, e.target.value as any)}
+                    className={`text-[11px] font-bold px-2 py-1 rounded-xl border focus:outline-none cursor-pointer shrink-0 ${
+                      order.status === 'completed' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
+                      order.status === 'repairing' ? 'bg-amber-100 text-amber-800 border-amber-200' :
+                      order.status === 'delivered' ? 'bg-slate-100 text-slate-700 border-slate-200' : 'bg-blue-100 text-blue-800 border-blue-200'
+                    }`}
+                  >
+                    <option value="received">مستلم (تحت الفحص)</option>
+                    <option value="repairing">جاري الصيانة (بالورشة)</option>
+                    <option value="completed">جاهز للاستلام ✓</option>
+                    <option value="delivered">تم التسليم النهائي</option>
+                  </select>
+                </div>
+
+                <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-200/60 font-mono">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-sans block">العميل: {order.customerName}</span>
+                    <span className="text-slate-600 dir-ltr text-[11px]">{order.customerPhone}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-slate-400 font-sans block">التكلفة:</span>
+                    <span className="font-bold text-blue-600 text-sm">{order.cost.toLocaleString()} {currency}</span>
+                  </div>
+                </div>
+
+                <div className="flex justify-end items-center gap-2 pt-2 border-t border-slate-200/60">
+                  <a
+                    href={getWhatsAppStatusLink(order)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white transition cursor-pointer text-xs font-bold flex items-center gap-1"
+                  >
+                    <Send className="w-3.5 h-3.5" /> إرسال تحديث عبر واتساب
+                  </a>
+
+                  <button
+                    onClick={() => {
+                      if (confirm(`هل أنت متأكد من حذف كرت الصيانة رقم #${order.orderNumber}؟`)) {
+                        onDeleteOrder(order.id);
+                      }
+                    }}
+                    className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                    title="حذف الكرت"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* DESKTOP TABLE VIEW (hidden md:block) */}
+        <div className="hidden md:block overflow-x-auto max-h-[450px] overflow-y-auto">
           <table className="w-full text-right text-xs">
             <thead>
               <tr className="border-b border-slate-200 text-slate-400 font-bold">
@@ -403,6 +386,130 @@ export default function Maintenance({
         </div>
 
       </div>
+
+      {/* FLOATING ACTION BUTTON (FAB) FOR NEW MAINTENANCE TICKET */}
+      <motion.div 
+        drag
+        dragMomentum={false}
+        whileDrag={{ scale: 1.1 }}
+        className="fixed bottom-6 right-6 z-40 touch-none cursor-grab active:cursor-grabbing"
+      >
+        <button
+          onClick={() => {
+            soundManager.playScanBeep();
+            setShowAddForm(true);
+          }}
+          className="w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-2xl flex items-center justify-center transition cursor-pointer border-2 border-white"
+          title="فتح كرت صيانة جديد (يمكنك سحبه وتحريكه)"
+        >
+          <Plus className="w-6 h-6" />
+        </button>
+      </motion.div>
+
+      {/* BOTTOM SHEET MODAL: NEW MAINTENANCE TICKET */}
+      {showAddForm && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-right">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                  <Wrench className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">بيانات كرت استلام الجهاز الجديد</h3>
+                  <p className="text-[11px] text-slate-400">فتح امر صيانة وتحديد تكلفة الإرشاد</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowAddForm(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-y-auto">
+              {formError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                  {formError}
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">اسم العميل:</label>
+                    <input
+                      type="text"
+                      required
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder="مثال: عبدالمجيد المحواشي..."
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">رقم جوال العميل:</label>
+                    <input
+                      type="tel"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      placeholder="77XXXXXXX"
+                      className="w-full bg-slate-50 border border-slate-200 font-mono rounded-xl px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-right focus:bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">اسم الجهاز والموديل:</label>
+                    <input
+                      type="text"
+                      required
+                      value={deviceName}
+                      onChange={(e) => setDeviceName(e.target.value)}
+                      placeholder="مثال: Samsung Galaxy S21 Ultra"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">التكلفة / الأجرة المقدرة:</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={cost || ''}
+                      onChange={(e) => setCost(Math.max(0, parseFloat(e.target.value) || 0))}
+                      placeholder="مثال: 15000"
+                      className="w-full bg-slate-50 border border-slate-200 font-bold font-mono rounded-xl px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">وصف المشكلة والأعطال:</label>
+                  <input
+                    type="text"
+                    required
+                    value={issueDescription}
+                    onChange={(e) => setIssueDescription(e.target.value)}
+                    placeholder="مثال: الشاشة مكسورة + تغيير منفذ الشحن..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 transition cursor-pointer"
+                >
+                  تثبيت وطباعة كرت الاستلام
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

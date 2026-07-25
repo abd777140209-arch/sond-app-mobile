@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { motion } from 'motion/react';
 import { 
   Search, 
   Package, 
@@ -48,6 +49,7 @@ export default function Inventory({
   isPrivacyMode = false
 }: InventoryProps) {
   const [showLabelPrinterModal, setShowLabelPrinterModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLowStock, setFilterLowStock] = useState(false);
 
@@ -123,6 +125,7 @@ export default function Inventory({
     setStock(0);
     setMinStock(2);
     setAddError('');
+    setShowAddModal(false);
     soundManager.playSuccessChime();
   };
 
@@ -170,51 +173,51 @@ export default function Inventory({
   const lowStockItemsCount = activeProductsList.filter(p => p.stock <= p.minStock).length;
 
   return (
-    <div id="inventory_tab_view" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    <div id="inventory_tab_view" className="space-y-3 md:space-y-6 pb-20 md:pb-28">
       
       {/* 1. TOP STATISTICAL BAR (أعلى قسم المخزون) */}
-      <div className="lg:col-span-12 grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-4">
         
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+        <div className="p-2.5 sm:p-4 rounded-xl md:rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-500">إجمالي السلع بالمستودع</span>
-            <h3 className="text-lg font-black text-slate-900 mt-1">{activeProductsList.length} صنف</h3>
-            <span className="text-[10px] text-slate-400">عدد القطع الكلي: {totalStockCount} قطعة</span>
+            <span className="text-[10px] sm:text-xs font-bold text-slate-500">إجمالي السلع</span>
+            <h3 className="text-sm sm:text-lg font-black text-slate-900 mt-0.5">{activeProductsList.length} صنف</h3>
+            <span className="text-[9px] sm:text-[10px] text-slate-400">القطع: {totalStockCount}</span>
           </div>
-          <div className="p-3 rounded-2xl bg-blue-50 text-blue-600">
-            <Package className="w-5 h-5" />
+          <div className="p-2 sm:p-3 rounded-lg sm:rounded-2xl bg-blue-50 text-blue-600">
+            <Package className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between relative overflow-hidden">
+        <div className="p-2.5 sm:p-4 rounded-xl md:rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between relative overflow-hidden">
           <div>
-            <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
-              <span>قيمة المخزون بسعر التكلفة</span>
+            <span className="text-[10px] sm:text-xs font-bold text-slate-500 flex items-center gap-1">
+              <span>قيمة التكلفة</span>
               {isPrivacyMode && <EyeOff className="w-3 h-3 text-amber-500 inline" />}
             </span>
-            <h3 className="text-lg font-black text-slate-900 mt-1 dir-ltr text-right font-mono">
+            <h3 className="text-sm sm:text-lg font-black text-slate-900 mt-0.5 dir-ltr text-right font-mono">
               {fmt(totalCostValue)}
             </h3>
-            <span className="text-[10px] text-slate-400">رأس المال المستثمر بالمخزن</span>
+            <span className="text-[9px] sm:text-[10px] text-slate-400">رأس المال المستثمر</span>
           </div>
-          <div className="p-3 rounded-2xl bg-indigo-50 text-indigo-600">
-            <DollarSign className="w-5 h-5" />
+          <div className="p-2 sm:p-3 rounded-lg sm:rounded-2xl bg-indigo-50 text-indigo-600">
+            <DollarSign className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between relative overflow-hidden">
+        <div className="p-2.5 sm:p-4 rounded-xl md:rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between relative overflow-hidden">
           <div>
-            <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
-              <span>الأرباح المتوقعة عند البيع</span>
+            <span className="text-[10px] sm:text-xs font-bold text-slate-500 flex items-center gap-1">
+              <span>الأرباح المتوقعة</span>
               {isPrivacyMode && <EyeOff className="w-3 h-3 text-amber-500 inline" />}
             </span>
-            <h3 className="text-lg font-black text-emerald-600 mt-1 dir-ltr text-right font-mono">
+            <h3 className="text-sm sm:text-lg font-black text-emerald-600 mt-0.5 dir-ltr text-right font-mono">
               {isPrivacyMode ? '**** ' + currency : '+' + totalPotentialProfit.toLocaleString() + ' ' + currency}
             </h3>
-            <span className="text-[10px] text-slate-400">هامش الربح الإجمالي</span>
+            <span className="text-[9px] sm:text-[10px] text-slate-400">هامش الربح</span>
           </div>
-          <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-600">
-            <Sparkles className="w-5 h-5" />
+          <div className="p-2 sm:p-3 rounded-lg sm:rounded-2xl bg-emerald-50 text-emerald-600">
+            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </div>
 
@@ -245,6 +248,17 @@ export default function Inventory({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => {
+                setShowAddModal(true);
+                soundManager.playScanBeep();
+              }}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 transition flex items-center gap-1 cursor-pointer"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>إضافة سلعة جديدة</span>
+            </button>
+
             {/* Category Filter Pills */}
             <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold overflow-x-auto whitespace-nowrap scrollbar-none gap-1 max-w-full">
               <button
@@ -309,7 +323,7 @@ export default function Inventory({
       {/* 3. LEFT COLUMN: Add / Edit Product Form (5 Cols) */}
       <div className="lg:col-span-5 space-y-6">
         
-        {editingProduct ? (
+        {editingProduct && (
           /* EDIT PRODUCT FORM */
           <div className="p-5 rounded-2xl bg-white border border-blue-500/50 shadow-md space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -429,131 +443,145 @@ export default function Inventory({
               </div>
             </form>
           </div>
-        ) : (
-          /* ADD NEW PRODUCT FORM */
-          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-              <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
-                <PlusCircle className="w-5 h-5" />
+        )}
+
+      {/* ADD NEW PRODUCT MODAL SHEET */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[85vh] text-right">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                  <Package className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">إضافة سلعة جديدة للمستودع</h3>
+                  <p className="text-[11px] text-slate-400">سجل البضائع والمنتجات الجديدة</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">إضافة سلعة جديدة للمستودع</h3>
-                <p className="text-[11px] text-slate-400">سجل البضائع والمنتجات الجديدة</p>
-              </div>
+              <button 
+                onClick={() => setShowAddModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            {addError && (
-              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
-                {addError}
-              </div>
-            )}
-
-            <form onSubmit={handleAddSubmit} className="space-y-3.5">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">اسم السلعة / الموديل:</label>
-                <input
-                  id="add_p_name"
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="مثال: شاشة ايفون 13 الأصلية..."
-                  className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-bold text-slate-700">رمز الباركود:</label>
-                  <button
-                    type="button"
-                    onClick={handleGenerateBarcode}
-                    className="text-[10px] text-blue-600 font-bold hover:underline flex items-center gap-1"
-                  >
-                    <Sparkles className="w-3 h-3" /> توليد باركود تلقائي
-                  </button>
+            <div className="p-5 space-y-4 overflow-y-auto">
+              {addError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                  {addError}
                 </div>
-                <input
-                  id="add_p_barcode"
-                  type="text"
-                  required
-                  value={barcode}
-                  onChange={(e) => setBarcode(e.target.value)}
-                  placeholder="امسح بالليزر أو ولد باركود..."
-                  className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
-                />
-              </div>
+              )}
 
-              <div className="grid grid-cols-2 gap-3">
+              <form onSubmit={handleAddSubmit} className="space-y-3.5">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">التصنيف:</label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
-                  >
-                    {categoriesList.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">الكمية البدائية:</label>
+                  <label className="text-xs font-bold text-slate-700">اسم السلعة / الموديل:</label>
                   <input
-                    id="add_p_stock"
-                    type="number"
-                    min="0"
+                    id="add_p_name"
+                    type="text"
                     required
-                    value={stock || ''}
-                    onChange={(e) => setStock(Math.max(0, parseInt(e.target.value) || 0))}
-                    placeholder="0"
-                    className="w-full bg-slate-50 border border-slate-200 text-xs font-bold font-mono rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">سعر الشراء (التكلفة):</label>
-                  <input
-                    id="add_p_cost"
-                    type="number"
-                    min="0"
-                    required
-                    value={costPrice || ''}
-                    onChange={(e) => setCostPrice(Math.max(0, parseFloat(e.target.value) || 0))}
-                    placeholder="0"
-                    className="w-full bg-slate-50 border border-slate-200 text-xs font-bold font-mono rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="مثال: شاشة ايفون 13 الأصلية..."
+                    className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">سعر البيع:</label>
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-slate-700">رمز الباركود:</label>
+                    <button
+                      type="button"
+                      onClick={handleGenerateBarcode}
+                      className="text-[10px] text-blue-600 font-bold hover:underline flex items-center gap-1"
+                    >
+                      <Sparkles className="w-3 h-3" /> توليد باركود تلقائي
+                    </button>
+                  </div>
                   <input
-                    id="add_p_sell"
-                    type="number"
-                    min="0"
+                    id="add_p_barcode"
+                    type="text"
                     required
-                    value={sellingPrice || ''}
-                    onChange={(e) => setSellingPrice(Math.max(0, parseFloat(e.target.value) || 0))}
-                    placeholder="0"
-                    className="w-full bg-slate-50 border border-slate-200 text-xs font-bold font-mono rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+                    value={barcode}
+                    onChange={(e) => setBarcode(e.target.value)}
+                    placeholder="امسح بالليزر أو ولد باركود..."
+                    className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
                   />
                 </div>
-              </div>
 
-              <button
-                id="submit_add_product_btn"
-                type="submit"
-                className="w-full py-3 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 transition cursor-pointer flex items-center justify-center gap-2"
-              >
-                <PlusCircle className="w-4 h-4" />
-                <span>اعتماد وإضافة السلعة للمستودع</span>
-              </button>
-            </form>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700">التصنيف:</label>
+                    <select
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+                    >
+                      {categoriesList.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700">الكمية البدائية:</label>
+                    <input
+                      id="add_p_stock"
+                      type="number"
+                      min="0"
+                      required
+                      value={stock || ''}
+                      onChange={(e) => setStock(Math.max(0, parseInt(e.target.value) || 0))}
+                      placeholder="0"
+                      className="w-full bg-slate-50 border border-slate-200 text-xs font-bold font-mono rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700">سعر الشراء (التكلفة):</label>
+                    <input
+                      id="add_p_cost"
+                      type="number"
+                      min="0"
+                      required
+                      value={costPrice || ''}
+                      onChange={(e) => setCostPrice(Math.max(0, parseFloat(e.target.value) || 0))}
+                      placeholder="0"
+                      className="w-full bg-slate-50 border border-slate-200 text-xs font-bold font-mono rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700">سعر البيع:</label>
+                    <input
+                      id="add_p_sell"
+                      type="number"
+                      min="0"
+                      required
+                      value={sellingPrice || ''}
+                      onChange={(e) => setSellingPrice(Math.max(0, parseFloat(e.target.value) || 0))}
+                      placeholder="0"
+                      className="w-full bg-slate-50 border border-slate-200 text-xs font-bold font-mono rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  id="submit_add_product_btn"
+                  type="submit"
+                  className="w-full py-3 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 transition cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>اعتماد وإضافة السلعة للمستودع</span>
+                </button>
+              </form>
+            </div>
           </div>
-        )}
+        </div>
+      )}
 
       </div>
 
@@ -567,8 +595,85 @@ export default function Inventory({
             </span>
           </div>
 
-          <div className="overflow-x-auto max-h-[550px] overflow-y-auto">
-            <table className="w-full text-right text-xs">
+        {/* MOBILE CARDS VIEW (block md:hidden) */}
+        <div className="block md:hidden space-y-3 max-h-[550px] overflow-y-auto pr-1">
+          {filteredProducts.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 text-xs">
+              لا توجد أي سلع تطابق معايير البحث بالتصفية.
+            </div>
+          ) : (
+            filteredProducts.map(p => {
+              const isLow = p.stock <= p.minStock;
+              return (
+                <div key={p.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 shadow-xs">
+                  <div className="flex justify-between items-start gap-2">
+                    <div>
+                      <div className="font-bold text-slate-900 text-sm">{p.name}</div>
+                      <div className="text-[11px] text-slate-500 font-mono flex items-center gap-1.5 mt-0.5">
+                        <Barcode className="w-3.5 h-3.5 text-slate-400" />
+                        <span>{p.barcode}</span>
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-white text-slate-600 border border-slate-200 shrink-0">
+                      {p.category || 'إكسسوارات'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200/60 text-xs font-mono">
+                    <div className="p-2 rounded-xl bg-white border border-slate-100">
+                      <span className="text-[10px] text-slate-400 block font-sans">المخزون المتوفر:</span>
+                      {isLow ? (
+                        <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-rose-100 text-rose-700 border border-rose-200 inline-flex items-center gap-1 mt-0.5">
+                          <AlertTriangle className="w-3 h-3" /> {p.stock} (منخفض)
+                        </span>
+                      ) : (
+                        <span className="font-bold text-slate-800 text-sm">{p.stock} قطعة</span>
+                      )}
+                    </div>
+
+                    <div className="p-2 rounded-xl bg-white border border-slate-100">
+                      <span className="text-[10px] text-slate-400 block font-sans">سعر البيع للزبون:</span>
+                      <span className="font-bold text-blue-600 text-sm">{fmt(p.sellingPrice)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-2 text-[11px] text-slate-500">
+                    <div>
+                      التكلفة: <span className="font-bold font-mono text-slate-700">{isPrivacyMode ? '****' : p.costPrice.toLocaleString() + ' ' + currency}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => {
+                          setEditingProduct(p);
+                          soundManager.playScanBeep();
+                        }}
+                        className="p-2 rounded-xl text-slate-600 bg-white border border-slate-200 hover:text-blue-600 hover:bg-blue-50 transition flex items-center gap-1 text-xs font-bold"
+                      >
+                        <Pencil className="w-3.5 h-3.5" /> تعديل
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          if (confirm(`هل أنت متأكد من حذف السلعة "${p.name}"؟`)) {
+                            soundManager.playWarningBeep();
+                            onDeleteProduct(p.id);
+                          }
+                        }}
+                        className="p-2 rounded-xl text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition flex items-center gap-1 text-xs font-bold"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> حذف
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* DESKTOP TABLE VIEW (hidden md:block) */}
+        <div className="hidden md:block overflow-x-auto max-h-[550px] overflow-y-auto">
+          <table className="w-full text-right text-xs">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-400 font-bold">
                   <th className="pb-3 pr-2">السلعة والباركود</th>
@@ -657,6 +762,25 @@ export default function Inventory({
         storeName={storeName}
         currency={currency}
       />
+
+      {/* FLOATING ACTION BUTTON (FAB) FOR ADDING PRODUCT */}
+      <motion.div 
+        drag
+        dragMomentum={false}
+        whileDrag={{ scale: 1.1 }}
+        className="fixed bottom-6 right-6 z-40 touch-none cursor-grab active:cursor-grabbing"
+      >
+        <button
+          onClick={() => {
+            soundManager.playScanBeep();
+            setShowAddModal(true);
+          }}
+          className="w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-2xl flex items-center justify-center transition cursor-pointer border-2 border-white"
+          title="إضافة منتج جديد (يمكنك سحبه وتحريكه)"
+        >
+          <PlusCircle className="w-6 h-6" />
+        </button>
+      </motion.div>
 
     </div>
   );

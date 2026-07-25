@@ -4,8 +4,33 @@
  */
 
 import React, { useState } from 'react';
-import { TrendingUp, Users, Package, Wallet, ArrowDownLeft, AlertCircle, Award, Phone, BarChart3, ArrowLeft, Bell, AlertTriangle, ShieldAlert, Sparkles, X, Volume2, Bot, CheckCircle2 } from 'lucide-react';
-import { Product, Customer, Invoice, Payment, Transaction, SystemSettings } from '../types';
+import { 
+  TrendingUp, 
+  Users, 
+  Package, 
+  Wallet, 
+  ArrowDownLeft, 
+  AlertCircle, 
+  Award, 
+  Phone, 
+  BarChart3, 
+  ArrowLeft, 
+  Bell, 
+  AlertTriangle, 
+  ShieldAlert, 
+  Sparkles, 
+  X, 
+  Volume2, 
+  Bot, 
+  CheckCircle2,
+  ShoppingCart,
+  Wrench,
+  Briefcase,
+  ClipboardCheck,
+  History,
+  Settings as SettingsIcon
+} from 'lucide-react';
+import { Product, Customer, Invoice, Payment, Transaction, SystemSettings, Employee } from '../types';
 import { soundManager } from '../utils/sound';
 
 interface DashboardProps {
@@ -15,6 +40,7 @@ interface DashboardProps {
   payments: Payment[];
   transactions: Transaction[];
   settings: SystemSettings;
+  employees?: Employee[];
   setActiveTab: (tab: string) => void;
   isPrivacyMode?: boolean;
 }
@@ -26,6 +52,7 @@ export default function Dashboard({
   payments,
   transactions,
   settings,
+  employees = [],
   setActiveTab,
   isPrivacyMode = false
 }: DashboardProps) {
@@ -82,38 +109,38 @@ export default function Dashboard({
   const maxDebtorVal = topDebtors[0]?.totalDebt || 1;
 
   return (
-    <div id="dashboard_tab_view" className="space-y-6">
+    <div id="dashboard_tab_view" className="space-y-3.5 sm:space-y-5 md:space-y-6 pb-20 md:pb-28">
       
       {/* 1. Welcome Header Banner */}
-      <div className="p-6 rounded-3xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/40 shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative overflow-hidden transition-all">
+      <div className="p-3.5 sm:p-5 md:p-6 rounded-2xl md:rounded-3xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/40 shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-3 md:gap-4 relative overflow-hidden transition-all">
         <div className="absolute -right-24 -top-24 w-48 h-48 rounded-full bg-sky-500/10 blur-3xl pointer-events-none" />
         
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
+            <span className="px-2.5 py-0.5 md:px-3 md:py-1 rounded-full text-[11px] md:text-xs font-bold bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
               🏪 {settings.storeName || 'النشاط التجاري الموثق'}
             </span>
           </div>
-          <h1 className="text-xl md:text-2xl font-black text-slate-800 dark:text-white">
+          <h1 className="text-lg md:text-2xl font-black text-slate-800 dark:text-white">
             لوحة التحكم المحاسبية والمالية الذكية
           </h1>
-          <p className="text-slate-500 dark:text-gray-400 text-xs mt-1">
+          <p className="text-slate-500 dark:text-gray-400 text-[11px] md:text-xs mt-0.5">
             نظام سند المحاسبي • المبيعات، الأرباح، حركة المخزن، والديون المباشرة
           </p>
         </div>
 
         {/* Developer Credit & Profit Report Shortcut */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full md:w-auto">
           {/* Zara AI Assistant Button */}
           <button
             onClick={() => {
               soundManager.playSuccessChime();
               setShowZaraModal(true);
             }}
-            className="flex items-center gap-2 bg-gradient-to-r from-amber-500 via-amber-600 to-[#C5A862] hover:from-amber-400 hover:to-[#d4b771] text-black px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-amber-500/20 active:scale-95"
+            className="flex items-center gap-2 bg-gradient-to-r from-amber-500 via-amber-600 to-[#C5A862] hover:from-amber-400 hover:to-[#d4b771] text-black px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl sm:rounded-2xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-amber-500/20 active:scale-95"
             title="المساعد المحاسبي الذكي زارا"
           >
-            <div className="w-6 h-6 rounded-xl bg-black/20 flex items-center justify-center font-black text-xs">
+            <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg sm:rounded-xl bg-black/20 flex items-center justify-center font-black text-xs">
               ✨
             </div>
             <div className="text-right">
@@ -128,10 +155,10 @@ export default function Dashboard({
           {/* Voice Report Button */}
           <button
             onClick={handleSpeakSummary}
-            className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 text-white px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-blue-500/20 active:scale-95"
+            className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 text-white px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl sm:rounded-2xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-blue-500/20 active:scale-95"
             title="استمع للملخص المالي صوتاً"
           >
-            <span className="text-base">🔊</span>
+            <span className="text-sm sm:text-base">🔊</span>
             <div className="text-right">
               <div className="text-white">التقرير الصوتي</div>
               <div className="text-[9px] text-blue-200">قراءة صوتية ذكية</div>
@@ -140,20 +167,20 @@ export default function Dashboard({
 
           <button
             onClick={() => setActiveTab('reports')}
-            className="flex items-center justify-between gap-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white px-4 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-emerald-500/20 group"
+            className="flex items-center justify-between gap-2.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl sm:rounded-2xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-emerald-500/20 group"
           >
             <div className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-emerald-200 group-hover:scale-110 transition-transform" />
+              <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-200 group-hover:scale-110 transition-transform" />
               <div className="text-right">
                 <div className="text-white">التقرير البياني للأرباح 📊</div>
-                <div className="text-[10px] text-emerald-100 font-normal">استعراض تحليل المبيعات بالرسم البياني</div>
+                <div className="text-[10px] text-emerald-100 font-normal hidden sm:block">استعراض تحليل المبيعات بالرسم البياني</div>
               </div>
             </div>
             <ArrowLeft className="w-4 h-4 text-white group-hover:-translate-x-1 transition-transform" />
           </button>
 
 
-          <div className="flex items-center gap-3 bg-slate-50 dark:bg-[#1A2838]/80 border border-slate-200 dark:border-sky-800/40 px-4 py-2 rounded-2xl text-xs">
+          <div className="hidden lg:flex items-center gap-3 bg-slate-50 dark:bg-[#1A2838]/80 border border-slate-200 dark:border-sky-800/40 px-4 py-2 rounded-2xl text-xs">
             <Award className="w-5 h-5 text-sky-600 dark:text-sky-400" />
             <div>
               <div className="text-slate-700 dark:text-gray-200 font-bold">تطوير: م. عبدالمجيد المحواشي</div>
@@ -165,24 +192,24 @@ export default function Dashboard({
 
       {/* 2. Smart System Alerts Card (التنبيهات الذكية) */}
       {(lowStockProducts.length > 0 || highDebtCustomers.length > 0) && (
-        <div className="p-4 md:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-amber-500/10 border border-amber-500/30 shadow-md space-y-3">
+        <div className="p-3 sm:p-4 md:p-5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-amber-500/10 border border-amber-500/30 shadow-md space-y-2.5">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-sm">
-              <Bell className="w-5 h-5 text-amber-500 animate-bounce" />
+            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-xs sm:text-sm">
+              <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500 animate-bounce" />
               <span>تنبيهات النظام الذكية 🔔</span>
             </div>
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+            <span className="text-[11px] sm:text-xs font-bold text-slate-500 dark:text-slate-400">
               {lowStockProducts.length + highDebtCustomers.length} تنبيهات تحتاج متابعة
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs">
             {lowStockProducts.length > 0 && (
-              <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-amber-200 dark:border-amber-900/50 flex items-center justify-between">
+              <div className="p-2.5 sm:p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-amber-200 dark:border-amber-900/50 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
                   <div>
-                    <span className="font-bold text-slate-800 dark:text-white">نقص مخزون الأصناف</span>
+                    <span className="font-bold text-slate-800 dark:text-white text-xs">نقص مخزون الأصناف</span>
                     <p className="text-[10px] text-slate-500 dark:text-slate-400">
                       يوجد {lowStockProducts.length} صنف وصل للحد الأدنى للمخزون
                     </p>
@@ -190,7 +217,7 @@ export default function Dashboard({
                 </div>
                 <button
                   onClick={() => setActiveTab('inventory')}
-                  className="px-3 py-1 rounded-lg bg-amber-500 text-white font-bold text-[11px] hover:bg-amber-600 transition"
+                  className="px-2.5 py-1 rounded-lg bg-amber-500 text-white font-bold text-[10px] sm:text-[11px] hover:bg-amber-600 transition"
                 >
                   استعراض الأصناف
                 </button>
@@ -198,11 +225,11 @@ export default function Dashboard({
             )}
 
             {highDebtCustomers.length > 0 && (
-              <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-rose-200 dark:border-rose-900/50 flex items-center justify-between">
+              <div className="p-2.5 sm:p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-rose-200 dark:border-rose-900/50 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
                   <div>
-                    <span className="font-bold text-slate-800 dark:text-white">مديونيات عالية مستحقة</span>
+                    <span className="font-bold text-slate-800 dark:text-white text-xs">مديونيات عالية مستحقة</span>
                     <p className="text-[10px] text-slate-500 dark:text-slate-400">
                       يوجد {highDebtCustomers.length} عملاء تتجاوز ديونهم 50,000
                     </p>
@@ -210,7 +237,7 @@ export default function Dashboard({
                 </div>
                 <button
                   onClick={() => setActiveTab('customers')}
-                  className="px-3 py-1 rounded-lg bg-rose-500 text-white font-bold text-[11px] hover:bg-rose-600 transition"
+                  className="px-2.5 py-1 rounded-lg bg-rose-500 text-white font-bold text-[10px] sm:text-[11px] hover:bg-rose-600 transition"
                 >
                   دفتر التحصيل
                 </button>
@@ -221,42 +248,42 @@ export default function Dashboard({
       )}
 
       {/* 3. KPI Financial Cards */}
-      <div className={isMobileMode ? "grid grid-cols-2 gap-3" : "grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5"}>
+      <div className={isMobileMode ? "grid grid-cols-2 gap-2.5" : "grid grid-cols-2 lg:grid-cols-4 gap-2.5 md:gap-5"}>
         
         {/* Total Sales */}
-        <div className="p-4 md:p-5 rounded-2xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 hover:border-emerald-400/50 transition-all duration-300 shadow-md group">
+        <div className="p-3 sm:p-4 md:p-5 rounded-xl sm:rounded-2xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 hover:border-emerald-400/50 transition-all duration-300 shadow-md group">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-[11px] md:text-xs text-slate-500 dark:text-gray-400 font-bold">إجمالي المبيعات</span>
-              <h3 className="text-base sm:text-lg md:text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+              <span className="text-[10px] sm:text-[11px] md:text-xs text-slate-500 dark:text-gray-400 font-bold">إجمالي المبيعات</span>
+              <h3 className="text-sm sm:text-lg md:text-xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
                 {fmt(totalSales)}
               </h3>
             </div>
-            <div className="p-2.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-              <TrendingUp className="w-5 h-5" />
+            <div className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+              <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="text-[10px] md:text-[11px] text-slate-500 dark:text-gray-400 mt-3 flex justify-between">
-            <span>عدد الفواتير الصادرة:</span>
-            <span className="font-bold text-slate-800 dark:text-white">{invoices.length} فاتورة</span>
+          <div className="text-[10px] md:text-[11px] text-slate-500 dark:text-gray-400 mt-2 flex justify-between">
+            <span>عدد الفواتير:</span>
+            <span className="font-bold text-slate-800 dark:text-white">{invoices.length}</span>
           </div>
         </div>
 
         {/* Total Debts */}
-        <div className="p-4 md:p-5 rounded-2xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 hover:border-rose-400/50 transition-all duration-300 shadow-md group">
+        <div className="p-3 sm:p-4 md:p-5 rounded-xl sm:rounded-2xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 hover:border-rose-400/50 transition-all duration-300 shadow-md group">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-[11px] md:text-xs text-slate-500 dark:text-gray-400 font-bold">الديون والذمم المستحقة</span>
-              <h3 className="text-base sm:text-lg md:text-xl font-black text-rose-600 dark:text-rose-400 mt-1">
+              <span className="text-[10px] sm:text-[11px] md:text-xs text-slate-500 dark:text-gray-400 font-bold">الديون المستحقة</span>
+              <h3 className="text-sm sm:text-lg md:text-xl font-black text-rose-600 dark:text-rose-400 mt-0.5">
                 {fmt(totalDebts)}
               </h3>
             </div>
-            <div className="p-2.5 rounded-2xl bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800">
-              <Wallet className="w-5 h-5" />
+            <div className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800">
+              <Wallet className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="text-[10px] md:text-[11px] text-slate-500 dark:text-gray-400 mt-3 flex justify-between">
-            <span>العملاء الدائنون:</span>
+          <div className="text-[10px] md:text-[11px] text-slate-500 dark:text-gray-400 mt-2 flex justify-between">
+            <span>الدائنون:</span>
             <span className="font-bold text-rose-600 dark:text-rose-400">
               {activeCustomers.filter(c => c.totalDebt > 0).length} عملاء
             </span>
@@ -264,39 +291,39 @@ export default function Dashboard({
         </div>
 
         {/* Inventory Capital Value */}
-        <div className="p-4 md:p-5 rounded-2xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 hover:border-sky-400/50 transition-all duration-300 shadow-md group">
+        <div className="p-3 sm:p-4 md:p-5 rounded-xl sm:rounded-2xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 hover:border-sky-400/50 transition-all duration-300 shadow-md group">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-[11px] md:text-xs text-slate-500 dark:text-gray-400 font-bold">رأس مال المخزون الحالي</span>
-              <h3 className="text-base sm:text-lg md:text-xl font-black text-sky-600 dark:text-sky-400 mt-1">
+              <span className="text-[10px] sm:text-[11px] md:text-xs text-slate-500 dark:text-gray-400 font-bold">رأس مال المخزون</span>
+              <h3 className="text-sm sm:text-lg md:text-xl font-black text-sky-600 dark:text-sky-400 mt-0.5">
                 {fmt(inventoryCostValue)}
               </h3>
             </div>
-            <div className="p-2.5 rounded-2xl bg-sky-50 dark:bg-sky-950 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800">
-              <Package className="w-5 h-5" />
+            <div className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-sky-50 dark:bg-sky-950 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800">
+              <Package className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="text-[10px] md:text-[11px] text-slate-500 dark:text-gray-400 mt-3 flex justify-between">
-            <span>قيمة البيع المتوقعة:</span>
+          <div className="text-[10px] md:text-[11px] text-slate-500 dark:text-gray-400 mt-2 flex justify-between">
+            <span>قيمة البيع:</span>
             <span className="font-bold text-sky-600 dark:text-sky-300">{fmt(inventoryRetailValue)}</span>
           </div>
         </div>
 
         {/* Expected Net Profit */}
-        <div className="p-4 md:p-5 rounded-2xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 hover:border-indigo-400/50 transition-all duration-300 shadow-md group">
+        <div className="p-3 sm:p-4 md:p-5 rounded-xl sm:rounded-2xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 hover:border-indigo-400/50 transition-all duration-300 shadow-md group">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-[11px] md:text-xs text-slate-500 dark:text-gray-400 font-bold">الأرباح المتوقعة من المخزون</span>
-              <h3 className="text-base sm:text-lg md:text-xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
+              <span className="text-[10px] sm:text-[11px] md:text-xs text-slate-500 dark:text-gray-400 font-bold">أرباح المخزون</span>
+              <h3 className="text-sm sm:text-lg md:text-xl font-black text-indigo-600 dark:text-indigo-400 mt-0.5">
                 {fmt(expectedProfit)}
               </h3>
             </div>
-            <div className="p-2.5 rounded-2xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
-              <Sparkles className="w-5 h-5" />
+            <div className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="text-[10px] md:text-[11px] text-slate-500 dark:text-gray-400 mt-3 flex justify-between">
-            <span>هامش الربح التجاري:</span>
+          <div className="text-[10px] md:text-[11px] text-slate-500 dark:text-gray-400 mt-2 flex justify-between">
+            <span>هامش الربح:</span>
             <span className="font-bold text-indigo-600 dark:text-indigo-300">
               {inventoryCostValue ? Math.round((expectedProfit / inventoryCostValue) * 100) : 0}%
             </span>
@@ -305,216 +332,193 @@ export default function Dashboard({
 
       </div>
 
-      {/* 4. Debt Analytics & Low Stock Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Top Debtors Chart */}
-        <div className="lg:col-span-2 p-6 rounded-3xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 shadow-xl flex flex-col justify-between">
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                <Users className="w-5 h-5 text-sky-600 dark:text-sky-400" />
-                أكبر مديونيات العملاء للتحصيل
-              </h2>
-              <button 
-                onClick={() => setActiveTab('customers')} 
-                className="text-xs text-sky-600 dark:text-sky-400 hover:underline cursor-pointer font-bold"
-              >
-                دفتر التحصيل الكامل ←
-              </button>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-gray-400 mb-6">
-              تحليل مالي مباشر لأعلى مبالغ الذمم والديون المترتبة على العملاء لسرعة المتابعة والتحصيل.
-            </p>
-
-            <div className="space-y-4">
-              {topDebtors.length === 0 ? (
-                <div className="py-8 text-center text-slate-400 text-sm">
-                  لا توجد مديونيات مستحقة حالياً. ممتاز!
-                </div>
-              ) : (
-                topDebtors.map(debtor => {
-                  const pct = Math.max(8, (debtor.totalDebt / maxDebtorVal) * 100);
-                  return (
-                    <div key={debtor.id} className="space-y-1.5">
-                      <div className="flex justify-between text-xs">
-                        <span className="font-bold text-slate-800 dark:text-gray-200">{debtor.name}</span>
-                        <span className="font-bold font-mono text-rose-600 dark:text-rose-400">{fmt(debtor.totalDebt)}</span>
-                      </div>
-                      <div className="w-full bg-slate-100 dark:bg-[#182535] h-3 rounded-full overflow-hidden flex">
-                        <div
-                          style={{ width: `${pct}%` }}
-                          className="bg-gradient-to-r from-sky-500 to-blue-600 rounded-full transition-all duration-500 shadow-sm"
-                        />
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-slate-100 dark:border-gray-800 text-xs text-slate-500 dark:text-gray-400 flex justify-between items-center">
-            <span>مجموع ديون العملاء الإجمالي:</span>
-            <span className="font-black text-rose-600 dark:text-rose-400 text-sm font-mono">{fmt(totalDebts)}</span>
-          </div>
-        </div>
-
-        {/* Low Stock Items List */}
-        <div className="p-6 rounded-3xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 shadow-xl flex flex-col justify-between">
-          <div>
-            <h2 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4">
-              <AlertCircle className="w-5 h-5 text-rose-500" />
-              تنبيهات نقص المخزون
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-gray-400 mb-4">
-              الأصناف التي وصلت إلى حد النقص الأدنى:
-            </p>
-
-            <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
-              {lowStockProducts.length === 0 ? (
-                <div className="py-8 text-center text-emerald-600 dark:text-emerald-400 text-xs flex flex-col items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center border border-emerald-300 dark:border-emerald-800 text-emerald-600">✓</div>
-                  جميع مستويات المخزون ممتازة!
-                </div>
-              ) : (
-                lowStockProducts.map(p => (
-                  <div key={p.id} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-rose-900/30 flex items-center justify-between text-xs">
-                    <div className="space-y-0.5">
-                      <div className="font-bold text-slate-800 dark:text-gray-200">{p.name}</div>
-                      <div className="text-[10px] text-slate-400 font-mono">باركود: {p.barcode}</div>
-                    </div>
-                    <div className="text-left">
-                      <div className="text-rose-600 dark:text-rose-400 font-bold font-mono">المتبقي: {p.stock}</div>
-                      <div className="text-[10px] text-slate-400">الحد الأدنى: {p.minStock}</div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <button
-            onClick={() => setActiveTab('inventory')}
-            className="w-full mt-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-xs font-bold text-white transition-all cursor-pointer text-center shadow-md"
-          >
-            إضافة كميات للمستودع
-          </button>
-        </div>
-
-      </div>
-
-      {/* 5. Recent Transactions Log */}
-      <div className="p-6 rounded-3xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 shadow-xl">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
-            <ArrowDownLeft className="w-5 h-5 text-emerald-500" />
-            دفتر العمليات والقيود الأخيرة
+      {/* 3.5 ULTRA-MODERN MOBILE GRID CARDS FOR QUICK NAVIGATION */}
+      <div className="space-y-3">
+        <div className="flex justify-between items-center px-1">
+          <h2 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-500" />
+            <span>الوصول السريع للأقسام الرئيسية</span>
           </h2>
-          <button 
-            onClick={() => setActiveTab('transactions')} 
-            className="text-xs text-sky-600 dark:text-sky-400 hover:underline font-bold cursor-pointer"
-          >
-            جميع القيود ←
-          </button>
+          <span className="text-[10px] text-slate-400 font-bold">تطبيق سند الجوال</span>
         </div>
 
-        {/* Mobile Mode Card View vs Desktop Table View */}
-        {isMobileMode ? (
-          <div className="space-y-2.5">
-            {transactions.length === 0 ? (
-              <div className="py-8 text-center text-slate-400 text-xs bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200">
-                لا توجد أي قيود مسجلة بعد.
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          {/* POS Sales */}
+          <button
+            onClick={() => {
+              soundManager.playScanBeep();
+              setActiveTab('pos');
+            }}
+            className="p-4 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-500/20 active:scale-95 transition-all text-right flex flex-col justify-between h-28 relative overflow-hidden group cursor-pointer"
+          >
+            <div className="flex justify-between items-start">
+              <div className="p-2.5 rounded-xl bg-white/20 backdrop-blur-md">
+                <ShoppingCart className="w-5 h-5 text-white" />
               </div>
-            ) : (
-              [...transactions].reverse().slice(0, 5).map(t => (
-                <div 
-                  key={t.id} 
-                  className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-sky-900/30 flex items-center justify-between text-xs transition hover:bg-white"
-                >
-                  <div className="space-y-1">
-                    <div className="font-bold text-slate-900 dark:text-gray-100">{t.description}</div>
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold ${
-                        t.type === 'sale' 
-                          ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 border border-emerald-200' 
-                          : t.type === 'payment'
-                          ? 'bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-400 border border-sky-200'
-                          : 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border border-amber-200'
-                      }`}>
-                        {t.type === 'sale' ? 'مبيعات' : t.type === 'payment' ? 'سداد ديون' : 'مصروف'}
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-mono">
-                        {new Date(t.date).toLocaleTimeString('ar-YE', { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                  </div>
+              <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-white/20 text-white backdrop-blur-md">
+                فوري ⚡
+              </span>
+            </div>
+            <div>
+              <div className="font-black text-sm text-white">نقطة البيع POS</div>
+              <p className="text-[10px] text-blue-100">فواتير مبيعات سريعة</p>
+            </div>
+          </button>
 
-                  <div className={`text-left font-black font-mono text-sm ${
-                    t.type === 'sale' ? 'text-emerald-600 dark:text-emerald-400' : 'text-sky-600 dark:text-sky-400'
-                  }`}>
-                    {t.type === 'sale' ? '+' : ''}{fmt(t.amount)}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-right text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-gray-800 text-slate-400">
-                  <th className="pb-3 pr-2">تفاصيل العملية</th>
-                  <th className="pb-3 text-center">التاريخ والوقت</th>
-                  <th className="pb-3 text-center">النوع</th>
-                  <th className="pb-3 pl-2 text-left">المبلغ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-gray-800/50">
-                {transactions.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="py-8 text-center text-slate-400">
-                      لا توجد أي قيود مسجلة بعد.
-                    </td>
-                  </tr>
-                ) : (
-                  [...transactions].reverse().slice(0, 5).map(t => (
-                    <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/20">
-                      <td className="py-3 pr-2 font-bold text-slate-800 dark:text-gray-200">
-                        {t.description}
-                      </td>
-                      <td className="py-3 text-center text-slate-400 font-mono">
-                        {new Date(t.date).toLocaleString('ar-YE', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </td>
-                      <td className="py-3 text-center">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          t.type === 'sale' 
-                            ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' 
-                            : t.type === 'payment'
-                            ? 'bg-sky-50 dark:bg-sky-950 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800'
-                            : 'bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
-                        }`}>
-                          {t.type === 'sale' ? 'مبيعات' : t.type === 'payment' ? 'سداد ديون' : 'مصروف'}
-                        </span>
-                      </td>
-                      <td className={`py-3 pl-2 text-left font-black font-mono ${
-                        t.type === 'sale' ? 'text-emerald-600 dark:text-emerald-400' : 'text-sky-600 dark:text-sky-400'
-                      }`}>
-                        {t.type === 'sale' ? '+' : ''}{fmt(t.amount)}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+          {/* Inventory */}
+          <button
+            onClick={() => {
+              soundManager.playScanBeep();
+              setActiveTab('inventory');
+            }}
+            className="p-4 rounded-2xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 hover:border-sky-500/50 shadow-sm active:scale-95 transition-all text-right flex flex-col justify-between h-28 cursor-pointer group"
+          >
+            <div className="flex justify-between items-start">
+              <div className="p-2.5 rounded-xl bg-sky-50 dark:bg-sky-950 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800">
+                <Package className="w-5 h-5" />
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-sky-50 dark:bg-sky-950 text-sky-600 dark:text-sky-400">
+                {activeProducts.length} صنف
+              </span>
+            </div>
+            <div>
+              <div className="font-bold text-sm text-slate-900 dark:text-white">المستودع والمخزن</div>
+              <p className="text-[10px] text-slate-400">إدارة البضائع والأسعار</p>
+            </div>
+          </button>
+
+          {/* Maintenance */}
+          <button
+            onClick={() => {
+              soundManager.playScanBeep();
+              setActiveTab('maintenance');
+            }}
+            className="p-4 rounded-2xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 hover:border-amber-500/50 shadow-sm active:scale-95 transition-all text-right flex flex-col justify-between h-28 cursor-pointer group"
+          >
+            <div className="flex justify-between items-start">
+              <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                <Wrench className="w-5 h-5" />
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400">
+                ورشة صيانة
+              </span>
+            </div>
+            <div>
+              <div className="font-bold text-sm text-slate-900 dark:text-white">قسم الصيانة</div>
+              <p className="text-[10px] text-slate-400">كروت واستلام الأجهزة</p>
+            </div>
+          </button>
+
+          {/* Customers & Debts */}
+          <button
+            onClick={() => {
+              soundManager.playScanBeep();
+              setActiveTab('customers');
+            }}
+            className="p-4 rounded-2xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 hover:border-rose-500/50 shadow-sm active:scale-95 transition-all text-right flex flex-col justify-between h-28 cursor-pointer group"
+          >
+            <div className="flex justify-between items-start">
+              <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800">
+                <Users className="w-5 h-5" />
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400">
+                {activeCustomers.filter(c => c.totalDebt > 0).length} مدينين
+              </span>
+            </div>
+            <div>
+              <div className="font-bold text-sm text-slate-900 dark:text-white">العملاء والديون</div>
+              <p className="text-[10px] text-slate-400">كشوفات الحساب والتحصيل</p>
+            </div>
+          </button>
+
+          {/* Employees & Payroll */}
+          <button
+            onClick={() => {
+              soundManager.playScanBeep();
+              setActiveTab('employees');
+            }}
+            className="p-4 rounded-2xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 hover:border-purple-500/50 shadow-sm active:scale-95 transition-all text-right flex flex-col justify-between h-28 cursor-pointer group"
+          >
+            <div className="flex justify-between items-start">
+              <div className="p-2.5 rounded-xl bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800">
+                <Briefcase className="w-5 h-5" />
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400">
+                {employees.length} موظف
+              </span>
+            </div>
+            <div>
+              <div className="font-bold text-sm text-slate-900 dark:text-white">العمال والرواتب</div>
+              <p className="text-[10px] text-slate-400">السلف وصرف المرتبات</p>
+            </div>
+          </button>
+
+          {/* Profit Reports */}
+          <button
+            onClick={() => {
+              soundManager.playScanBeep();
+              setActiveTab('reports');
+            }}
+            className="p-4 rounded-2xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 hover:border-emerald-500/50 shadow-sm active:scale-95 transition-all text-right flex flex-col justify-between h-28 cursor-pointer group"
+          >
+            <div className="flex justify-between items-start">
+              <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                <BarChart3 className="w-5 h-5" />
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">
+                تقارير 📊
+              </span>
+            </div>
+            <div>
+              <div className="font-bold text-sm text-slate-900 dark:text-white">الأرباح والتقارير</div>
+              <p className="text-[10px] text-slate-400">تحليل المبيعات الشامل</p>
+            </div>
+          </button>
+
+          {/* Stock Audit */}
+          <button
+            onClick={() => {
+              soundManager.playScanBeep();
+              setActiveTab('stock_audit');
+            }}
+            className="p-4 rounded-2xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 hover:border-indigo-500/50 shadow-sm active:scale-95 transition-all text-right flex flex-col justify-between h-28 cursor-pointer group"
+          >
+            <div className="flex justify-between items-start">
+              <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+                <ClipboardCheck className="w-5 h-5" />
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400">
+                حصر جرد
+              </span>
+            </div>
+            <div>
+              <div className="font-bold text-sm text-slate-900 dark:text-white">جرد المنشأة</div>
+              <p className="text-[10px] text-slate-400">مطابقة الكميات الميدانية</p>
+            </div>
+          </button>
+
+          {/* Ledger / Transactions */}
+          <button
+            onClick={() => {
+              soundManager.playScanBeep();
+              setActiveTab('transactions');
+            }}
+            className="p-4 rounded-2xl bg-white dark:bg-[#0F1824] border border-slate-200 dark:border-sky-900/30 hover:border-slate-500/50 shadow-sm active:scale-95 transition-all text-right flex flex-col justify-between h-28 cursor-pointer group"
+          >
+            <div className="flex justify-between items-start">
+              <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                <History className="w-5 h-5" />
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                {transactions.length} حركات
+              </span>
+            </div>
+            <div>
+              <div className="font-bold text-sm text-slate-900 dark:text-white">دفتر القيود والأرشيف</div>
+              <p className="text-[10px] text-slate-400">المصاريف وأرشيف الفواتير</p>
+            </div>
+          </button>
+        </div>
       </div>
 
       {/* Zara AI Financial Assistant Modal */}

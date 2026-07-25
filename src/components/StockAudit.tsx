@@ -436,7 +436,7 @@ export default function StockAudit({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-28">
       
       {/* Top Banner Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
@@ -671,9 +671,103 @@ export default function StockAudit({
             </div>
           </div>
 
-          {/* Audit Reconciliation Table */}
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
+          {/* Audit Reconciliation Cards & Table */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs p-4">
+            
+            {/* MOBILE CARDS VIEW (block md:hidden) */}
+            <div className="block md:hidden space-y-3">
+              {filteredProducts.length === 0 ? (
+                <div className="py-8 text-center text-slate-500 text-xs">
+                  لا توجد أصناف تطابق شروط البحث والجرد بالتصفية الحالية.
+                </div>
+              ) : (
+                filteredProducts.map(p => {
+                  const physical = physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : p.stock;
+                  const diff = physical - p.stock;
+                  const financialImpact = diff * p.costPrice;
+                  const isApplied = appliedReconciliations[p.id];
+
+                  return (
+                    <div key={p.id} className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="font-bold text-slate-900 text-sm">{p.name}</div>
+                          <div className="text-[10px] text-slate-400 font-mono">{p.barcode}</div>
+                        </div>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white text-slate-600 border border-slate-200">
+                          {p.category || 'عام'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 bg-white p-2.5 rounded-xl border border-slate-100 text-xs">
+                        <div>
+                          <span className="text-slate-400 text-[10px] block">كمية السيستم</span>
+                          <span className="font-mono font-bold text-slate-800 text-sm">{p.stock}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 text-[10px] block">الكمية الفعلية الميدانية</span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : p.stock}
+                            onChange={(e) => handlePhysicalCountChange(p.id, e.target.value)}
+                            className={`w-full p-1 rounded-lg text-center font-mono font-bold text-sm bg-slate-50 border transition focus:outline-none ${
+                              diff < 0 
+                                ? 'border-rose-400 text-rose-600 bg-rose-50' 
+                                : diff > 0 
+                                ? 'border-emerald-400 text-emerald-600 bg-emerald-50' 
+                                : 'border-slate-300 text-slate-900'
+                            }`}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center text-xs pt-1 border-t border-slate-200/60">
+                        <div>
+                          <span className="text-slate-400 text-[10px] ml-1">الفارق:</span>
+                          {diff === 0 ? (
+                            <span className="text-slate-400 font-bold">0 (متطابق)</span>
+                          ) : diff < 0 ? (
+                            <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-600 font-bold text-[11px]">
+                              {diff} (عجز)
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 font-bold text-[11px]">
+                              +{diff} (زيادة)
+                            </span>
+                          )}
+                        </div>
+
+                        <div>
+                          <span className="text-slate-400 text-[10px] ml-1">الأثر:</span>
+                          <span className={`font-mono font-bold ${financialImpact < 0 ? 'text-rose-600' : financialImpact > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {financialImpact === 0 ? '0' : (financialImpact > 0 ? '+' : '') + financialImpact.toLocaleString()} {currency}
+                          </span>
+                        </div>
+                      </div>
+
+                      {diff !== 0 && (
+                        <button
+                          onClick={() => handleReconcileSingle(p)}
+                          disabled={isApplied}
+                          className={`w-full py-2 rounded-xl font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1 ${
+                            isApplied
+                              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                              : 'bg-blue-600 text-white hover:bg-blue-700 shadow-xs'
+                          }`}
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>{isApplied ? 'تمت التسوية بنجاح ✅' : 'اعتماد تسوية هذا الصنف'}</span>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* DESKTOP TABLE VIEW (hidden md:block) */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-xs text-right text-slate-700">
                 <thead className="bg-slate-50 text-slate-900 font-bold border-b border-slate-200">
                   <tr>

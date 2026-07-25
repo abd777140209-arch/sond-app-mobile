@@ -25,7 +25,9 @@ import {
   Download,
   Briefcase,
   ClipboardCheck,
-  Boxes
+  Boxes,
+  ArrowRight,
+  Home
 } from 'lucide-react';
 
 import { Product, Customer, Invoice, Payment, Transaction, SystemSettings, MaintenanceOrder, Employee, PayrollRecord } from './types';
@@ -1433,7 +1435,7 @@ export default function App() {
           id="desktop_sub_view_hub" 
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
-          className="flex-1 p-3 md:p-6 pb-28 md:pb-6 overflow-y-auto bg-[#F8FAFC] relative"
+          className="flex-1 p-2 sm:p-3 md:p-6 pb-20 md:pb-6 overflow-y-auto bg-[#F8FAFC] relative"
         >
           {/* Floating Mobile Swipe Toast Hint */}
           <AnimatePresence>
@@ -1458,6 +1460,55 @@ export default function App() {
               transition={{ duration: 0.18, ease: 'easeOut' }}
               className="w-full h-full"
             >
+              {/* TOP APP BAR FOR SUB-VIEWS WITH BACK BUTTON */}
+              {activeTab !== 'dashboard' && (
+                <div className="mb-2.5 sm:mb-4 bg-white dark:bg-[#0F1824] p-2 sm:p-3 px-3 sm:px-4 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-sky-900/40 shadow-sm flex items-center justify-between gap-2.5 sm:gap-3">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => {
+                        soundManager.playScanBeep();
+                        setActiveTab('dashboard');
+                      }}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 text-white font-extrabold text-xs transition shadow-md active:scale-95 cursor-pointer"
+                      title="العودة فوراً للشاشة الرئيسية"
+                    >
+                      <ArrowRight className="w-4 h-4" />
+                      <span>العودة للرئيسية 🏠</span>
+                    </button>
+
+                    <div className="h-5 w-px bg-slate-200 dark:bg-slate-800" />
+
+                    <div className="flex items-center gap-2">
+                      <span className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                        {activeTab === 'pos' && <ShoppingCart className="w-4 h-4 text-emerald-600" />}
+                        {activeTab === 'inventory' && <Package className="w-4 h-4 text-purple-600" />}
+                        {activeTab === 'customers' && <Users className="w-4 h-4 text-sky-600" />}
+                        {activeTab === 'maintenance' && <Wrench className="w-4 h-4 text-amber-600" />}
+                        {activeTab === 'employees' && <Briefcase className="w-4 h-4 text-indigo-600" />}
+                        {activeTab === 'reports' && <BarChart3 className="w-4 h-4 text-emerald-600" />}
+                        {activeTab === 'stock_audit' && <ClipboardCheck className="w-4 h-4 text-blue-600" />}
+                        {activeTab === 'transactions' && <History className="w-4 h-4 text-slate-600" />}
+                        {activeTab === 'settings' && <SettingsIcon className="w-4 h-4 text-slate-600" />}
+                      </span>
+                      <h2 className="text-sm font-black text-slate-800 dark:text-white">
+                        {activeTab === 'pos' && 'نقطة البيع السريعة (POS)'}
+                        {activeTab === 'inventory' && 'إدارة المستودع والمخزون'}
+                        {activeTab === 'customers' && 'حسابات العملاء والديون والتحصيل'}
+                        {activeTab === 'maintenance' && 'قسم الصيانة والورشة واستلام الأجهزة'}
+                        {activeTab === 'employees' && 'قسم الموظفين والرواتب والسلف'}
+                        {activeTab === 'reports' && 'الأرباح والتقارير المالية البيانية'}
+                        {activeTab === 'stock_audit' && 'حصر وجرد المنشأة الميداني'}
+                        {activeTab === 'transactions' && 'دفتر القيود والأرشيف والمصاريف'}
+                        {activeTab === 'settings' && 'إعدادات النظام والترخيص'}
+                      </h2>
+                    </div>
+                  </div>
+
+                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 rounded-full hidden sm:inline-block">
+                    تطبيق سند المحاسبي • شاشة خاصة
+                  </span>
+                </div>
+              )}
               {activeTab === 'dashboard' && (
                 <Dashboard
                   products={products}
@@ -1466,6 +1517,7 @@ export default function App() {
                   payments={payments}
                   transactions={transactions}
                   settings={settings}
+                  employees={employees}
                   setActiveTab={setActiveTab}
                   isPrivacyMode={isPrivacyMode}
                 />

@@ -317,12 +317,12 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
   });
 
   return (
-    <div id="pos_tab_view" className="space-y-4">
+    <div id="pos_tab_view" className="space-y-2.5 md:space-y-4">
       
       {/* 0. SMART TOOLS ACTION HEADER BAR */}
-      <div className="bg-white border border-slate-200 p-3.5 rounded-2xl shadow-sm flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-white border border-slate-200 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl shadow-sm flex flex-wrap items-center justify-between gap-2 sm:gap-3">
         <div className="flex items-center gap-2">
-          <div className="p-2 rounded-xl bg-blue-50 text-blue-600 font-bold text-xs flex items-center gap-1.5">
+          <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-blue-50 text-blue-600 font-bold text-xs flex items-center gap-1.5">
             <ShieldCheck className="w-4 h-4 text-blue-600" />
             <span>محطة البيع الذكية (Smart POS)</span>
           </div>
@@ -332,7 +332,7 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
         </div>
 
         {/* Action Tool Launchers */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
           
           {/* Voice POS Button */}
           <button
@@ -340,10 +340,10 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
               soundManager.playScanBeep();
               setShowVoiceModal(true);
             }}
-            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer transition"
+            className="px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-lg sm:rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1 shadow-sm active:scale-95 cursor-pointer transition"
           >
-            <Mic className="w-4 h-4 animate-pulse" />
-            <span>المساعد الصوتي (Voice POS)</span>
+            <Mic className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-pulse" />
+            <span>المساعد الصوتي</span>
           </button>
 
           {/* Camera / Barcode Scanner */}
@@ -352,10 +352,10 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
               soundManager.playScanBeep();
               setShowScannerModal(true);
             }}
-            className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center gap-1.5 border border-slate-200 cursor-pointer transition"
+            className="px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-lg sm:rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[11px] sm:text-xs flex items-center gap-1 border border-slate-200 cursor-pointer transition"
           >
-            <Camera className="w-4 h-4 text-blue-600" />
-            <span>قارئ الباركود (الكاميرا)</span>
+            <Camera className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
+            <span>قارئ الكاميرا</span>
           </button>
 
           {/* Bluetooth Barcode Label Printer */}
@@ -364,16 +364,16 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
               soundManager.playScanBeep();
               setShowLabelPrinterModal(true);
             }}
-            className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center gap-1.5 border border-slate-200 cursor-pointer transition"
+            className="px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-lg sm:rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[11px] sm:text-xs flex items-center gap-1 border border-slate-200 cursor-pointer transition"
           >
-            <Printer className="w-4 h-4 text-slate-600" />
-            <span>طباعة ملصقات الباركود 🖨️</span>
+            <Printer className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-600" />
+            <span>طباعة الملصقات</span>
           </button>
 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-3.5 md:gap-6 items-start">
         
         {/* LEFT: Products selection catalogue & Barcode scanning (7 cols) */}
         <div className="xl:col-span-7 space-y-4">

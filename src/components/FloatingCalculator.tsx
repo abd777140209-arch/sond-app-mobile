@@ -4,7 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import { Calculator, X, Copy, Check, Delete, RefreshCw } from 'lucide-react';
+import { Calculator, X, Copy, Check, Delete, Move } from 'lucide-react';
+import { motion } from 'motion/react';
 
 interface FloatingCalculatorProps {
   onCopyResult?: (val: string) => void;
@@ -74,33 +75,42 @@ export default function FloatingCalculator({ onCopyResult }: FloatingCalculatorP
 
   return (
     <>
-      {/* Floating Toggle Button */}
-      <div className="fixed bottom-16 md:bottom-6 left-4 md:left-6 z-50 no-print">
+      {/* Draggable Floating Toggle Button (Bottom-Right) */}
+      <motion.div 
+        drag
+        dragMomentum={false}
+        whileDrag={{ scale: 1.1 }}
+        className="fixed bottom-24 right-6 z-50 no-print touch-none cursor-grab active:cursor-grabbing"
+      >
         <button
           id="floating_calculator_trigger"
           onClick={() => setIsOpen(!isOpen)}
           className={`p-3.5 rounded-full shadow-2xl transition-all duration-300 flex items-center justify-center cursor-pointer ${
             isOpen
               ? 'bg-rose-600 hover:bg-rose-700 text-white rotate-90 scale-110'
-              : 'bg-gradient-to-r from-[#0284C7] to-[#0369A1] hover:from-[#0369A1] hover:to-[#075985] text-white shadow-sky-500/30 hover:scale-105'
+              : 'bg-gradient-to-r from-[#0284C7] to-[#0369A1] hover:from-[#0369A1] hover:to-[#075985] text-white shadow-sky-500/30 hover:scale-105 border-2 border-white dark:border-slate-800'
           }`}
-          title="آلة حاسبة سريعة"
+          title="آلة حاسبة سريعة (يمكنك سحبها وتحريكها بحرية)"
         >
           {isOpen ? <X className="w-6 h-6" /> : <Calculator className="w-6 h-6" />}
         </button>
-      </div>
+      </motion.div>
 
-      {/* Floating Calculator Window */}
+      {/* Draggable Floating Calculator Window */}
       {isOpen && (
-        <div className="fixed bottom-28 md:bottom-20 left-4 md:left-6 z-50 w-72 md:w-80 bg-white dark:bg-[#0B141F] border border-slate-200 dark:border-sky-800/40 rounded-3xl shadow-2xl p-4 text-slate-900 dark:text-white transition-all animate-in fade-in slide-in-from-bottom-5 no-print">
-          
-          {/* Header */}
-          <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-100 dark:border-slate-800">
+        <motion.div 
+          drag
+          dragMomentum={false}
+          className="fixed bottom-28 right-4 md:right-6 z-50 w-72 md:w-80 bg-white dark:bg-[#0B141F] border border-slate-200 dark:border-sky-800/40 rounded-3xl shadow-2xl p-4 text-slate-900 dark:text-white transition-all animate-in fade-in slide-in-from-bottom-5 no-print touch-none"
+        >
+          {/* Header & Drag Handle */}
+          <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-100 dark:border-slate-800 cursor-grab active:cursor-grabbing">
             <div className="flex items-center gap-2">
+              <Move className="w-3.5 h-3.5 text-slate-400" />
               <div className="p-1.5 rounded-xl bg-sky-100 dark:bg-sky-950 text-sky-600 dark:text-sky-400">
                 <Calculator className="w-4 h-4" />
               </div>
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-100">آلة حاسبة سريعة</span>
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-100">آلة حاسبة (اسحب للتحريك)</span>
             </div>
             
             <button
@@ -157,7 +167,7 @@ export default function FloatingCalculator({ onCopyResult }: FloatingCalculatorP
             <button onClick={handleCalculate} className="p-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition">=</button>
           </div>
 
-        </div>
+        </motion.div>
       )}
     </>
   );

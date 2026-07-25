@@ -94,7 +94,7 @@ export default function Employees({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-28">
       {/* Top Header Card */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
         <div>
@@ -244,6 +244,25 @@ export default function Employees({
           </div>
         ))}
       </div>
+
+      {/* Floating Action Button (FAB) for Mobile */}
+      <motion.div 
+        drag
+        dragMomentum={false}
+        whileDrag={{ scale: 1.1 }}
+        className="fixed bottom-6 right-6 z-40 touch-none cursor-grab active:cursor-grabbing"
+      >
+        <button
+          onClick={() => {
+            soundManager.playScanBeep();
+            setShowAddModal(true);
+          }}
+          className="w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-2xl flex items-center justify-center transition cursor-pointer border-2 border-white"
+          title="إضافة موظف جديد (يمكنك سحبه وتحريكه)"
+        >
+          <UserPlus className="w-6 h-6" />
+        </button>
+      </motion.div>
 
       {/* Modal: Add Employee */}
       <AnimatePresence>
