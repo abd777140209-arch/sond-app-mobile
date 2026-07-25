@@ -9,6 +9,7 @@ import {
   initializeFirestore, 
   persistentLocalCache, 
   persistentMultipleTabManager,
+  setLogLevel,
   doc, 
   getDoc, 
   setDoc, 
@@ -122,14 +123,20 @@ export function getFirestoreDb() {
       const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
       
       try {
-        // Initialize Firestore with robust local offline persistence (Multi-Tab) & Long Polling detection
+        setLogLevel('error');
+      } catch (e) {
+        // ignore log level error if already set
+      }
+
+      try {
+        // Initialize Firestore with robust local offline persistence (Multi-Tab) & Force Long Polling for sandboxed iFrames
         firestoreDb = initializeFirestore(app, {
           localCache: persistentLocalCache({
             tabManager: persistentMultipleTabManager()
           }),
-          experimentalAutoDetectLongPolling: true
+          experimentalForceLongPolling: true
         });
-        console.log("Firestore offline persistence enabled successfully.");
+        console.log("Firestore offline persistence and long-polling enabled successfully.");
       } catch (persistenceError) {
         console.warn("Firestore offline persistence failed to initialize (usually happens in strict iframe environments). Falling back to memory cache:", persistenceError);
         firestoreDb = getFirestore(app);
