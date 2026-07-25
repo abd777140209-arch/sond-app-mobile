@@ -226,10 +226,10 @@ export default function Transactions({
         
         {/* Navigation Sub-Tabs & Export */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-          <div className="flex bg-slate-100 p-1 border border-slate-200 rounded-xl text-xs font-bold">
+          <div className="flex bg-slate-100 p-1 border border-slate-200 rounded-xl text-xs font-bold overflow-x-auto whitespace-nowrap scrollbar-none gap-1 max-w-full">
             <button
               onClick={() => setSubTab('ledger')}
-              className={`px-4 py-2 rounded-lg transition ${
+              className={`px-4 py-2 rounded-lg transition shrink-0 ${
                 subTab === 'ledger' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -237,7 +237,7 @@ export default function Transactions({
             </button>
             <button
               onClick={() => setSubTab('invoices')}
-              className={`px-4 py-2 rounded-lg transition ${
+              className={`px-4 py-2 rounded-lg transition shrink-0 ${
                 subTab === 'invoices' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
               }`}
             >

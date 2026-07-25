@@ -246,10 +246,10 @@ export default function Inventory({
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* Category Filter Pills */}
-            <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold">
+            <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold overflow-x-auto whitespace-nowrap scrollbar-none gap-1 max-w-full">
               <button
                 onClick={() => setSelectedCategoryFilter('الكل')}
-                className={`px-2.5 py-1 rounded-lg transition ${
+                className={`px-2.5 py-1 rounded-lg transition shrink-0 ${
                   selectedCategoryFilter === 'الكل' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'
                 }`}
               >
@@ -259,7 +259,7 @@ export default function Inventory({
                 <button
                   key={cat}
                   onClick={() => setSelectedCategoryFilter(cat)}
-                  className={`px-2.5 py-1 rounded-lg transition ${
+                  className={`px-2.5 py-1 rounded-lg transition shrink-0 ${
                     selectedCategoryFilter === cat ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'
                   }`}
                 >

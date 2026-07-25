@@ -446,7 +446,7 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
               </div>
 
               {/* Category Filter Pills */}
-              <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold overflow-x-auto max-w-full">
+              <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold overflow-x-auto whitespace-nowrap scrollbar-none gap-1 max-w-full">
                 {categoriesList.map(cat => (
                   <button
                     key={cat}

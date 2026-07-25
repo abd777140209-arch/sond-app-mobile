@@ -2,9 +2,12 @@ package com.sanad.accounting
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -28,6 +31,36 @@ class MainActivity : AppCompatActivity() {
     private val LOCAL_APP_URL = "file:///android_asset/public/index.html"
     private val PERMISSIONS_REQUEST_CODE = 1001
 
+    class WebAppInterface(private val mContext: Context) {
+        @JavascriptInterface
+        fun getDeviceId(): String {
+            return try {
+                val androidId = Settings.Secure.getString(mContext.contentResolver, Settings.Secure.ANDROID_ID)
+                if (androidId != null && androidId.trim().isNotEmpty()) androidId else ""
+            } catch (e: Exception) {
+                ""
+            }
+        }
+
+        private fun String?.isNullOrBlank(): Boolean {
+            return this == null || this.trim().isEmpty()
+        }
+
+        @JavascriptInterface
+        fun showToast(message: String) {
+            try {
+                Toast.makeText(mContext, message, Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
+
+        @JavascriptInterface
+        fun requestPermissions(permissions: Array<String>) {
+            // No-op or permission trigger
+        }
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +74,7 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl(LOCAL_APP_URL)
     }
 
+    @Suppress("DEPRECATION")
     private fun configureWebView() {
         val settings = webView.settings
         settings.javaScriptEnabled = true
@@ -48,18 +82,15 @@ class MainActivity : AppCompatActivity() {
         settings.databaseEnabled = true
         settings.allowFileAccess = true
         settings.allowContentAccess = true
-
-        // 👈 تم إضافة السطرين هنا لمنع الشاشة البيضاء وفتح الملفات المحلية بنجاح
-        @Suppress("DEPRECATION")
         settings.allowFileAccessFromFileURLs = true
-        @Suppress("DEPRECATION")
         settings.allowUniversalAccessFromFileURLs = true
-
         settings.mediaPlaybackRequiresUserGesture = false
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         settings.setSupportZoom(true)
         settings.builtInZoomControls = true
         settings.displayZoomControls = false
+
+        webView.addJavascriptInterface(WebAppInterface(this), "AndroidInterface")
 
         webView.webViewClient = object : WebViewClient() {
             override fun onReceivedError(
@@ -92,6 +123,7 @@ class MainActivity : AppCompatActivity() {
         )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
             permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
         } else {
             permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)

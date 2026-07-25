@@ -590,12 +590,42 @@ export default function App() {
 
 
 
+  // Immediate Reactive Theme & Layout DOM class synchronization
+  useEffect(() => {
+    const theme = settings.appTheme || 'financial-blue';
+    const shape = settings.cardShape || 'soft';
+    const density = settings.density || 'comfortable';
+
+    const themeClass = `theme-${theme}`;
+    const shapeClass = `shape-${shape}`;
+    const densityClass = `density-${density}`;
+    const fullClass = `${themeClass} ${shapeClass} ${densityClass}`;
+
+    document.documentElement.className = fullClass;
+    if (theme === 'dark-luxury') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [settings.appTheme, settings.cardShape, settings.density]);
+
   // Action: Save settings
   const handleSaveSettings = (newSettings: SystemSettings) => {
+    localStorage.setItem('smart_accounting_settings', JSON.stringify(newSettings));
+    setSettings(newSettings);
+
+    const theme = newSettings.appTheme || 'financial-blue';
+    const shape = newSettings.cardShape || 'soft';
+    const density = newSettings.density || 'comfortable';
+    document.documentElement.className = `theme-${theme} shape-${shape} density-${density}`;
+    if (theme === 'dark-luxury') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+
     if (license.licenseKey) {
       saveStoreSettings(license.licenseKey, newSettings);
-    } else {
-      setSettings(newSettings);
     }
   };
 
@@ -1403,7 +1433,7 @@ export default function App() {
           id="desktop_sub_view_hub" 
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
-          className="flex-1 p-3 md:p-6 pb-20 md:pb-6 overflow-y-auto bg-[#F8FAFC] relative"
+          className="flex-1 p-3 md:p-6 pb-28 md:pb-6 overflow-y-auto bg-[#F8FAFC] relative"
         >
           {/* Floating Mobile Swipe Toast Hint */}
           <AnimatePresence>

@@ -286,7 +286,7 @@ export default function Maintenance({
         {/* Filter & Search Controls */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 pt-2">
           
-          <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold overflow-x-auto max-w-full">
+          <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold overflow-x-auto whitespace-nowrap scrollbar-none gap-1 max-w-full">
             {[
               { id: 'all', label: 'الكل' },
               { id: 'received', label: 'مستلم' },

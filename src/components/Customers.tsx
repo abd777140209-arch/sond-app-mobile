@@ -420,10 +420,10 @@ export default function Customers({
 
               {/* View Switcher & Quick Filters */}
               <div className="flex items-center gap-2 flex-wrap">
-                <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold">
+                <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold overflow-x-auto whitespace-nowrap scrollbar-none gap-1 max-w-full">
                   <button
                     onClick={() => setFilterType('all')}
-                    className={`px-2.5 py-1 rounded-lg transition ${
+                    className={`px-2.5 py-1 rounded-lg transition shrink-0 ${
                       filterType === 'all' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
                     }`}
                   >
@@ -431,7 +431,7 @@ export default function Customers({
                   </button>
                   <button
                     onClick={() => setFilterType('debtors')}
-                    className={`px-2.5 py-1 rounded-lg transition ${
+                    className={`px-2.5 py-1 rounded-lg transition shrink-0 ${
                       filterType === 'debtors' ? 'bg-rose-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
                     }`}
                   >
@@ -439,7 +439,7 @@ export default function Customers({
                   </button>
                   <button
                     onClick={() => setFilterType('overdue')}
-                    className={`px-2.5 py-1 rounded-lg transition ${
+                    className={`px-2.5 py-1 rounded-lg transition shrink-0 ${
                       filterType === 'overdue' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
                     }`}
                   >

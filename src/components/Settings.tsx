@@ -98,6 +98,91 @@ export default function Settings({
     }
   };
 
+  const updateThemeInstantly = (newTheme: AppTheme) => {
+    soundManager.playScanBeep();
+    setAppTheme(newTheme);
+
+    const themeClass = `theme-${newTheme}`;
+    const shapeClass = `shape-${cardShape}`;
+    const densityClass = `density-${density}`;
+    const fullClass = `${themeClass} ${shapeClass} ${densityClass}`;
+
+    document.documentElement.className = fullClass;
+    if (newTheme === 'dark-luxury') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+
+    onSaveSettings({
+      ...settings,
+      storeName,
+      currency,
+      address,
+      phone,
+      pinCode,
+      isPinEnabled,
+      privacyPinCode,
+      isPrivacyPinEnabled,
+      appTheme: newTheme,
+      cardShape,
+      density,
+      deviceMode
+    });
+  };
+
+  const updateCardShapeInstantly = (newShape: CardShape) => {
+    soundManager.playScanBeep();
+    setCardShape(newShape);
+
+    const themeClass = `theme-${appTheme}`;
+    const shapeClass = `shape-${newShape}`;
+    const densityClass = `density-${density}`;
+    document.documentElement.className = `${themeClass} ${shapeClass} ${densityClass}`;
+
+    onSaveSettings({
+      ...settings,
+      storeName,
+      currency,
+      address,
+      phone,
+      pinCode,
+      isPinEnabled,
+      privacyPinCode,
+      isPrivacyPinEnabled,
+      appTheme,
+      cardShape: newShape,
+      density,
+      deviceMode
+    });
+  };
+
+  const updateDensityInstantly = (newDensity: DisplayDensity) => {
+    soundManager.playScanBeep();
+    setDensity(newDensity);
+
+    const themeClass = `theme-${appTheme}`;
+    const shapeClass = `shape-${cardShape}`;
+    const densityClass = `density-${newDensity}`;
+    document.documentElement.className = `${themeClass} ${shapeClass} ${densityClass}`;
+
+    onSaveSettings({
+      ...settings,
+      storeName,
+      currency,
+      address,
+      phone,
+      pinCode,
+      isPinEnabled,
+      privacyPinCode,
+      isPrivacyPinEnabled,
+      appTheme,
+      cardShape,
+      density: newDensity,
+      deviceMode
+    });
+  };
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSave = (e: React.FormEvent) => {
@@ -589,10 +674,7 @@ export default function Settings({
                   {/* Financial Blue */}
                   <button
                     type="button"
-                    onClick={() => {
-                      soundManager.playScanBeep();
-                      setAppTheme('financial-blue');
-                    }}
+                    onClick={() => updateThemeInstantly('financial-blue')}
                     className={`p-3 rounded-xl border text-right transition cursor-pointer flex flex-col justify-between h-20 ${
                       appTheme === 'financial-blue'
                         ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-500/30'
@@ -615,10 +697,7 @@ export default function Settings({
                   {/* Emerald Green */}
                   <button
                     type="button"
-                    onClick={() => {
-                      soundManager.playScanBeep();
-                      setAppTheme('emerald-green');
-                    }}
+                    onClick={() => updateThemeInstantly('emerald-green')}
                     className={`p-3 rounded-xl border text-right transition cursor-pointer flex flex-col justify-between h-20 ${
                       appTheme === 'emerald-green'
                         ? 'bg-emerald-50 border-emerald-600 ring-2 ring-emerald-500/30'
@@ -641,10 +720,7 @@ export default function Settings({
                   {/* Warm Amber */}
                   <button
                     type="button"
-                    onClick={() => {
-                      soundManager.playScanBeep();
-                      setAppTheme('warm-amber');
-                    }}
+                    onClick={() => updateThemeInstantly('warm-amber')}
                     className={`p-3 rounded-xl border text-right transition cursor-pointer flex flex-col justify-between h-20 ${
                       appTheme === 'warm-amber'
                         ? 'bg-amber-50 border-amber-600 ring-2 ring-amber-500/30'
@@ -667,10 +743,7 @@ export default function Settings({
                   {/* Dark Luxury */}
                   <button
                     type="button"
-                    onClick={() => {
-                      soundManager.playScanBeep();
-                      setAppTheme('dark-luxury');
-                    }}
+                    onClick={() => updateThemeInstantly('dark-luxury')}
                     className={`p-3 rounded-xl border text-right transition cursor-pointer flex flex-col justify-between h-20 ${
                       appTheme === 'dark-luxury'
                         ? 'bg-slate-900 border-amber-500 ring-2 ring-amber-500/30 text-white'
@@ -704,10 +777,7 @@ export default function Settings({
                   {/* Soft Rounded */}
                   <button
                     type="button"
-                    onClick={() => {
-                      soundManager.playScanBeep();
-                      setCardShape('soft');
-                    }}
+                    onClick={() => updateCardShapeInstantly('soft')}
                     className={`p-2.5 rounded-2xl border text-center transition cursor-pointer ${
                       cardShape === 'soft'
                         ? 'bg-blue-50 border-blue-600 text-blue-950 font-bold ring-2 ring-blue-500/20'
@@ -721,10 +791,7 @@ export default function Settings({
                   {/* Sharp */}
                   <button
                     type="button"
-                    onClick={() => {
-                      soundManager.playScanBeep();
-                      setCardShape('sharp');
-                    }}
+                    onClick={() => updateCardShapeInstantly('sharp')}
                     className={`p-2.5 rounded-none border text-center transition cursor-pointer ${
                       cardShape === 'sharp'
                         ? 'bg-blue-50 border-blue-600 text-blue-950 font-bold ring-2 ring-blue-500/20'
@@ -738,10 +805,7 @@ export default function Settings({
                   {/* Glassmorphism */}
                   <button
                     type="button"
-                    onClick={() => {
-                      soundManager.playScanBeep();
-                      setCardShape('glass');
-                    }}
+                    onClick={() => updateCardShapeInstantly('glass')}
                     className={`p-2.5 rounded-2xl border text-center transition cursor-pointer backdrop-blur-md ${
                       cardShape === 'glass'
                         ? 'bg-blue-50/80 border-blue-600 text-blue-950 font-bold ring-2 ring-blue-500/20 shadow-md'
@@ -767,10 +831,7 @@ export default function Settings({
                   {/* Comfortable */}
                   <button
                     type="button"
-                    onClick={() => {
-                      soundManager.playScanBeep();
-                      setDensity('comfortable');
-                    }}
+                    onClick={() => updateDensityInstantly('comfortable')}
                     className={`p-3 rounded-xl border text-right transition cursor-pointer flex items-center gap-3 ${
                       density === 'comfortable'
                         ? 'bg-emerald-50 border-emerald-600 text-emerald-950 font-bold ring-2 ring-emerald-500/20'
@@ -789,10 +850,7 @@ export default function Settings({
                   {/* Compact */}
                   <button
                     type="button"
-                    onClick={() => {
-                      soundManager.playScanBeep();
-                      setDensity('compact');
-                    }}
+                    onClick={() => updateDensityInstantly('compact')}
                     className={`p-3 rounded-xl border text-right transition cursor-pointer flex items-center gap-3 ${
                       density === 'compact'
                         ? 'bg-emerald-50 border-emerald-600 text-emerald-950 font-bold ring-2 ring-emerald-500/20'
