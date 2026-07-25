@@ -10,6 +10,7 @@ import { jsPDF } from 'jspdf';
 import { QRCodeSVG } from 'qrcode.react';
 import { Invoice, SystemSettings, Customer } from '../types';
 import { soundManager } from '../utils/sound';
+import { requestStoragePermissionOnDemand } from '../utils/androidPermissions';
 
 interface InvoiceModalProps {
   invoice: Invoice | null;
@@ -50,6 +51,7 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
 
   const handleBluetoothPrint = async () => {
     soundManager.playSuccessChime();
+    await requestStoragePermissionOnDemand();
     setIsBluetoothConnecting(true);
     try {
       if (typeof navigator !== 'undefined' && 'bluetooth' in navigator) {
@@ -76,6 +78,7 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
   const handleExportPDF = async () => {
     if (isExportingPDF) return;
     soundManager.playSuccessChime();
+    await requestStoragePermissionOnDemand();
     setIsExportingPDF(true);
 
     try {

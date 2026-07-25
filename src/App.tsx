@@ -61,7 +61,6 @@ import PinCheckModal from './components/PinCheckModal';
 
 import { LicenseInfo, loadLicenseLocally, saveLicenseLocally } from './utils/licensing';
 import { findLicenseByHwid } from './utils/firebase';
-import { requestAndroidStartupPermissions } from './utils/androidPermissions';
 import { 
   saveStoreDocument, 
   deleteStoreDocument, 
@@ -299,10 +298,42 @@ export default function App() {
     };
     saveLicenseLocally(updated);
     setLicense(updated);
-    localStorage.removeItem('smart_accounting_license_v1');
-    localStorage.removeItem('smart_accounting_license');
-    localStorage.removeItem('smart_accounting_user');
-    localStorage.removeItem('smart_accounting_token');
+
+    // Complete purge of legacy licenses, user tokens, Google account linkages & sessions
+    const keysToRemove = [
+      'smart_accounting_license_v1',
+      'smart_accounting_license',
+      'smart_accounting_user',
+      'smart_accounting_token',
+      'google_account_token',
+      'google_user_account',
+      'google_auth_token',
+      'google_oauth_token',
+      'google_id_token',
+      'google_access_token',
+      'sond_google_account',
+      'sond_user_session',
+      'firebase:authUser',
+      'gdrive_backup_token'
+    ];
+
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+
+    // Remove any additional Google or OAuth keys from localStorage
+    try {
+      Object.keys(localStorage).forEach(key => {
+        if (key.toLowerCase().includes('google') || key.toLowerCase().includes('firebase:auth') || key.toLowerCase().includes('oauth')) {
+          localStorage.removeItem(key);
+        }
+      });
+    } catch (e) {
+      console.warn('LocalStorage purge error:', e);
+    }
+
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.clear();
+    }
+
     setActiveTab('dashboard');
   };
 

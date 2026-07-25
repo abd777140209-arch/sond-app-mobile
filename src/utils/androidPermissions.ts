@@ -42,6 +42,25 @@ export async function requestCameraPermissionOnDemand(): Promise<boolean> {
 }
 
 /**
+ * Requests Android Storage/Media permissions ONLY on user action (e.g. exporting PDF, printing, uploading attachment)
+ */
+export async function requestStoragePermissionOnDemand(): Promise<boolean> {
+  if (typeof window !== 'undefined' && (window as any).AndroidInterface?.requestPermissions === 'function') {
+    try {
+      (window as any).AndroidInterface.requestPermissions([
+        'android.permission.READ_EXTERNAL_STORAGE',
+        'android.permission.WRITE_EXTERNAL_STORAGE',
+        'android.permission.READ_MEDIA_IMAGES'
+      ]);
+      return true;
+    } catch (e) {
+      console.warn('Android Native Storage Bridge warning:', e);
+    }
+  }
+  return true;
+}
+
+/**
  * Passive startup check - does NOT pop up permission dialogs automatically on boot.
  */
 export async function requestAndroidStartupPermissions(): Promise<AndroidPermissionStatus> {
