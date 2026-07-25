@@ -2,27 +2,24 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- ====================================================================== -->
-    <!-- الأذونات المعتمدة لنظام أندرويد (Android APK & Mobile Webview)           -->
+    <!-- الأذونات المعتمدة لنظام أندرويد (تم حذف الإشعارات لمنع الطلب الآلي)    -->
     <!-- ====================================================================== -->
 
-    <!-- 1. إذن الإشعارات (Android 13+ / API 33) -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <!-- 2. إذن الكاميرا (لقراءة وقراءة الباركوود وإدخال المنتجات) -->
+    <!-- 1. إذن الكاميرا (تُطلب فقط عند تشغيل الباركود) -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
-    <!-- 3. إذن الاتصال بالإنترنت والشبكة (للمزامنة السحابية وبوابة المطور) -->
+    <!-- 2. إذن الاتصال بالإنترنت والشبكة (للمزامنة السحابية) -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- 4. إذن التخزين الخارجي (لحفظ وتصدير ملفات النسخ الاحتياطي والفواتير) -->
+    <!-- 3. إذن التخزين الخارجي (لتصدير الفواتير والنسخ الاحتياطي) -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 
-    <!-- 5. إذن الاهتزاز والتنبيهات الصوتية عند إجراء عمليات البيع أوالصيانة -->
+    <!-- 4. إذن الاهتزاز عند مسح الباركود -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
