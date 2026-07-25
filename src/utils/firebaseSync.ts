@@ -10,7 +10,7 @@ import {
   setDoc, 
   deleteDoc 
 } from 'firebase/firestore';
-import { getFirestoreDb, handleFirestoreError, OperationType } from './firebase';
+import { getFirestoreDb, handleFirestoreError, OperationType, withTimeout } from './firebase';
 
 // Helper to save a single document in a subcollection under a store
 export async function saveStoreDocument(licenseKey: string, collectionName: string, docId: string, data: any): Promise<void> {
@@ -18,7 +18,7 @@ export async function saveStoreDocument(licenseKey: string, collectionName: stri
   if (!db) return;
   const path = `stores/${licenseKey}/${collectionName}/${docId}`;
   try {
-    await setDoc(doc(db, 'stores', licenseKey, collectionName, docId), data);
+    await withTimeout(setDoc(doc(db, 'stores', licenseKey, collectionName, docId), data), 1500);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
@@ -30,7 +30,7 @@ export async function deleteStoreDocument(licenseKey: string, collectionName: st
   if (!db) return;
   const path = `stores/${licenseKey}/${collectionName}/${docId}`;
   try {
-    await deleteDoc(doc(db, 'stores', licenseKey, collectionName, docId));
+    await withTimeout(deleteDoc(doc(db, 'stores', licenseKey, collectionName, docId)), 1500);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
@@ -42,7 +42,7 @@ export async function saveStoreSettings(licenseKey: string, settings: any): Prom
   if (!db) return;
   const path = `stores/${licenseKey}/config/settings`;
   try {
-    await setDoc(doc(db, 'stores', licenseKey, 'config', 'settings'), settings);
+    await withTimeout(setDoc(doc(db, 'stores', licenseKey, 'config', 'settings'), settings), 1500);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }

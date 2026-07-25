@@ -78,6 +78,25 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   console.warn('Firestore Operation Warning: ', JSON.stringify(errInfo));
 }
 
+// Helper to race Firestore operations with a short timeout (1500ms) for instant offline fallback
+export async function withTimeout<T>(promise: Promise<T>, timeoutMs = 1500): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('FIRESTORE_TIMEOUT'));
+    }, timeoutMs);
+
+    promise
+      .then((res) => {
+        clearTimeout(timer);
+        resolve(res);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
 // Lazy initialization of Firestore with multi-tab offline persistence
 let firestoreDb: any = null;
 
@@ -103,11 +122,12 @@ export function getFirestoreDb() {
       const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
       
       try {
-        // Initialize Firestore with robust local offline persistence (Multi-Tab)
+        // Initialize Firestore with robust local offline persistence (Multi-Tab) & Long Polling detection
         firestoreDb = initializeFirestore(app, {
           localCache: persistentLocalCache({
             tabManager: persistentMultipleTabManager()
-          })
+          }),
+          experimentalAutoDetectLongPolling: true
         });
         console.log("Firestore offline persistence enabled successfully.");
       } catch (persistenceError) {
@@ -195,7 +215,7 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
     if (db) {
       try {
         const docRef = doc(db, 'licenses', key);
-        const docSnap = await getDoc(docRef);
+        const docSnap = await withTimeout(getDoc(docRef), 1500);
         if (docSnap.exists()) {
           const license = docSnap.data() as CloudLicense;
           if (license.status === 'suspended') {
@@ -248,7 +268,7 @@ export async function activateLicenseOnCloud(key: string, hwid: string, customer
     if (db) {
       try {
         const docRef = doc(db, 'licenses', key);
-        const docSnap = await getDoc(docRef);
+        const docSnap = await withTimeout(getDoc(docRef), 1500);
         if (docSnap.exists()) {
           const license = docSnap.data() as CloudLicense;
           if (license.status === 'suspended') {
@@ -265,7 +285,7 @@ export async function activateLicenseOnCloud(key: string, hwid: string, customer
             customerName: customerName || license.customerName,
             phone: phone || license.phone
           };
-          await setDoc(docRef, updatedLicense);
+          await withTimeout(setDoc(docRef, updatedLicense), 1500);
           return { success: true, message: 'ACTIVATED_SUCCESSFULLY' };
         }
       } catch (cloudErr) {
@@ -312,7 +332,7 @@ export async function createLicenseOnCloud(key: string, license: CloudLicense): 
     const db = getFirestoreDb();
     if (db) {
       try {
-        await setDoc(doc(db, 'licenses', key), license);
+        await withTimeout(setDoc(doc(db, 'licenses', key), license), 1500);
         return true;
       } catch (cloudErr) {
         console.warn('Firestore setDoc offline or error, saving to local DB:', cloudErr);
@@ -335,7 +355,7 @@ export async function getAllLicensesFromCloud(): Promise<CloudLicense[]> {
     const db = getFirestoreDb();
     if (db) {
       try {
-        const querySnapshot = await getDocs(collection(db, 'licenses'));
+        const querySnapshot = await withTimeout(getDocs(collection(db, 'licenses')), 1500);
         const licenses: CloudLicense[] = [];
         querySnapshot.forEach((doc) => {
           licenses.push(doc.data() as CloudLicense);
@@ -363,7 +383,7 @@ export async function deleteLicenseFromCloud(key: string): Promise<boolean> {
     const db = getFirestoreDb();
     if (db) {
       try {
-        await deleteDoc(doc(db, 'licenses', key));
+        await withTimeout(deleteDoc(doc(db, 'licenses', key)), 1500);
         return true;
       } catch (cloudErr) {
         console.warn('Firestore deleteDoc offline or error, deleting from local DB:', cloudErr);
@@ -387,10 +407,10 @@ export async function updateLicenseHwidOnCloud(key: string, newHwid: string): Pr
     if (db) {
       try {
         const docRef = doc(db, 'licenses', key);
-        const docSnap = await getDoc(docRef);
+        const docSnap = await withTimeout(getDoc(docRef), 1500);
         if (docSnap.exists()) {
           const current = docSnap.data() as CloudLicense;
-          await setDoc(docRef, { ...current, hwid: newHwid.trim() });
+          await withTimeout(setDoc(docRef, { ...current, hwid: newHwid.trim() }), 1500);
           return true;
         }
       } catch (cloudErr) {
@@ -417,7 +437,7 @@ export async function findLicenseByHwid(hwid: string): Promise<CloudLicense | nu
     const db = getFirestoreDb();
     if (db) {
       try {
-        const querySnapshot = await getDocs(collection(db, 'licenses'));
+        const querySnapshot = await withTimeout(getDocs(collection(db, 'licenses')), 1500);
         let matched: CloudLicense | null = null;
         querySnapshot.forEach((doc) => {
           const data = doc.data() as CloudLicense;
@@ -465,9 +485,9 @@ export async function resetCloudData(): Promise<{ success: boolean; deletedCount
       for (const colName of collectionsToReset) {
         try {
           const colRef = collection(db, colName);
-          const snap = await getDocs(colRef);
+          const snap = await withTimeout(getDocs(colRef), 1500);
           for (const docSnap of snap.docs) {
-            await deleteDoc(doc(db, colName, docSnap.id));
+            await withTimeout(deleteDoc(doc(db, colName, docSnap.id)), 1500);
             count++;
           }
         } catch (e) {
@@ -477,15 +497,15 @@ export async function resetCloudData(): Promise<{ success: boolean; deletedCount
 
       // 2. Reset subcollections under stores/{storeId}/
       try {
-        const storesSnap = await getDocs(collection(db, 'stores'));
+        const storesSnap = await withTimeout(getDocs(collection(db, 'stores')), 1500);
         for (const storeDoc of storesSnap.docs) {
           const storeId = storeDoc.id;
           for (const colName of collectionsToReset) {
             try {
               const subColRef = collection(db, 'stores', storeId, colName);
-              const subSnap = await getDocs(subColRef);
+              const subSnap = await withTimeout(getDocs(subColRef), 1500);
               for (const docSnap of subSnap.docs) {
-                await deleteDoc(doc(db, 'stores', storeId, colName, docSnap.id));
+                await withTimeout(deleteDoc(doc(db, 'stores', storeId, colName, docSnap.id)), 1500);
                 count++;
               }
             } catch (e) {
