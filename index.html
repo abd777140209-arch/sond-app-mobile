@@ -6,9 +6,9 @@
     <title>نظام سند المحاسبي الذكي</title>
     
     <!-- PWA Manifest & Icons -->
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="apple-touch-icon" href="/pwa-192.png" />
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+    <link rel="apple-touch-icon" href="./pwa-192.png" />
     
     <!-- PWA Meta Tags -->
     <meta name="theme-color" content="#ffffff" />
@@ -23,13 +23,13 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" src="./src/main.tsx"></script>
     
     <!-- Register Service Worker for PWA & PWABuilder Readiness -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
+          navigator.serviceWorker.register('./sw.js')
             .then((registration) => {
               console.log('سُند PWA Service Worker Registered:', registration.scope);
             })
