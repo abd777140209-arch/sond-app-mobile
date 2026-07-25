@@ -5,7 +5,11 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    base: './', // 👈 أضفنا هذا السطر ليعتمد المسارات النسبية للـ Android WebView
+    base: './', // يعتمد المسارات النسبية للـ Android WebView
+    build: {
+      target: 'es2015', // 👈 أضفنا هذا السطر لضمان توافق أكواد الجافاسكربت داخل WebView الأندرويد
+      outDir: 'dist',
+    },
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
