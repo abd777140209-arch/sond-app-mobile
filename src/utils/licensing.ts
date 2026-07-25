@@ -43,32 +43,65 @@ const deobfuscate = (obfuscated: string): string => {
   }
 };
 
-// Generate deterministic Hardware ID (HWID) based on browser features to bind software
+// Generate deterministic Hardware ID (HWID) based on native Android ID or environment features to bind software
 export const generateHWID = (): string => {
-  let existing = localStorage.getItem('smart_accounting_hwid');
-  if (existing) return existing;
+  try {
+    const existing = localStorage.getItem('smart_accounting_hwid');
+    if (existing && existing.trim() !== '' && existing !== 'null' && existing !== 'undefined') {
+      return existing.trim();
+    }
 
-  const userAgent = navigator.userAgent;
-  const screenWidth = window.screen.width;
-  const screenHeight = window.screen.height;
-  const cores = navigator.hardwareConcurrency || 4;
-  const language = navigator.language || 'en';
-  
-  // Create a combined string
-  const combined = `${userAgent}-${screenWidth}x${screenHeight}-${cores}-${language}`;
-  
-  // Calculate a simple hash
-  let hash = 0;
-  for (let i = 0; i < combined.length; i++) {
-    const char = combined.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash |= 0; // Convert to 32bit integer
+    // Check if Android Native Interface is available in WebView
+    if (typeof window !== 'undefined' && (window as any).AndroidInterface?.getDeviceId) {
+      try {
+        const nativeDeviceId = (window as any).AndroidInterface.getDeviceId();
+        if (nativeDeviceId && typeof nativeDeviceId === 'string' && nativeDeviceId.trim().length > 0 && nativeDeviceId !== 'null') {
+          const hwid = `MHT-HWID-${nativeDeviceId.trim().toUpperCase()}`;
+          localStorage.setItem('smart_accounting_hwid', hwid);
+          return hwid;
+        }
+      } catch (e) {
+        console.warn('Native Android getDeviceId call failed:', e);
+      }
+    }
+
+    // Fallback fingerprint generation based on environment features
+    const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+    const screenWidth = typeof window !== 'undefined' && window.screen ? window.screen.width || 1080 : 1080;
+    const screenHeight = typeof window !== 'undefined' && window.screen ? window.screen.height || 1920 : 1920;
+    const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4;
+    const language = typeof navigator !== 'undefined' ? navigator.language || 'ar' : 'ar';
+
+    let deviceSeed = localStorage.getItem('smart_accounting_device_seed');
+    if (!deviceSeed) {
+      deviceSeed = `${Date.now()}-${Math.floor(100000 + Math.random() * 900000)}`;
+      localStorage.setItem('smart_accounting_device_seed', deviceSeed);
+    }
+
+    const combined = `${userAgent}-${screenWidth}x${screenHeight}-${cores}-${language}-${deviceSeed}`;
+    
+    let hash = 0;
+    for (let i = 0; i < combined.length; i++) {
+      const char = combined.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash |= 0;
+    }
+
+    const hwid = `MHT-HWID-${Math.abs(hash).toString(16).toUpperCase()}`;
+    localStorage.setItem('smart_accounting_hwid', hwid);
+    return hwid;
+  } catch (err) {
+    console.error('HWID generation exception:', err);
+    const fallback = `MHT-HWID-DEV-${Math.floor(100000 + Math.random() * 900000)}`;
+    try {
+      localStorage.setItem('smart_accounting_hwid', fallback);
+    } catch {}
+    return fallback;
   }
-  
-  const rawHwid = `MHT-HWID-${Math.abs(hash).toString(16).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
-  localStorage.setItem('smart_accounting_hwid', rawHwid);
-  return rawHwid;
 };
+
+export const getHWID = generateHWID;
+export const getDeviceId = generateHWID;
 
 // Generate cryptographically looking license key (useful for Abdulmajeed's admin panel)
 export const generateLicenseKey = (type: 'monthly' | 'yearly' | 'lifetime' | 'trial'): string => {

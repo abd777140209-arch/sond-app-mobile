@@ -19,7 +19,7 @@ import {
   Fingerprint
 } from 'lucide-react';
 import { soundManager } from '../utils/sound';
-import { LicenseInfo, saveLicenseLocally } from '../utils/licensing';
+import { LicenseInfo, saveLicenseLocally, generateHWID } from '../utils/licensing';
 import { isFirebaseConfigured, checkLicenseOnCloud, activateLicenseOnCloud, isUnboundHwid } from '../utils/firebase';
 
 interface SaaSActivatorProps {
@@ -52,6 +52,18 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
     setTimeout(() => setCopiedHwid(false), 2000);
   };
 
+  const showToastOrAlert = (msg: string) => {
+    if (typeof window !== 'undefined' && (window as any).AndroidInterface?.showToast) {
+      try {
+        (window as any).AndroidInterface.showToast(msg);
+      } catch {
+        alert(msg);
+      }
+    } else if (typeof window !== 'undefined') {
+      alert(msg);
+    }
+  };
+
   // Submit Activation Request
   const handleActivateLicense = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,13 +75,17 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
 
     if (!phone) {
       soundManager.playWarningBeep();
-      setStatusMessage({ text: '⚠️ الرجاء إدخال رقم الهاتف أولاً للتأكيد والتوثيق!', type: 'error' });
+      const warningMsg = '⚠️ الرجاء إدخال رقم الهاتف أولاً للتأكيد والتوثيق!';
+      setStatusMessage({ text: warningMsg, type: 'error' });
+      showToastOrAlert(warningMsg);
       return;
     }
 
     if (!key) {
       soundManager.playWarningBeep();
-      setStatusMessage({ text: '⚠️ الرجاء إدخال رمز التفعيل (Activation Code / OTP) أولاً!', type: 'error' });
+      const warningMsg = '⚠️ الرجاء إدخال رمز التفعيل (Activation Code) أولاً!';
+      setStatusMessage({ text: warningMsg, type: 'error' });
+      showToastOrAlert(warningMsg);
       return;
     }
 
@@ -85,111 +101,65 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
           localStorage.setItem('sond_biometrics_enabled', 'false');
         }
 
-        const response = await checkLicenseOnCloud(key, license.hwid);
-        
-        if (response.success && response.data) {
-          if (!response.data.hwid || isUnboundHwid(response.data.hwid)) {
-            const bindResult = await activateLicenseOnCloud(key, license.hwid, storeName, phone);
-            if (!bindResult.success) {
-              soundManager.playWarningBeep();
-              setStatusMessage({ text: '❌ فشل ربط مفتاح التفعيل بقاعدة البيانات السحابية. يرجى المحاولة لاحقاً.', type: 'error' });
-              setLoading(false);
-              return;
-            }
-          }
+        const currentHwid = generateHWID();
 
+        // Attempt direct cloud activation and device binding
+        const result = await activateLicenseOnCloud(key, currentHwid, storeName, phone);
+        
+        if (result.success && result.data) {
           const activeLic: LicenseInfo = {
             licenseKey: key,
             status: 'active',
             activatedAt: new Date().toISOString(),
-            expiresAt: response.data.expiresAt,
-            hwid: license.hwid,
-            subscriptionType: response.data.type,
+            expiresAt: result.data.expiresAt,
+            hwid: currentHwid,
+            subscriptionType: result.data.type,
             customerName: storeName,
             phone: phone
           };
           saveLicenseLocally(activeLic);
           setLicense(activeLic);
           soundManager.playSuccessChime();
-          setStatusMessage({ text: `🎉 تم التوثيق بنجاح برقم الهاتف (${phone}) لنشاطك التجاري (${storeName})`, type: 'success' });
+          const succMsg = `🎉 تم تفعيل وتوثيق الترخيص وربط جهازك الجديد بنجاح برقم الهاتف (${phone})`;
+          setStatusMessage({ text: succMsg, type: 'success' });
+          showToastOrAlert(succMsg);
           onActivationSuccess(activeLic);
         } else {
           soundManager.playWarningBeep();
-          if (response.message === 'KEY_NOT_FOUND') {
-            const activationResult = await activateLicenseOnCloud(key, license.hwid, storeName, phone);
-            if (activationResult.success) {
-              const recheck = await checkLicenseOnCloud(key, license.hwid);
-              if (recheck.success && recheck.data) {
-                const activeLic: LicenseInfo = {
-                  licenseKey: key,
-                  status: 'active',
-                  activatedAt: new Date().toISOString(),
-                  expiresAt: recheck.data.expiresAt,
-                  hwid: license.hwid,
-                  subscriptionType: recheck.data.type,
-                  customerName: storeName,
-                  phone: phone
-                };
-                saveLicenseLocally(activeLic);
-                setLicense(activeLic);
-                soundManager.playSuccessChime();
-                setStatusMessage({ text: `🎉 تم التنشيط والربط الفوري برقم الهاتف (${phone})!`, type: 'success' });
-                onActivationSuccess(activeLic);
-                return;
-              }
-            }
+          let failMsg = '';
+
+          switch (result.message) {
+            case 'KEY_SUSPENDED':
+              failMsg = '❌ تم إيقاف وتعطيل هذا الترخيص من قبل إدارة النظام!';
+              break;
+            case 'KEY_EXPIRED':
+              failMsg = '❌ انتهت صلاحية كود التفعيل المنسوب لهذا الترخيص!';
+              break;
+            case 'KEY_NOT_FOUND':
+              failMsg = '❌ كود التفعيل غير موجود بالسيرفر أو غير صحيح. تأكد من إدخال الرمز الدقيق المعتمد.';
+              break;
+            case 'MAX_DEVICES_REACHED':
+              failMsg = '❌ تم استهلاك الحد الأقصى لعدد الأجهزة المسجلة لهذا الترخيص!';
+              break;
+            case 'SERVER_ERROR':
+              failMsg = '❌ فشل الاتصال بالسيرفر السحابي. يرجى التأكد من توفر الاتصال بالإنترنت والمحاولة مجدداً.';
+              break;
+            default:
+              failMsg = `❌ فشلت عملية التفعيل: ${result.message || 'كود غير مقبول'}`;
           }
 
-          // Offline fallback validation
-          if (key.length >= 8) {
-            const upperKey = key.toUpperCase();
-            let subType: 'monthly' | 'yearly' | 'lifetime' | 'trial' = 'monthly';
-            let expDate = new Date();
-
-            if (upperKey.startsWith('MHTM')) {
-              subType = 'monthly';
-              expDate.setMonth(expDate.getMonth() + 1);
-            } else if (upperKey.startsWith('MHTY')) {
-              subType = 'yearly';
-              expDate.setFullYear(expDate.getFullYear() + 1);
-            } else if (upperKey.startsWith('MHTL')) {
-              subType = 'lifetime';
-              expDate.setFullYear(expDate.getFullYear() + 100);
-            } else if (upperKey.startsWith('MHTT')) {
-              subType = 'trial';
-              expDate.setDate(expDate.getDate() + 7);
-            } else {
-              // Default to 1 month for standard activation key
-              subType = 'monthly';
-              expDate.setMonth(expDate.getMonth() + 1);
-            }
-
-            const activeLic: LicenseInfo = {
-              licenseKey: key,
-              status: 'active',
-              activatedAt: new Date().toISOString(),
-              expiresAt: expDate.toISOString(),
-              hwid: license.hwid,
-              subscriptionType: subType,
-              customerName: storeName,
-              phone: phone
-            };
-            saveLicenseLocally(activeLic);
-            setLicense(activeLic);
-            soundManager.playSuccessChime();
-            setStatusMessage({ text: `🎉 تم قبول التفعيل المحلي برقم الهاتف (${phone})`, type: 'success' });
-            onActivationSuccess(activeLic);
-          } else {
-            setStatusMessage({ text: '❌ رمز التفعيل خاطئ أو غير مدفوع! تأكد من الرقم ورمز SMS/OTP الصادر من المبرمج.', type: 'error' });
-          }
+          setStatusMessage({ text: failMsg, type: 'error' });
+          showToastOrAlert(failMsg);
         }
       } catch (err: any) {
         soundManager.playWarningBeep();
-        setStatusMessage({ text: `❌ حدث خطأ أثناء التفعيل: ${err.message || 'خطأ غير معروف'}`, type: 'error' });
+        const errStr = `❌ حدث خطأ أثناء التفعيل: ${err.message || 'فشل الاتصال'}`;
+        setStatusMessage({ text: errStr, type: 'error' });
+        showToastOrAlert(errStr);
       } finally {
         setLoading(false);
       }
-    }, 600);
+    }, 400);
   };
 
   return (

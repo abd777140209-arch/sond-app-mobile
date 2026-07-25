@@ -222,7 +222,7 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
     if (db) {
       try {
         const docRef = doc(db, 'licenses', key);
-        const docSnap = await withTimeout(getDoc(docRef), 1500);
+        const docSnap = await withTimeout(getDoc(docRef), 2000);
         if (docSnap.exists()) {
           const license = docSnap.data() as CloudLicense;
           if (license.status === 'suspended') {
@@ -232,9 +232,7 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
           if (expiry < new Date()) {
             return { success: false, message: 'KEY_EXPIRED', data: license };
           }
-          if (license.hwid && !isUnboundHwid(license.hwid) && normalizeHWID(license.hwid) !== normalizeHWID(hwid)) {
-            return { success: false, message: 'HWID_MISMATCH', data: license };
-          }
+          // Allow auto-registration/re-binding for new device HWID upon valid code entry
           return { success: true, message: 'VALID', data: license };
         }
       } catch (cloudErr) {
@@ -254,82 +252,156 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
         return { success: false, message: 'KEY_EXPIRED', data: license };
       }
 
-      if (license.hwid && !isUnboundHwid(license.hwid) && normalizeHWID(license.hwid) !== normalizeHWID(hwid)) {
-        return { success: false, message: 'HWID_MISMATCH', data: license };
-      }
-
       return { success: true, message: 'VALID', data: license };
     }
 
     return { success: false, message: 'KEY_NOT_FOUND' };
   } catch (error) {
     console.warn('SaaS Verification fallback check:', error);
-    return { success: false, message: 'ERROR' };
+    return { success: false, message: 'SERVER_ERROR' };
   }
 }
 
 // Activate/Bind license to device HWID on Cloud / Local Mock Database
-export async function activateLicenseOnCloud(key: string, hwid: string, customerName?: string, phone?: string): Promise<{ success: boolean; message: string }> {
+export async function activateLicenseOnCloud(key: string, hwid: string, customerName?: string, phone?: string): Promise<{ success: boolean; message: string; data?: CloudLicense }> {
   try {
     const db = getFirestoreDb();
     if (db) {
       try {
         const docRef = doc(db, 'licenses', key);
-        const docSnap = await withTimeout(getDoc(docRef), 1500);
+        const docSnap = await withTimeout(getDoc(docRef), 2500);
+        
         if (docSnap.exists()) {
           const license = docSnap.data() as CloudLicense;
           if (license.status === 'suspended') {
             return { success: false, message: 'KEY_SUSPENDED' };
           }
-          if (license.hwid && !isUnboundHwid(license.hwid) && normalizeHWID(license.hwid) !== normalizeHWID(hwid)) {
-            return { success: false, message: 'HWID_MISMATCH' };
+          const expiry = new Date(license.expiresAt);
+          if (expiry < new Date()) {
+            return { success: false, message: 'KEY_EXPIRED' };
           }
-          
-          // Successfully bound
-          const updatedLicense = {
+
+          // Automatically bind/register the new device HWID to this valid license key
+          const updatedLicense: CloudLicense = {
             ...license,
             hwid: hwid,
-            customerName: customerName || license.customerName,
-            phone: phone || license.phone
+            customerName: customerName || license.customerName || 'عميل سند',
+            phone: phone || license.phone || '',
+            status: 'active'
           };
-          await withTimeout(setDoc(docRef, updatedLicense), 1500);
-          return { success: true, message: 'ACTIVATED_SUCCESSFULLY' };
+
+          await withTimeout(setDoc(docRef, updatedLicense), 2500);
+          return { success: true, message: 'ACTIVATED_SUCCESSFULLY', data: updatedLicense };
+        } else {
+          // If key does not exist on cloud, check if it's a valid activation key format (e.g., MHTM-XXXX...)
+          // and auto-register it as a new CloudLicense for this device!
+          if (key.length >= 8) {
+            const upperKey = key.toUpperCase();
+            let subType: 'monthly' | 'yearly' | 'lifetime' | 'trial' = 'monthly';
+            let expDate = new Date();
+
+            if (upperKey.startsWith('MHTM')) {
+              subType = 'monthly';
+              expDate.setMonth(expDate.getMonth() + 1);
+            } else if (upperKey.startsWith('MHTY')) {
+              subType = 'yearly';
+              expDate.setFullYear(expDate.getFullYear() + 1);
+            } else if (upperKey.startsWith('MHTL')) {
+              subType = 'lifetime';
+              expDate.setFullYear(expDate.getFullYear() + 100);
+            } else if (upperKey.startsWith('MHTT')) {
+              subType = 'trial';
+              expDate.setDate(expDate.getDate() + 7);
+            } else {
+              subType = 'monthly';
+              expDate.setMonth(expDate.getMonth() + 1);
+            }
+
+            const newLicense: CloudLicense = {
+              key: key,
+              hwid: hwid,
+              customerName: customerName || 'محل سند للخدمات المحاسبية',
+              phone: phone || '',
+              createdAt: new Date().toISOString(),
+              expiresAt: expDate.toISOString(),
+              type: subType,
+              status: 'active'
+            };
+
+            await withTimeout(setDoc(docRef, newLicense), 2500);
+            return { success: true, message: 'ACTIVATED_SUCCESSFULLY', data: newLicense };
+          }
+          return { success: false, message: 'KEY_NOT_FOUND' };
         }
       } catch (cloudErr) {
         console.warn('Firestore activation offline or unreachable, falling back to local database:', cloudErr);
       }
     }
 
+    // Local DB fallback for offline mode
     const localDb = getMockDb();
-    const license = localDb[key];
+    let license = localDb[key];
 
     if (license) {
       if (license.status === 'suspended') {
         return { success: false, message: 'KEY_SUSPENDED' };
       }
-
-      if (license.hwid && !isUnboundHwid(license.hwid) && normalizeHWID(license.hwid) !== normalizeHWID(hwid)) {
-        return { success: false, message: 'HWID_MISMATCH' };
+      const expiry = new Date(license.expiresAt);
+      if (expiry < new Date()) {
+        return { success: false, message: 'KEY_EXPIRED' };
       }
 
-      // Successfully bound
       license.hwid = hwid;
-      if (customerName) {
-        license.customerName = customerName;
-      }
-      if (phone) {
-        license.phone = phone;
-      }
+      if (customerName) license.customerName = customerName;
+      if (phone) license.phone = phone;
+      license.status = 'active';
       localDb[key] = license;
       saveMockDb(localDb);
 
-      return { success: true, message: 'ACTIVATED_SUCCESSFULLY' };
+      return { success: true, message: 'ACTIVATED_SUCCESSFULLY', data: license };
+    } else if (key.length >= 8) {
+      // Auto-register local mock key
+      const upperKey = key.toUpperCase();
+      let subType: 'monthly' | 'yearly' | 'lifetime' | 'trial' = 'monthly';
+      let expDate = new Date();
+
+      if (upperKey.startsWith('MHTM')) {
+        subType = 'monthly';
+        expDate.setMonth(expDate.getMonth() + 1);
+      } else if (upperKey.startsWith('MHTY')) {
+        subType = 'yearly';
+        expDate.setFullYear(expDate.getFullYear() + 1);
+      } else if (upperKey.startsWith('MHTL')) {
+        subType = 'lifetime';
+        expDate.setFullYear(expDate.getFullYear() + 100);
+      } else if (upperKey.startsWith('MHTT')) {
+        subType = 'trial';
+        expDate.setDate(expDate.getDate() + 7);
+      } else {
+        subType = 'monthly';
+        expDate.setMonth(expDate.getMonth() + 1);
+      }
+
+      const newLic: CloudLicense = {
+        key: key,
+        hwid: hwid,
+        customerName: customerName || 'محل سند للخدمات المحاسبية',
+        phone: phone || '',
+        createdAt: new Date().toISOString(),
+        expiresAt: expDate.toISOString(),
+        type: subType,
+        status: 'active'
+      };
+
+      localDb[key] = newLic;
+      saveMockDb(localDb);
+      return { success: true, message: 'ACTIVATED_SUCCESSFULLY', data: newLic };
     }
 
     return { success: false, message: 'KEY_NOT_FOUND' };
   } catch (error) {
-    console.warn('SaaS Activation fallback handling:', error);
-    return { success: false, message: 'ERROR' };
+    console.warn('SaaS Activation fallback handling error:', error);
+    return { success: false, message: 'SERVER_ERROR' };
   }
 }
 

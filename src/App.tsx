@@ -60,7 +60,7 @@ import DeveloperPortalModal from './components/DeveloperPortalModal';
 import PinCheckModal from './components/PinCheckModal';
 
 import { LicenseInfo, loadLicenseLocally, saveLicenseLocally } from './utils/licensing';
-import { findLicenseByHwid } from './utils/firebase';
+import { findLicenseByHwid, checkLicenseOnCloud } from './utils/firebase';
 import { 
   saveStoreDocument, 
   deleteStoreDocument, 
@@ -337,7 +337,7 @@ export default function App() {
     setActiveTab('dashboard');
   };
 
-  // Real-time silent cloud license activation/blocking check based on HWID
+  // Real-time silent cloud license activation/blocking check
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
@@ -347,64 +347,79 @@ export default function App() {
         return;
       }
       if (!license.hwid) return;
+
       try {
-        const cloudLic = await findLicenseByHwid(license.hwid);
-        if (cloudLic) {
-          const expiryDate = new Date(cloudLic.expiresAt);
-          const isExpired = expiryDate < new Date();
+        if (license.licenseKey) {
+          const res = await checkLicenseOnCloud(license.licenseKey, license.hwid);
+          if (res.success && res.data) {
+            const expiryDate = new Date(res.data.expiresAt);
+            const isExpired = expiryDate < new Date();
 
-          if (cloudLic.status === 'suspended') {
+            if (res.data.status === 'suspended') {
+              const updated: LicenseInfo = {
+                licenseKey: res.data.key,
+                status: 'unlicensed',
+                activatedAt: license.activatedAt || new Date().toISOString(),
+                expiresAt: res.data.expiresAt,
+                hwid: license.hwid,
+                subscriptionType: res.data.type,
+                customerName: res.data.customerName
+              };
+              saveLicenseLocally(updated);
+              setLicense(updated);
+              return;
+            }
+
+            if (isExpired) {
+              const updated: LicenseInfo = {
+                licenseKey: res.data.key,
+                status: 'expired',
+                activatedAt: license.activatedAt || new Date().toISOString(),
+                expiresAt: res.data.expiresAt,
+                hwid: license.hwid,
+                subscriptionType: res.data.type,
+                customerName: res.data.customerName
+              };
+              saveLicenseLocally(updated);
+              setLicense(updated);
+              return;
+            }
+
+            // Update license details safely
             const updated: LicenseInfo = {
-              licenseKey: cloudLic.key,
+              licenseKey: res.data.key,
+              status: res.data.type === 'trial' ? 'trial' : 'active',
+              activatedAt: license.activatedAt || new Date().toISOString(),
+              expiresAt: res.data.expiresAt,
+              hwid: license.hwid,
+              subscriptionType: res.data.type,
+              customerName: res.data.customerName || license.customerName,
+              phone: res.data.phone || license.phone
+            };
+
+            if (license.status !== 'active' && license.status !== 'trial') {
+              soundManager.playSuccessChime();
+            }
+
+            saveLicenseLocally(updated);
+            setLicense(updated);
+          } else if (res.message === 'KEY_SUSPENDED') {
+            const updated: LicenseInfo = {
+              ...license,
               status: 'unlicensed',
-              activatedAt: license.activatedAt || new Date().toISOString(),
-              expiresAt: cloudLic.expiresAt,
-              hwid: license.hwid,
-              subscriptionType: cloudLic.type,
-              customerName: cloudLic.customerName
+              licenseKey: ''
             };
             saveLicenseLocally(updated);
             setLicense(updated);
-            return;
-          }
-
-          if (isExpired) {
+          } else if (res.message === 'KEY_EXPIRED') {
             const updated: LicenseInfo = {
-              licenseKey: cloudLic.key,
-              status: 'expired',
-              activatedAt: license.activatedAt || new Date().toISOString(),
-              expiresAt: cloudLic.expiresAt,
-              hwid: license.hwid,
-              subscriptionType: cloudLic.type,
-              customerName: cloudLic.customerName
+              ...license,
+              status: 'expired'
             };
             saveLicenseLocally(updated);
             setLicense(updated);
-            return;
-          }
-
-          // Active cloud license found! Auto-activate or update local
-          const updated: LicenseInfo = {
-            licenseKey: cloudLic.key,
-            status: cloudLic.type === 'trial' ? 'trial' : 'active',
-            activatedAt: license.activatedAt || new Date().toISOString(),
-            expiresAt: cloudLic.expiresAt,
-            hwid: license.hwid,
-            subscriptionType: cloudLic.type,
-            customerName: cloudLic.customerName
-          };
-
-          // Only trigger chime if transitioned from inactive/unlicensed to active/trial
-          if (license.status !== 'active' && license.status !== 'trial') {
-            soundManager.playSuccessChime();
-          }
-
-          saveLicenseLocally(updated);
-          setLicense(updated);
-        } else {
-          // If no license matching the HWID exists on cloud, check if we currently have an active/trial state and revoke it instantly!
-          // This allows immediate blocking of devices when deleted from developer portal.
-          if (license.status === 'active' || license.status === 'trial') {
+          } else if (res.message === 'KEY_NOT_FOUND') {
+            // Key was deleted remotely from Cloud Admin
             const updated: LicenseInfo = {
               licenseKey: '',
               status: 'unlicensed',
@@ -417,9 +432,31 @@ export default function App() {
             saveLicenseLocally(updated);
             setLicense(updated);
           }
+          // Note: If SERVER_ERROR or offline, we preserve current local active license state!
+        } else {
+          // No license key locally: check if this HWID is registered on Cloud for auto-activation
+          const cloudLic = await findLicenseByHwid(license.hwid);
+          if (cloudLic && cloudLic.status === 'active') {
+            const expiryDate = new Date(cloudLic.expiresAt);
+            if (expiryDate >= new Date()) {
+              const updated: LicenseInfo = {
+                licenseKey: cloudLic.key,
+                status: cloudLic.type === 'trial' ? 'trial' : 'active',
+                activatedAt: new Date().toISOString(),
+                expiresAt: cloudLic.expiresAt,
+                hwid: license.hwid,
+                subscriptionType: cloudLic.type,
+                customerName: cloudLic.customerName,
+                phone: cloudLic.phone
+              };
+              soundManager.playSuccessChime();
+              saveLicenseLocally(updated);
+              setLicense(updated);
+            }
+          }
         }
       } catch (err) {
-        console.warn('Global silent check failed:', err);
+        console.warn('Global silent check error (retaining offline state):', err);
       }
     };
 
