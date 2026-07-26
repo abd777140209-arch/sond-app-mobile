@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { LicenseInfo, generateLicenseKey, getExpiryDate } from '../utils/licensing';
-import { isFirebaseConfigured, checkLicenseOnCloud, activateLicenseOnCloud, createLicenseOnCloud, CloudLicense, getAllLicensesFromCloud, deleteLicenseFromCloud, updateLicenseHwidOnCloud, resetCloudData, resetClientCloudData } from '../utils/firebase';
+import { isFirebaseConfigured, checkLicenseOnCloud, activateLicenseOnCloud, createLicenseOnCloud, CloudLicense, getAllLicensesFromCloud, deleteLicenseFromCloud, updateLicenseHwidOnCloud, updateLicenseHwidsOnCloud, getLicenseHwidSlots, resetCloudData, resetClientCloudData } from '../utils/firebase';
 
 interface DeveloperPortalModalProps {
   isOpen: boolean;
@@ -61,9 +61,10 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
   } | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' | null }>({ text: '', type: null });
 
-  // Update Device ID (HWID) modal state
+  // Update Device IDs (HWID 1 & HWID 2) modal state
   const [editingHwidLicense, setEditingHwidLicense] = useState<CloudLicense | null>(null);
-  const [newHwidInput, setNewHwidInput] = useState('');
+  const [hwid1Input, setHwid1Input] = useState('');
+  const [hwid2Input, setHwid2Input] = useState('');
   const [isSavingHwid, setIsSavingHwid] = useState(false);
 
   // Developer keys history list (Local database synced with LocalStorage/Cloud)
@@ -172,30 +173,35 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
     }
   };
 
-  // Developer action: Update License Device ID (HWID)
+  // Developer action: Update License Device IDs (HWID 1 & HWID 2)
   const handleUpdateHwid = async () => {
     if (!editingHwidLicense) return;
     setIsSavingHwid(true);
     try {
-      const success = await updateLicenseHwidOnCloud(editingHwidLicense.key, newHwidInput.trim());
+      const success = await updateLicenseHwidsOnCloud(
+        editingHwidLicense.key,
+        hwid1Input.trim(),
+        hwid2Input.trim()
+      );
       if (success) {
         soundManager.playSuccessChime();
         setStatusMessage({
-          text: `✓ تم تحديث معرف الجهاز (Device ID) بنجاح للعميل (${editingHwidLicense.customerName})! يمكن للعميل الآن تسجيل الدخول والتفعيل فوراً من جهازه الجديد.`,
+          text: `✓ تم تحديث وحفظ معرفات الأجهزة (HWID 1 & HWID 2) بنجاح بالسحابة للعميل (${editingHwidLicense.customerName})!`,
           type: 'success'
         });
         await handleFetchCloudLicenses();
       } else {
         soundManager.playWarningBeep();
-        setStatusMessage({ text: `❌ فشل تحديث معرف الجهاز.`, type: 'error' });
+        setStatusMessage({ text: `❌ فشل تحديث معرفات الأجهزة.`, type: 'error' });
       }
     } catch (e) {
       console.error(e);
-      setStatusMessage({ text: `❌ حدث خطأ أثناء تحديث معرف الجهاز.`, type: 'error' });
+      setStatusMessage({ text: `❌ حدث خطأ أثناء تحديث معرفات الأجهزة.`, type: 'error' });
     } finally {
       setIsSavingHwid(false);
       setEditingHwidLicense(null);
-      setNewHwidInput('');
+      setHwid1Input('');
+      setHwid2Input('');
     }
   };
 
@@ -674,6 +680,7 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                           </tr>
                         ) : (
                           Object.values(allLicenseKeys).map((lk: any) => {
+                            const { hwid1, hwid2 } = getLicenseHwidSlots(lk);
                             return (
                               <tr key={lk.key} className="hover:bg-slate-900/60 transition">
                                 <td className="p-3 text-white font-bold">{lk.customerName}</td>
@@ -688,13 +695,28 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                                 </td>
                                 <td className="p-3 text-yellow-400 font-bold font-mono select-all tracking-wider">{lk.key}</td>
                                 <td className="p-3">
-                                  {lk.hwid ? (
-                                    <span className="text-green-400 text-[10px] bg-green-950/40 px-2.5 py-1 rounded-full border border-green-500/10 font-mono inline-flex items-center gap-1">
-                                      <Laptop className="w-3 h-3 text-green-400" /> {lk.hwid}
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-500 text-[10px] bg-slate-900 px-2.5 py-1 rounded-full font-sans">⏳ غير مربوط بجهاز بعد</span>
-                                  )}
+                                  <div className="space-y-1 font-mono text-[10px]">
+                                    <div>
+                                      <span className="text-gray-400 text-[9px] mr-1">HWID 1:</span>
+                                      {hwid1 ? (
+                                        <span className="text-green-400 bg-green-950/40 px-2 py-0.5 rounded border border-green-500/20 inline-flex items-center gap-1">
+                                          <Laptop className="w-2.5 h-2.5 text-green-400" /> {hwid1}
+                                        </span>
+                                      ) : (
+                                        <span className="text-amber-400 bg-amber-950/30 px-2 py-0.5 rounded border border-amber-500/20">⏳ فارغ (متاح)</span>
+                                      )}
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-400 text-[9px] mr-1">HWID 2:</span>
+                                      {hwid2 ? (
+                                        <span className="text-green-400 bg-green-950/40 px-2 py-0.5 rounded border border-green-500/20 inline-flex items-center gap-1">
+                                          <Laptop className="w-2.5 h-2.5 text-green-400" /> {hwid2}
+                                        </span>
+                                      ) : (
+                                        <span className="text-amber-400 bg-amber-950/30 px-2 py-0.5 rounded border border-amber-500/20">⏳ فارغ (متاح)</span>
+                                      )}
+                                    </div>
+                                  </div>
                                 </td>
                                 <td className="p-3 text-gray-300">
                                   <span className="font-bold text-[10px] bg-slate-800 px-2 py-0.5 rounded mr-1">
@@ -707,14 +729,16 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                                     <button
                                       onClick={() => {
                                         soundManager.playSuccessChime();
+                                        const slots = getLicenseHwidSlots(lk);
                                         setEditingHwidLicense(lk);
-                                        setNewHwidInput(lk.hwid || '');
+                                        setHwid1Input(slots.hwid1 || '');
+                                        setHwid2Input(slots.hwid2 || '');
                                       }}
                                       className="px-2 py-1 rounded bg-blue-950/80 hover:bg-blue-900 border border-blue-500/40 text-blue-300 hover:text-white text-[10px] font-bold transition flex items-center gap-1 cursor-pointer shadow-sm"
-                                      title="تعديل معرف الجهاز (Update Device ID) لنقل الترخيص لجهاز جديد"
+                                      title="إدارة وتعديل معرف الجهاز الأول والثاني (HWID 1 & HWID 2)"
                                     >
                                       <Edit3 className="w-3 h-3 text-blue-400" />
-                                      <span>تعديل Device ID</span>
+                                      <span>تعديل HWID 1 & 2</span>
                                     </button>
 
                                     <button
@@ -962,16 +986,16 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
           </div>
         )}
 
-        {/* Modal for Updating License Device ID (HWID) */}
+        {/* Modal for Updating License Device IDs (HWID 1 & HWID 2) */}
         {editingHwidLicense && (
           <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
             <div className="w-full max-w-md bg-[#090d16] border border-blue-500/40 rounded-2xl p-6 text-right space-y-4 shadow-2xl">
               <div className="flex items-center justify-between border-b border-gray-800 pb-3">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Laptop className="w-4 h-4 text-blue-400" /> نقل الترخيص وتعديل معرف الجهاز (Device ID)
+                  <Laptop className="w-4 h-4 text-blue-400" /> إدارة وتعديل معرفات الأجهزة (HWID 1 & HWID 2)
                 </h3>
                 <button
-                  onClick={() => { setEditingHwidLicense(null); setNewHwidInput(''); }}
+                  onClick={() => { setEditingHwidLicense(null); setHwid1Input(''); setHwid2Input(''); }}
                   className="text-gray-400 hover:text-white cursor-pointer"
                 >
                   <XCircle className="w-5 h-5" />
@@ -982,40 +1006,73 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                 <div>العميل: <span className="text-white font-bold">{editingHwidLicense.customerName}</span></div>
                 <div>رقم الهاتف: <span className="text-cyan-400 font-mono font-bold">{editingHwidLicense.phone || 'غير مدخل'}</span></div>
                 <div>كود الترخيص: <span className="text-yellow-400 font-mono font-bold">{editingHwidLicense.key}</span></div>
-                <div>المعرف الحالي: <span className="text-green-400 font-mono font-bold">{editingHwidLicense.hwid || 'غير مربوط بعد (Unbound)'}</span></div>
-                <div className="text-gray-400 text-[10px] pt-1">
-                  * عند تعديل الـ Device ID وحفظه، يتاح للعميل التفعيل والدخول فوراً على جهازه الجديد.
+                <div className="text-amber-300 text-[10.5px] pt-1">
+                  💡 عند ترك أحد الحقلين فارغاً، يتيح النظام للتطبيق التفعيل والتسجيل التلقائي بالجهاز الجديد وتعبئة الحقل الفارغ فوراً.
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[11px] text-gray-300 font-bold block">
-                  معرف الجهاز الجديد (Device ID / HWID):
-                </label>
-                <input
-                  type="text"
-                  value={newHwidInput}
-                  onChange={(e) => setNewHwidInput(e.target.value)}
-                  placeholder="أدخل بصمة الجهاز الجديد أو اتركه فارغاً لفك الربط"
-                  className="w-full bg-[#04060b] border border-gray-800 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-blue-400"
-                  autoFocus
-                />
-                <div className="flex gap-2 text-[10px] pt-1">
+              {/* Field HWID 1 */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] text-gray-300 font-bold block">
+                    [ معرف الجهاز الأول HWID 1 ]:
+                  </label>
                   <button
                     type="button"
-                    onClick={() => setNewHwidInput('')}
-                    className="text-amber-400 hover:underline cursor-pointer"
+                    onClick={() => setHwid1Input('')}
+                    className="text-[10px] text-amber-400 hover:underline cursor-pointer"
                   >
-                    🧹 مسح المعرف (إتاحة الكود للعميل ليستخدمه على أي جهاز جديد)
+                    🧹 مسح HWID 1
                   </button>
                 </div>
+                <input
+                  type="text"
+                  value={hwid1Input}
+                  onChange={(e) => setHwid1Input(e.target.value)}
+                  placeholder="أدخل بصمة الجهاز الأول أو اتركه فارغاً"
+                  className="w-full bg-[#04060b] border border-gray-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-blue-400"
+                  autoFocus
+                />
+              </div>
+
+              {/* Field HWID 2 */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] text-gray-300 font-bold block">
+                    [ معرف الجهاز الثاني HWID 2 ]:
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setHwid2Input('')}
+                    className="text-[10px] text-amber-400 hover:underline cursor-pointer"
+                  >
+                    🧹 مسح HWID 2
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={hwid2Input}
+                  onChange={(e) => setHwid2Input(e.target.value)}
+                  placeholder="أدخل بصمة الجهاز الثاني أو اتركه فارغاً"
+                  className="w-full bg-[#04060b] border border-gray-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-blue-400"
+                />
+              </div>
+
+              <div className="flex justify-between items-center text-[10px] pt-1">
+                <button
+                  type="button"
+                  onClick={() => { setHwid1Input(''); setHwid2Input(''); }}
+                  className="text-red-400 hover:underline cursor-pointer font-bold"
+                >
+                  🧹 مسح المعرفين معاً (إتاحة الكود للربط مع أي جهازين جديدين)
+                </button>
               </div>
 
               <div className="flex gap-2 justify-end pt-2">
                 <button
                   disabled={isSavingHwid}
                   onClick={handleUpdateHwid}
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg cursor-pointer transition text-xs flex items-center gap-1.5"
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg cursor-pointer transition text-xs flex items-center gap-1.5 shadow-lg shadow-blue-900/40"
                 >
                   {isSavingHwid ? (
                     <>
@@ -1023,14 +1080,14 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                     </>
                   ) : (
                     <>
-                      <Save className="w-3.5 h-3.5" /> حفظ الـ Device ID الجديد 💾
+                      <Save className="w-3.5 h-3.5" /> حفظ التعديلات 💾
                     </>
                   )}
                 </button>
                 <button
                   disabled={isSavingHwid}
-                  onClick={() => { setEditingHwidLicense(null); setNewHwidInput(''); }}
-                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-lg cursor-pointer transition text-xs"
+                  onClick={() => { setEditingHwidLicense(null); setHwid1Input(''); setHwid2Input(''); }}
+                  className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-lg cursor-pointer transition text-xs"
                 >
                   إلغاء ❌
                 </button>

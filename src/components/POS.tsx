@@ -53,7 +53,17 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
   const [selectedCategory, setSelectedCategory] = useState<string>('الكل');
   
   // Dynamic Currency Selector State
-  const [saleCurrency, setSaleCurrency] = useState<'YER' | 'SAR' | 'USD'>('YER');
+  const activeCurrencies = settings?.currencies && settings.currencies.length > 0
+    ? settings.currencies
+    : [
+        { id: 'YER', code: 'YER', name: 'الريال اليمني', symbol: 'ر.ي', exchangeRate: 1, isBase: true },
+        { id: 'SAR', code: 'SAR', name: 'الريال السعودي', symbol: 'ر.س', exchangeRate: 140, isBase: false },
+        { id: 'USD', code: 'USD', name: 'الدولار الأمريكي', symbol: '$', exchangeRate: 530, isBase: false },
+      ];
+
+  const [saleCurrencySymbol, setSaleCurrencySymbol] = useState<string>(
+    settings?.selectedCurrencySymbol || settings?.currency || 'ر.ي'
+  );
 
   // Modal Visibility States
   const [showVoiceModal, setShowVoiceModal] = useState(false);
@@ -271,6 +281,10 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
   // Calculations
   const cartSubtotal = cart.reduce((sum, item) => sum + item.total, 0);
   const cartTotal = Math.max(0, cartSubtotal - discountInput);
+
+  const selectedCurrObj = activeCurrencies.find(c => c.symbol === saleCurrencySymbol || c.code === saleCurrencySymbol) || activeCurrencies[0];
+  const selectedRate = selectedCurrObj?.exchangeRate && selectedCurrObj.exchangeRate > 0 ? selectedCurrObj.exchangeRate : 1;
+  const convertedTotal = selectedCurrObj?.isBase ? cartTotal : (cartTotal / selectedRate);
 
   const handleCheckout = () => {
     if (cart.length === 0) {
@@ -646,22 +660,22 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
               <div className="p-4 rounded-2xl bg-slate-900 text-white space-y-3 shadow-inner">
                 <div className="flex justify-between items-center pb-2 border-b border-slate-800">
                   <span className="text-[11px] text-slate-400 font-bold">عملة التسديد المباشر:</span>
-                  <div className="flex gap-1 bg-slate-800 p-1 rounded-lg">
-                    {(['YER', 'SAR', 'USD'] as const).map(curr => (
+                  <div className="flex gap-1 bg-slate-800 p-1 rounded-lg overflow-x-auto max-w-[200px]">
+                    {activeCurrencies.map(curr => (
                       <button
-                        key={curr}
+                        key={curr.id}
                         type="button"
                         onClick={() => {
                           soundManager.playScanBeep();
-                          setSaleCurrency(curr);
+                          setSaleCurrencySymbol(curr.symbol);
                         }}
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono transition cursor-pointer ${
-                          saleCurrency === curr
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono transition cursor-pointer whitespace-nowrap ${
+                          saleCurrencySymbol === curr.symbol
                             ? 'bg-amber-500 text-slate-950 shadow-xs'
                             : 'text-slate-400 hover:text-white'
                         }`}
                       >
-                        {curr === 'YER' ? 'ر.ي' : curr === 'SAR' ? 'ر.س' : '$'}
+                        {curr.symbol}
                       </button>
                     ))}
                   </div>
@@ -684,14 +698,12 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
                 </div>
 
                 {/* Dynamic Currency Equivalent Output */}
-                <div className="p-2 rounded-xl bg-slate-800/80 border border-slate-700/60 flex justify-between items-center text-[11px]">
+                <div className="p-2.5 rounded-xl bg-slate-800/90 border border-slate-700/80 flex justify-between items-center text-xs">
                   <span className="text-amber-400 font-bold flex items-center gap-1">
-                    <span>⚡ المعادل بالعملة المحولة:</span>
+                    <span>⚡ المعادل بـ ({selectedCurrObj?.name || saleCurrencySymbol}):</span>
                   </span>
-                  <span className="font-mono font-bold text-white dir-ltr">
-                    {saleCurrency === 'YER' && `${cartTotal.toLocaleString()} ر.ي`}
-                    {saleCurrency === 'SAR' && `${(cartTotal / (settings?.exchangeRates?.SAR || 420)).toFixed(2)} ر.س`}
-                    {saleCurrency === 'USD' && `$${(cartTotal / (settings?.exchangeRates?.USD || 1600)).toFixed(2)}`}
+                  <span className="font-mono font-extrabold text-amber-300 text-sm dir-ltr">
+                    {convertedTotal.toLocaleString(undefined, { minimumFractionDigits: selectedCurrObj?.isBase ? 0 : 2, maximumFractionDigits: 2 })} {selectedCurrObj?.symbol || saleCurrencySymbol}
                   </span>
                 </div>
               </div>
@@ -756,6 +768,7 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
         onClose={() => setShowLabelPrinterModal(false)}
         products={activeProducts}
         storeName={storeName}
+        storeLogoUrl={settings?.storeLogoUrl}
         currency={currency}
       />
 

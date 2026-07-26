@@ -36,9 +36,14 @@ import {
   HardDrive,
   Cloud,
   Wifi,
-  WifiOff
+  WifiOff,
+  Coins,
+  Plus,
+  Trash2,
+  Image as ImageIcon
 } from 'lucide-react';
-import { SystemSettings, AppTheme, CardShape, DisplayDensity } from '../types';
+import { SystemSettings, AppTheme, CardShape, DisplayDensity, CurrencyRate } from '../types';
+import { DEFAULT_CURRENCIES } from '../utils/seedData';
 import { soundManager } from '../utils/sound';
 import { loadLicenseLocally, saveLicenseLocally, generateHWID, LicenseInfo } from '../utils/licensing';
 
@@ -59,11 +64,15 @@ export default function Settings({
 }: SettingsProps) {
   // Local state form variables
   const [storeName, setStoreName] = useState(settings.storeName);
+  const [storeLogoUrl, setStoreLogoUrl] = useState(settings.storeLogoUrl || '');
   const [currency, setCurrency] = useState(settings.currency);
   const [address, setAddress] = useState(settings.address);
   const [phone, setPhone] = useState(settings.phone);
   const [pinCode, setPinCode] = useState(settings.pinCode);
   const [isPinEnabled, setIsPinEnabled] = useState(settings.isPinEnabled);
+  const [protectedSections, setProtectedSections] = useState<string[]>(() => {
+    return settings.protectedSections || ['settings', 'reports'];
+  });
   const [privacyPinCode, setPrivacyPinCode] = useState(settings.privacyPinCode || settings.pinCode || '1234');
   const [isPrivacyPinEnabled, setIsPrivacyPinEnabled] = useState(settings.isPrivacyPinEnabled ?? true);
   const [isBiometricEnabled, setIsBiometricEnabled] = useState(() => {
@@ -75,6 +84,17 @@ export default function Settings({
   const [cardShape, setCardShape] = useState<CardShape>(settings.cardShape || 'soft');
   const [density, setDensity] = useState<DisplayDensity>(settings.density || 'comfortable');
   const [deviceMode, setDeviceMode] = useState<'mobile' | 'desktop'>(settings.deviceMode || 'mobile');
+  const [layoutPreference, setLayoutPreference] = useState<'mobile' | 'desktop'>(() => {
+    return (localStorage.getItem('app_layout_preference') as 'mobile' | 'desktop') || settings.deviceMode || 'mobile';
+  });
+
+  const handleLayoutPreferenceChange = (mode: 'mobile' | 'desktop') => {
+    soundManager.playScanBeep();
+    setLayoutPreference(mode);
+    setDeviceMode(mode);
+    localStorage.setItem('app_layout_preference', mode);
+    window.dispatchEvent(new Event('app_layout_changed'));
+  };
 
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -98,6 +118,67 @@ export default function Settings({
     }
   };
 
+  // Currencies state
+  const [currenciesList, setCurrenciesList] = useState<CurrencyRate[]>(() => {
+    return settings.currencies && settings.currencies.length > 0
+      ? settings.currencies
+      : DEFAULT_CURRENCIES;
+  });
+  const [selectedCurrencySymbol, setSelectedCurrencySymbol] = useState(
+    settings.selectedCurrencySymbol || settings.currency || 'ر.ي'
+  );
+
+  // New currency form state
+  const [newCurrName, setNewCurrName] = useState('');
+  const [newCurrCode, setNewCurrCode] = useState('');
+  const [newCurrSymbol, setNewCurrSymbol] = useState('');
+  const [newCurrRate, setNewCurrRate] = useState<string>('1');
+  const [showAddCurrForm, setShowAddCurrForm] = useState(false);
+
+  const handleAddCurrency = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCurrName.trim() || !newCurrSymbol.trim()) return;
+    const rateNum = parseFloat(newCurrRate) || 1;
+    const newCurr: CurrencyRate = {
+      id: 'curr_' + Date.now(),
+      code: (newCurrCode.trim() || newCurrSymbol.trim()).toUpperCase(),
+      name: newCurrName.trim(),
+      symbol: newCurrSymbol.trim(),
+      exchangeRate: rateNum,
+      isBase: false
+    };
+    const updated = [...currenciesList, newCurr];
+    setCurrenciesList(updated);
+    setNewCurrName('');
+    setNewCurrCode('');
+    setNewCurrSymbol('');
+    setNewCurrRate('1');
+    setShowAddCurrForm(false);
+    soundManager.playSuccessChime();
+  };
+
+  const handleUpdateCurrencyRate = (id: string, newRate: number) => {
+    setCurrenciesList(prev => prev.map(c => c.id === id ? { ...c, exchangeRate: Math.max(0.0001, newRate) } : c));
+  };
+
+  const handleDeleteCurrency = (id: string) => {
+    soundManager.playWarningBeep();
+    const target = currenciesList.find(c => c.id === id);
+    if (target?.isBase) {
+      alert('⚠️ لا يمكن حذف العملة الأساسية للنظام.');
+      return;
+    }
+    setCurrenciesList(prev => prev.filter(c => c.id !== id));
+  };
+
+  const getExchangeRatesMap = () => {
+    const map: Record<string, number> = {};
+    currenciesList.forEach(c => {
+      map[c.code] = c.exchangeRate;
+    });
+    return map;
+  };
+
   const updateThemeInstantly = (newTheme: AppTheme) => {
     soundManager.playScanBeep();
     setAppTheme(newTheme);
@@ -117,11 +198,15 @@ export default function Settings({
     onSaveSettings({
       ...settings,
       storeName,
-      currency,
+      currency: selectedCurrencySymbol || currency,
+      currencies: currenciesList,
+      selectedCurrencySymbol: selectedCurrencySymbol || currency,
+      exchangeRates: getExchangeRatesMap(),
       address,
       phone,
       pinCode,
       isPinEnabled,
+      protectedSections,
       privacyPinCode,
       isPrivacyPinEnabled,
       appTheme: newTheme,
@@ -143,11 +228,15 @@ export default function Settings({
     onSaveSettings({
       ...settings,
       storeName,
-      currency,
+      currency: selectedCurrencySymbol || currency,
+      currencies: currenciesList,
+      selectedCurrencySymbol: selectedCurrencySymbol || currency,
+      exchangeRates: getExchangeRatesMap(),
       address,
       phone,
       pinCode,
       isPinEnabled,
+      protectedSections,
       privacyPinCode,
       isPrivacyPinEnabled,
       appTheme,
@@ -169,11 +258,15 @@ export default function Settings({
     onSaveSettings({
       ...settings,
       storeName,
-      currency,
+      currency: selectedCurrencySymbol || currency,
+      currencies: currenciesList,
+      selectedCurrencySymbol: selectedCurrencySymbol || currency,
+      exchangeRates: getExchangeRatesMap(),
       address,
       phone,
       pinCode,
       isPinEnabled,
+      protectedSections,
       privacyPinCode,
       isPrivacyPinEnabled,
       appTheme,
@@ -185,6 +278,51 @@ export default function Settings({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('حجم الصورة كبير جداً. يرجى اختيار صورة بحجم أقل من 5 ميجابايت.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 320;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedBase64 = canvas.toDataURL('image/png');
+          setStoreLogoUrl(compressedBase64);
+          soundManager.playSuccessChime();
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     soundManager.playSuccessChime();
@@ -193,11 +331,16 @@ export default function Settings({
 
     onSaveSettings({
       storeName: storeName.trim(),
-      currency: currency.trim(),
+      storeLogoUrl,
+      currency: (selectedCurrencySymbol || currency).trim(),
+      currencies: currenciesList,
+      selectedCurrencySymbol: (selectedCurrencySymbol || currency).trim(),
+      exchangeRates: getExchangeRatesMap(),
       address: address.trim(),
       phone: phone.trim(),
       pinCode,
       isPinEnabled,
+      protectedSections,
       privacyPinCode: privacyPinCode.trim() || '1234',
       isPrivacyPinEnabled,
       appTheme,
@@ -461,6 +604,84 @@ export default function Settings({
 
           <form onSubmit={handleSave} className="space-y-4">
             
+            {/* Custom Logo Upload Card */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-blue-100 text-blue-700">
+                    <ImageIcon className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-slate-900">شعار المنشأة / المحل التجاري (خاص بالترخيص)</h4>
+                    <p className="text-[10px] text-slate-500">يُحفظ الشعار محلياً وخاص بهذا الجهاز فقط، ويظهر في الهيدر، الفواتير، التقارير وكشوف الحسابات</p>
+                  </div>
+                </div>
+                {storeLogoUrl ? (
+                  <span className="px-2 py-0.5 text-[10px] bg-emerald-100 text-emerald-800 rounded-full font-bold flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" /> تم التخصيص
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 text-[10px] bg-slate-200 text-slate-600 rounded-full font-bold">
+                    افتراضي
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
+                {/* Logo Preview Container */}
+                <div className="relative w-24 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
+                  {storeLogoUrl ? (
+                    <img 
+                      src={storeLogoUrl} 
+                      alt="شعار المنشأة" 
+                      className="w-full h-full object-contain p-1" 
+                    />
+                  ) : (
+                    <div className="text-center p-2">
+                      <Building2 className="w-8 h-8 text-slate-300 mx-auto mb-1" />
+                      <span className="text-[9px] text-slate-400 font-bold block">لا يوجد شعار</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions & File Input */}
+                <div className="space-y-2 flex-1 w-full text-right">
+                  <div className="flex flex-wrap gap-2">
+                    <label className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs">
+                      <Upload className="w-4 h-4" />
+                      <span>{storeLogoUrl ? 'تغيير الشعار' : 'رفع شعار جديد'}</span>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleLogoFileChange} 
+                        className="hidden" 
+                      />
+                    </label>
+
+                    {storeLogoUrl && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          soundManager.playWarningBeep();
+                          if (confirm('هل أنت متأكد من حذف شعار المنشأة العائد للترخيص الحالي؟')) {
+                            setStoreLogoUrl('');
+                          }
+                        }}
+                        className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-rose-200"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>حذف الشعار</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <p className="text-[10px] text-slate-400">
+                    الصيغ المدعومة: PNG, JPG, SVG. يتم حفظ الشعار بنجاح فور الضغط على زر "حفظ الإعدادات".
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
@@ -477,15 +698,203 @@ export default function Settings({
 
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                  <DollarSign className="w-3.5 h-3.5 text-blue-600" /> العملة المعتمدة:
+                  <DollarSign className="w-3.5 h-3.5 text-blue-600" /> رمز العملة الرئيسية:
                 </label>
                 <input
                   type="text"
                   required
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+                  value={selectedCurrencySymbol}
+                  onChange={(e) => {
+                    setSelectedCurrencySymbol(e.target.value);
+                    setCurrency(e.target.value);
+                  }}
+                  placeholder="ر.ي"
+                  className="w-full bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
                 />
+              </div>
+            </div>
+
+            {/* Multi-currency & Exchange Rates Manager */}
+            <div className="p-4 rounded-2xl bg-slate-50/90 border border-slate-200/90 space-y-4 shadow-xs">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-slate-200">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-amber-100 text-amber-700">
+                    <Coins className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                      <span>إدارة العملات وإعداد أسعار الصرف</span>
+                      <span className="px-2 py-0.5 text-[10px] bg-amber-100 text-amber-800 rounded-full font-bold">متعدد العملات</span>
+                    </h4>
+                    <p className="text-[10px] text-slate-500">أضف عملات أخرى وحدد سعر الصرف للتحويل المباشر في الفواتير والتقارير</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundManager.playScanBeep();
+                    setShowAddCurrForm(!showAddCurrForm);
+                  }}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>إضافة عملة</span>
+                </button>
+              </div>
+
+              {/* Active Currency Selector */}
+              <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-2">
+                <label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                  <Coins className="w-3.5 h-3.5 text-amber-600" /> حدد العملة النشطة المعتمدة في شاشات النظام:
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {currenciesList.map(curr => {
+                    const isSelected = selectedCurrencySymbol === curr.symbol;
+                    return (
+                      <button
+                        key={curr.id}
+                        type="button"
+                        onClick={() => {
+                          soundManager.playScanBeep();
+                          setSelectedCurrencySymbol(curr.symbol);
+                          setCurrency(curr.symbol);
+                        }}
+                        className={`p-2 rounded-xl text-xs font-bold border transition text-right cursor-pointer flex justify-between items-center ${
+                          isSelected
+                            ? 'bg-amber-50 border-amber-500 text-amber-950 font-black shadow-xs ring-1 ring-amber-400/50'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-mono text-xs">{curr.symbol}</span>
+                          <span className="text-[9px] text-slate-400 font-normal">{curr.name}</span>
+                        </div>
+                        {isSelected && <Check className="w-4 h-4 text-amber-600 shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Add Currency Form */}
+              {showAddCurrForm && (
+                <div className="p-3 bg-amber-50/80 border border-amber-200/90 rounded-xl space-y-2.5 animate-in fade-in duration-200">
+                  <h5 className="text-xs font-bold text-amber-950 flex items-center gap-1">
+                    <Coins className="w-3.5 h-3.5 text-amber-600" /> بيانات العملة الجديدة:
+                  </h5>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-700 block mb-0.5">اسم العملة:</label>
+                      <input
+                        type="text"
+                        placeholder="درهم إماراتي"
+                        value={newCurrName}
+                        onChange={(e) => setNewCurrName(e.target.value)}
+                        className="w-full bg-white border border-slate-200 text-xs rounded-lg px-2 py-1 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-700 block mb-0.5">رمز العملة:</label>
+                      <input
+                        type="text"
+                        placeholder="د.إ"
+                        value={newCurrSymbol}
+                        onChange={(e) => setNewCurrSymbol(e.target.value)}
+                        className="w-full bg-white border border-slate-200 text-xs font-bold rounded-lg px-2 py-1 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-700 block mb-0.5">الكود (Code):</label>
+                      <input
+                        type="text"
+                        placeholder="AED"
+                        value={newCurrCode}
+                        onChange={(e) => setNewCurrCode(e.target.value)}
+                        className="w-full bg-white border border-slate-200 text-xs font-mono uppercase rounded-lg px-2 py-1 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-700 block mb-0.5">سعر الصرف:</label>
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="144"
+                        value={newCurrRate}
+                        onChange={(e) => setNewCurrRate(e.target.value)}
+                        className="w-full bg-white border border-slate-200 text-xs font-mono font-bold rounded-lg px-2 py-1 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddCurrForm(false)}
+                      className="px-2.5 py-1 bg-slate-200 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-300 cursor-pointer"
+                    >
+                      إلغاء
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddCurrency}
+                      className="px-3 py-1 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 cursor-pointer flex items-center gap-1"
+                    >
+                      <Check className="w-3.5 h-3.5" /> حفظ العملة
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Table of Exchange Rates */}
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden text-xs">
+                <div className="p-2.5 bg-slate-100/80 border-b border-slate-200 font-bold text-slate-700 flex justify-between items-center">
+                  <span>جدول أسعار الصرف للعملات</span>
+                  <span className="text-[10px] text-slate-400 font-normal">عدّل سعر الصرف مباشرة ليتم التحويل فوراً</span>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {currenciesList.map(curr => (
+                    <div key={curr.id} className="p-2.5 flex items-center justify-between gap-2 hover:bg-slate-50/70">
+                      <div className="flex items-center gap-2">
+                        <span className="w-7 h-7 rounded-lg bg-slate-100 border border-slate-200 font-mono font-extrabold text-slate-800 flex items-center justify-center text-xs shrink-0">
+                          {curr.symbol}
+                        </span>
+                        <div>
+                          <div className="font-bold text-slate-900 flex items-center gap-1">
+                            <span>{curr.name}</span>
+                            <span className="text-[10px] font-mono text-slate-400">({curr.code})</span>
+                            {curr.isBase && (
+                              <span className="px-1.5 py-0.2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[9px] font-bold">أساسية</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5">
+                          <span className="text-[10px] text-slate-500 font-bold">1 {curr.symbol} =</span>
+                          <input
+                            type="number"
+                            step="any"
+                            disabled={curr.isBase}
+                            value={curr.exchangeRate}
+                            onChange={(e) => handleUpdateCurrencyRate(curr.id, parseFloat(e.target.value) || 1)}
+                            className="w-16 bg-white border border-slate-200 text-xs font-mono font-bold text-slate-900 rounded px-1.5 py-0.5 text-center focus:outline-none focus:ring-1 focus:ring-amber-500 disabled:bg-slate-100 disabled:text-slate-400"
+                          />
+                        </div>
+                        {!curr.isBase && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCurrency(curr.id)}
+                            className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition cursor-pointer"
+                            title="حذف العملة"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -522,6 +931,90 @@ export default function Settings({
               <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                 <Shield className="w-4 h-4 text-blue-600" /> الحماية وقفل الدخول الأمني
               </h4>
+
+              {/* PIN Section Protection Customizer */}
+              <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-bold text-blue-950 text-xs flex items-center gap-1.5">
+                      <KeyRound className="w-4 h-4 text-blue-600" />
+                      <span>حماية الأقسام برمز PIN</span>
+                    </div>
+                    <div className="text-[10px] text-blue-700/80">
+                      قفل اختياري لحماية أقسام النظام لمنع الوصول غير المصرح به
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={isPinEnabled}
+                    onChange={(e) => setIsPinEnabled(e.target.checked)}
+                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                </div>
+
+                {isPinEnabled && (
+                  <div className="pt-2.5 border-t border-blue-200/80 space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-blue-900">رمز PIN السري المطلوب للأقسام (4 أرقام):</label>
+                      <input
+                        type="password"
+                        maxLength={6}
+                        value={pinCode}
+                        onChange={(e) => setPinCode(e.target.value)}
+                        placeholder="1234"
+                        className="w-full bg-white border border-blue-300 text-xs font-mono font-extrabold rounded-xl px-3.5 py-2 text-blue-950 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center tracking-widest shadow-inner"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="text-xs font-bold text-blue-900 flex items-center justify-between">
+                        <span>حدد الأقسام المراد قفلها برمز PIN:</span>
+                        <span className="text-[10px] text-blue-700 font-bold bg-white px-2 py-0.5 rounded-full border border-blue-200">
+                          {protectedSections.length} قسم محمي 🔐
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-white p-3 rounded-xl border border-blue-200/70">
+                        {[
+                          { id: 'reports', label: 'قسم الأرباح والتقارير البيانية', icon: '📊' },
+                          { id: 'employees', label: 'قسم إدارة العمال والرواتب', icon: '💼' },
+                          { id: 'customers', label: 'قسم الدفاتر والقيود والتحصيلات', icon: '👥' },
+                          { id: 'settings', label: 'شاشة إعدادات النظام والترخيص', icon: '⚙️' },
+                          { id: 'transactions', label: 'دفتر القيود وأرشيف الحركة', icon: '📜' },
+                          { id: 'inventory', label: 'إدارة المستودع والمخزون', icon: '📦' }
+                        ].map(sec => {
+                          const isChecked = protectedSections.includes(sec.id);
+                          return (
+                            <label
+                              key={sec.id}
+                              className={`flex items-center gap-2.5 p-2 rounded-lg border text-xs cursor-pointer transition select-none ${
+                                isChecked
+                                  ? 'bg-blue-50 border-blue-400 text-blue-950 font-bold shadow-xs'
+                                  : 'bg-slate-50/50 border-slate-200 text-slate-600 hover:bg-slate-50'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  soundManager.playScanBeep();
+                                  if (e.target.checked) {
+                                    setProtectedSections([...protectedSections, sec.id]);
+                                  } else {
+                                    setProtectedSections(protectedSections.filter(id => id !== sec.id));
+                                  }
+                                }}
+                                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                              />
+                              <span className="text-sm">{sec.icon}</span>
+                              <span className="text-[11px]">{sec.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* General Manager PIN */}
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
@@ -607,60 +1100,68 @@ export default function Settings({
                 </span>
               </div>
 
-              {/* 0. Device Layout Option (Mobile vs Desktop) */}
-              <div className="space-y-2 p-3 bg-sky-50/60 border border-sky-200 rounded-2xl">
-                <label className="text-[11px] font-bold text-sky-900 flex items-center gap-1.5">
+              {/* 0. Dual Layout Architecture Preference Radio Buttons */}
+              <div className="space-y-3 p-3.5 bg-sky-50/70 border border-sky-200 rounded-2xl shadow-xs">
+                <label className="text-xs font-bold text-sky-950 flex items-center gap-1.5">
                   <Smartphone className="w-4 h-4 text-sky-600" />
-                  <span>نوع واجهة الجهاز وتخطيط الشاشة (Device Mode):</span>
+                  <span>معمارية الواجهات (Dual Layout Architecture):</span>
                 </label>
-                <p className="text-[10px] text-slate-500">اختر نمط العرض المناسب لجهازك (واجهة الهاتف هي الافتراضية)</p>
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  {/* Mobile View */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      soundManager.playScanBeep();
-                      setDeviceMode('mobile');
-                    }}
-                    className={`p-3 rounded-xl border text-right transition cursor-pointer flex items-center gap-3 ${
-                      deviceMode === 'mobile'
+                <p className="text-[10.5px] text-slate-500">اختر نمط الواجهة المفضلة. يتم التبديل فورياً وتخزين خيارك في النظام:</p>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                  {/* Radio 1: Mobile View */}
+                  <label
+                    onClick={() => handleLayoutPreferenceChange('mobile')}
+                    className={`p-3 rounded-xl border text-right transition cursor-pointer flex items-center gap-3 select-none ${
+                      layoutPreference === 'mobile'
                         ? 'bg-white border-sky-600 ring-2 ring-sky-500/30 text-sky-950 font-bold shadow-xs'
                         : 'bg-white/70 border-slate-200 text-slate-700 hover:bg-white'
                     }`}
                   >
+                    <input
+                      type="radio"
+                      name="app_layout_preference"
+                      value="mobile"
+                      checked={layoutPreference === 'mobile'}
+                      onChange={() => handleLayoutPreferenceChange('mobile')}
+                      className="w-4 h-4 text-sky-600 focus:ring-sky-500 cursor-pointer shrink-0"
+                    />
                     <div className="p-2 rounded-lg bg-sky-100 text-sky-700 shrink-0">
                       <Smartphone className="w-5 h-5" />
                     </div>
                     <div>
                       <div className="text-xs font-bold text-slate-900 flex items-center gap-1">
-                        <span>واجهة الهاتف (Mobile View)</span>
-                        <span className="text-[9px] px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded font-bold">افتراضي</span>
+                        <span>واجهة الجوال المبسطة (Mobile View)</span>
                       </div>
-                      <div className="text-[9.5px] text-slate-500">مخصصة للهواتف واستخدام اللمس باليد</div>
+                      <div className="text-[9.5px] text-slate-500 mt-0.5">شبكة بلاطات ملونة وشريط تنقل سفلي ثابت</div>
                     </div>
-                  </button>
+                  </label>
 
-                  {/* Desktop View */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      soundManager.playScanBeep();
-                      setDeviceMode('desktop');
-                    }}
-                    className={`p-3 rounded-xl border text-right transition cursor-pointer flex items-center gap-3 ${
-                      deviceMode === 'desktop'
+                  {/* Radio 2: Desktop View */}
+                  <label
+                    onClick={() => handleLayoutPreferenceChange('desktop')}
+                    className={`p-3 rounded-xl border text-right transition cursor-pointer flex items-center gap-3 select-none ${
+                      layoutPreference === 'desktop'
                         ? 'bg-white border-sky-600 ring-2 ring-sky-500/30 text-sky-950 font-bold shadow-xs'
                         : 'bg-white/70 border-slate-200 text-slate-700 hover:bg-white'
                     }`}
                   >
+                    <input
+                      type="radio"
+                      name="app_layout_preference"
+                      value="desktop"
+                      checked={layoutPreference === 'desktop'}
+                      onChange={() => handleLayoutPreferenceChange('desktop')}
+                      className="w-4 h-4 text-sky-600 focus:ring-sky-500 cursor-pointer shrink-0"
+                    />
                     <div className="p-2 rounded-lg bg-sky-100 text-sky-700 shrink-0">
                       <HardDrive className="w-5 h-5" />
                     </div>
                     <div>
-                      <div className="text-xs font-bold text-slate-900">واجهة الكمبيوتر والتابلت</div>
-                      <div className="text-[9.5px] text-slate-500">عرض عريض للشاشات الكبيرة واللوحية</div>
+                      <div className="text-xs font-bold text-slate-900">واجهة الكمبيوتر والشاشات العريضة (Desktop View)</div>
+                      <div className="text-[9.5px] text-slate-500 mt-0.5">كامل القوائم الجانبية والهيدر العريض</div>
                     </div>
-                  </button>
+                  </label>
                 </div>
               </div>
 

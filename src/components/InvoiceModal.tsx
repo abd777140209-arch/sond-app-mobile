@@ -337,9 +337,16 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
         <div id="invoice-printable-card" className="p-5 bg-white overflow-y-auto max-h-[380px] font-sans print-area" style={{ direction: 'rtl' }}>
           
           <div className="text-center space-y-1">
-            {/* Store Name & Branding */}
+            {/* Store Logo & Branding */}
+            {settings.storeLogoUrl && (
+              <img 
+                src={settings.storeLogoUrl} 
+                alt={settings.storeName} 
+                className="w-14 h-14 mx-auto object-contain mb-1 rounded-lg"
+              />
+            )}
             <h2 className="text-base font-extrabold tracking-tight text-gray-900">
-              👑 {settings.storeName}
+              {settings.storeName}
             </h2>
             <p className="text-[10px] text-gray-500 font-bold">للأجهزة الذكية والصيانة والبرمجة</p>
             <p className="text-[9px] text-gray-400 font-mono">{settings.address}</p>
@@ -597,8 +604,15 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
       {/* Actual Printed Canvas Wrapper - Visible ONLY in print output, styled dynamically to selected paper width */}
       <div className="hidden print:block print-area" style={{ direction: 'rtl' }}>
         <div className="text-center space-y-1">
+          {settings.storeLogoUrl && (
+            <img 
+              src={settings.storeLogoUrl} 
+              alt={settings.storeName} 
+              className="w-16 h-16 mx-auto object-contain mb-1 rounded-lg"
+            />
+          )}
           <h2 className="font-extrabold tracking-tight text-black">
-            👑 {settings.storeName}
+            {settings.storeName}
           </h2>
           <p className="text-[10px] font-bold">للأجهزة الذكية والصيانة والبرمجة</p>
           <p className="text-[9px]">{settings.address}</p>

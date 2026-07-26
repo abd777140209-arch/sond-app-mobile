@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Users, UserPlus, DollarSign, Wallet, Trash2, Calendar, FileText, Search, AlertTriangle, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Users, UserPlus, DollarSign, Wallet, Trash2, Calendar, FileText, Search, AlertTriangle, CheckCircle2, ShieldAlert, X } from 'lucide-react';
 import { Employee, PayrollRecord } from '../types';
 import { soundManager } from '../utils/sound';
 
@@ -264,20 +264,39 @@ export default function Employees({
         </button>
       </motion.div>
 
-      {/* Modal: Add Employee */}
+      {/* Modal: Add Employee (Bottom Sheet) */}
       <AnimatePresence>
         {showAddModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-0 sm:p-4">
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 text-slate-900"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAddModal(false)}
+              className="absolute inset-0"
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="relative w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-5 space-y-4 shadow-2xl z-10 max-h-[90vh] overflow-y-auto text-right text-slate-900"
             >
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <UserPlus className="w-5 h-5 text-blue-600" />
-                <span>إضافة موظف جديد</span>
-              </h3>
+              {/* Drag Handle */}
+              <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto -mt-1 mb-1" />
+
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <UserPlus className="w-5 h-5 text-blue-600" />
+                  <span>إضافة موظف جديد</span>
+                </h3>
+                <button
+                  onClick={() => setShowAddModal(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
               <form onSubmit={handleAddSubmit} className="space-y-4">
                 <div>
@@ -353,29 +372,54 @@ export default function Employees({
         )}
       </AnimatePresence>
 
-      {/* Modal: Advance or Salary Payment */}
+      {/* Modal: Advance or Salary Payment (Bottom Sheet) */}
       <AnimatePresence>
         {modalType && selectedEmployee && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-0 sm:p-4">
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white border border-slate-200 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 text-slate-900"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setModalType(null);
+                setSelectedEmployee(null);
+              }}
+              className="absolute inset-0"
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="relative w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-5 space-y-4 shadow-2xl z-10 max-h-[90vh] overflow-y-auto text-right text-slate-900"
             >
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                {modalType === 'advance' ? (
-                  <>
-                    <Wallet className="w-5 h-5 text-amber-600" />
-                    <span>تسجيل سلفة للموظف: {selectedEmployee.name}</span>
-                  </>
-                ) : (
-                  <>
-                    <DollarSign className="w-5 h-5 text-emerald-600" />
-                    <span>صرف راتب للموظف: {selectedEmployee.name}</span>
-                  </>
-                )}
-              </h3>
+              {/* Drag Handle */}
+              <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto -mt-1 mb-1" />
+
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  {modalType === 'advance' ? (
+                    <>
+                      <Wallet className="w-5 h-5 text-amber-600" />
+                      <span>تسجيل سلفة للموظف: {selectedEmployee.name}</span>
+                    </>
+                  ) : (
+                    <>
+                      <DollarSign className="w-5 h-5 text-emerald-600" />
+                      <span>صرف راتب للموظف: {selectedEmployee.name}</span>
+                    </>
+                  )}
+                </h3>
+                <button
+                  onClick={() => {
+                    setModalType(null);
+                    setSelectedEmployee(null);
+                  }}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1 text-slate-700">
                 <div className="flex justify-between">

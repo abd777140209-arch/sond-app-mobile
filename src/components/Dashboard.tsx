@@ -99,10 +99,31 @@ export default function Dashboard({
   const deviceMode = settings.deviceMode || 'mobile';
   const isMobileMode = deviceMode === 'mobile';
 
-  // Format currency with Privacy mode support
+  // Multi-Currency Selection
+  const activeCurrencies = settings?.currencies && settings.currencies.length > 0
+    ? settings.currencies
+    : [
+        { id: 'YER', code: 'YER', name: 'الريال اليمني', symbol: 'ر.ي', exchangeRate: 1, isBase: true },
+        { id: 'SAR', code: 'SAR', name: 'الريال السعودي', symbol: 'ر.س', exchangeRate: 140, isBase: false },
+        { id: 'USD', code: 'USD', name: 'الدولار الأمريكي', symbol: '$', exchangeRate: 530, isBase: false },
+      ];
+
+  const [dashCurrencySymbol, setDashCurrencySymbol] = useState<string>(
+    settings?.selectedCurrencySymbol || settings?.currency || 'ر.ي'
+  );
+
+  const selectedCurr = activeCurrencies.find(c => c.symbol === dashCurrencySymbol || c.code === dashCurrencySymbol) || activeCurrencies[0];
+  const currRate = selectedCurr?.exchangeRate && selectedCurr.exchangeRate > 0 ? selectedCurr.exchangeRate : 1;
+
+  // Format currency with Privacy mode support & Multi-currency conversion
   const fmt = (num: number) => {
-    if (isPrivacyMode) return '**** ' + settings.currency;
-    return num.toLocaleString() + ' ' + settings.currency;
+    const symbol = selectedCurr?.symbol || dashCurrencySymbol || settings.currency;
+    if (isPrivacyMode) return '**** ' + symbol;
+    const converted = selectedCurr?.isBase ? num : (num / currRate);
+    const formatted = selectedCurr?.isBase
+      ? Math.round(converted).toLocaleString()
+      : converted.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return `${formatted} ${symbol}`;
   };
 
 
@@ -118,7 +139,7 @@ export default function Dashboard({
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 md:px-3 md:py-1 rounded-full text-[11px] md:text-xs font-bold bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
-              🏪 {settings.storeName || 'النشاط التجاري الموثق'}
+              🏪 {settings.storeName && settings.storeName.trim() ? settings.storeName : 'نظام سند المحاسبي الذكي'}
             </span>
           </div>
           <h1 className="text-lg md:text-2xl font-black text-slate-800 dark:text-white">
@@ -129,8 +150,30 @@ export default function Dashboard({
           </p>
         </div>
 
-        {/* Developer Credit & Profit Report Shortcut */}
+        {/* Developer Credit & Profit Report Shortcut & Currency Pills */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full md:w-auto">
+          {/* Multi-Currency Pills */}
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold px-1 hidden sm:inline">العملة:</span>
+            {activeCurrencies.map(c => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => {
+                  soundManager.playScanBeep();
+                  setDashCurrencySymbol(c.symbol);
+                }}
+                className={`px-2 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  dashCurrencySymbol === c.symbol
+                    ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800'
+                }`}
+              >
+                {c.symbol}
+              </button>
+            ))}
+          </div>
+
           {/* Zara AI Assistant Button */}
           <button
             onClick={() => {

@@ -44,6 +44,8 @@ import {
 // Component imports
 import Navigation from './components/Navigation';
 import Dashboard from './components/Dashboard';
+import MobileDashboardView, { MobileBottomNavbar } from './components/MobileDashboardView';
+import DesktopDashboardView from './components/DesktopDashboardView';
 import POS from './components/POS';
 import Customers from './components/Customers';
 import Inventory from './components/Inventory';
@@ -158,6 +160,24 @@ export default function App() {
   // APK Download Modal
   const [showApkModal, setShowApkModal] = useState<boolean>(false);
 
+  // Dual Layout Preference ('mobile' | 'desktop')
+  const [layoutPreference, setLayoutPreference] = useState<'mobile' | 'desktop'>(() => {
+    return (localStorage.getItem('app_layout_preference') as 'mobile' | 'desktop') || 'mobile';
+  });
+
+  useEffect(() => {
+    const handleLayoutChange = () => {
+      const pref = (localStorage.getItem('app_layout_preference') as 'mobile' | 'desktop') || 'mobile';
+      setLayoutPreference(pref);
+    };
+    window.addEventListener('storage', handleLayoutChange);
+    window.addEventListener('app_layout_changed', handleLayoutChange);
+    return () => {
+      window.removeEventListener('storage', handleLayoutChange);
+      window.removeEventListener('app_layout_changed', handleLayoutChange);
+    };
+  }, []);
+
   // Active navigation tab
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [showDevPortal, setShowDevPortal] = useState<boolean>(false);
@@ -183,7 +203,10 @@ export default function App() {
   };
 
   const handleTabSelect = (tab: string) => {
-    const isRestricted = (tab === 'settings' || tab === 'reports') && (isCashierMode || settings.isPinEnabled);
+    const protectedList = settings.protectedSections || ['settings', 'reports'];
+    const isTabProtected = protectedList.includes(tab);
+    const isRestricted = isTabProtected && (isCashierMode || settings.isPinEnabled);
+
     if (isRestricted) {
       soundManager.playWarningBeep();
       setPendingProtectedTab(tab);
@@ -1289,11 +1312,17 @@ export default function App() {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-sm md:text-base font-black text-slate-900 flex items-center gap-1.5">
-                <span>{settings.storeName || license.customerName || 'النشاط التجاري'}</span>
+                <span>
+                  {settings.storeName && settings.storeName.trim()
+                    ? settings.storeName
+                    : (license.customerName && license.customerName.trim()
+                        ? license.customerName
+                        : 'سجل اسم المنشأة أو النظام هنا من الإعدادات')}
+                </span>
               </h1>
-              {license.phone && (
+              {(settings.phone || license.phone) && (
                 <span className="px-2.5 py-0.5 rounded-full text-[11px] bg-blue-50 border border-blue-200 text-blue-700 font-mono font-bold flex items-center gap-1 shadow-xs">
-                  <span>📱</span> {license.phone}
+                  <span>📱</span> {settings.phone || license.phone}
                 </span>
               )}
             </div>
@@ -1510,17 +1539,37 @@ export default function App() {
                 </div>
               )}
               {activeTab === 'dashboard' && (
-                <Dashboard
-                  products={products}
-                  customers={customers}
-                  invoices={invoices}
-                  payments={payments}
-                  transactions={transactions}
-                  settings={settings}
-                  employees={employees}
-                  setActiveTab={setActiveTab}
-                  isPrivacyMode={isPrivacyMode}
-                />
+                layoutPreference === 'mobile' ? (
+                  <MobileDashboardView
+                    products={products}
+                    customers={customers}
+                    invoices={invoices}
+                    payments={payments}
+                    transactions={transactions}
+                    settings={settings}
+                    employees={employees}
+                    activeTab={activeTab}
+                    setActiveTab={handleTabSelect}
+                    isPrivacyMode={isPrivacyMode}
+                    setIsPrivacyMode={setIsPrivacyMode}
+                    isCashierMode={isCashierMode}
+                    setIsCashierMode={setIsCashierMode}
+                    setShowPinCheckModal={setShowPinCheckModal}
+                    setShowPrivacyPinModal={setShowPrivacyPinModal}
+                  />
+                ) : (
+                  <DesktopDashboardView
+                    products={products}
+                    customers={customers}
+                    invoices={invoices}
+                    payments={payments}
+                    transactions={transactions}
+                    settings={settings}
+                    employees={employees}
+                    setActiveTab={handleTabSelect}
+                    isPrivacyMode={isPrivacyMode}
+                  />
+                )
               )}
 
               {activeTab === 'pos' && (
@@ -1545,6 +1594,7 @@ export default function App() {
                   onDeleteCustomer={handleDeleteCustomer}
                   currency={settings.currency}
                   storeName={settings.storeName}
+                  storeLogoUrl={settings.storeLogoUrl}
                   isPrivacyMode={isPrivacyMode}
                   debtReminderTemplate={settings.debtReminderTemplate}
                   onSaveReminderTemplate={(tmpl) => {
@@ -1578,6 +1628,7 @@ export default function App() {
                   onDeleteProduct={handleDeleteProduct}
                   currency={settings.currency}
                   storeName={settings.storeName}
+                  storeLogoUrl={settings.storeLogoUrl}
                   isPrivacyMode={isPrivacyMode}
                 />
               )}
@@ -1613,6 +1664,7 @@ export default function App() {
                   transactions={transactions}
                   customers={customers}
                   currency={settings.currency}
+                  settings={settings}
                   isPrivacyMode={isPrivacyMode}
                 />
               )}
@@ -1683,6 +1735,11 @@ export default function App() {
       )}
 
 
+
+      {/* Mobile Fixed Bottom Navbar for Subviews */}
+      {layoutPreference === 'mobile' && activeTab !== 'dashboard' && (
+        <MobileBottomNavbar activeTab={activeTab} handleNavClick={handleTabSelect} />
+      )}
 
       {/* 5. FOOTER (Non-printed, Desktop) */}
       <footer id="desktop_footer" className="no-print hidden md:flex h-8 bg-white border-t border-slate-200 px-6 justify-between items-center text-[10px] text-slate-500 font-medium">

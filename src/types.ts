@@ -87,22 +87,30 @@ export type AppTheme = 'financial-blue' | 'emerald-green' | 'warm-amber' | 'dark
 export type CardShape = 'soft' | 'sharp' | 'glass';
 export type DisplayDensity = 'comfortable' | 'compact';
 
+export interface CurrencyRate {
+  id: string;
+  code: string;
+  name: string;
+  symbol: string;
+  exchangeRate: number; // rate relative to base currency (e.g. 1 SAR = 140 YER)
+  isBase?: boolean;
+}
+
 export interface SystemSettings {
   storeName: string;
   currency: string;
+  currencies?: CurrencyRate[];
+  selectedCurrencySymbol?: string;
   address: string;
   phone: string;
   pinCode: string;
   isPinEnabled: boolean;
+  protectedSections?: string[];
   privacyPinCode?: string;
   isPrivacyPinEnabled?: boolean;
   storeLogoUrl?: string;
   debtReminderTemplate?: string;
-  exchangeRates?: {
-    YER: number;
-    SAR: number;
-    USD: number;
-  };
+  exchangeRates?: Record<string, number>;
   appTheme?: AppTheme;
   cardShape?: CardShape;
   density?: DisplayDensity;

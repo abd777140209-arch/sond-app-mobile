@@ -3,17 +3,31 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Product, Customer, Invoice, Payment, Transaction, SystemSettings } from '../types';
+import { Product, Customer, Invoice, Payment, Transaction, SystemSettings, CurrencyRate } from '../types';
+
+export const DEFAULT_CURRENCIES: CurrencyRate[] = [
+  { id: 'YER', code: 'YER', name: 'الريال اليمني', symbol: 'ر.ي', exchangeRate: 1, isBase: true },
+  { id: 'SAR', code: 'SAR', name: 'الريال السعودي', symbol: 'ر.س', exchangeRate: 140, isBase: false },
+  { id: 'USD', code: 'USD', name: 'الدولار الأمريكي', symbol: '$', exchangeRate: 530, isBase: false },
+];
 
 export const DEFAULT_SETTINGS: SystemSettings = {
-  storeName: "الأندرويد فون الذكي",
+  storeName: "",
   currency: "ر.ي", // Yemeni Rial, matching Abdulmajeed's yemeni context / phone number 967
+  currencies: DEFAULT_CURRENCIES,
+  selectedCurrencySymbol: "ر.ي",
   address: "صنعاء - شارع صخر - بجوار محطة الكهرباء",
   phone: "+967777714020",
   pinCode: "1234",
   isPinEnabled: true,
+  protectedSections: ['reports', 'settings'],
   privacyPinCode: "1234",
   isPrivacyPinEnabled: true,
+  exchangeRates: {
+    YER: 1,
+    SAR: 140,
+    USD: 530,
+  },
   appTheme: 'financial-blue',
   cardShape: 'soft',
   density: 'comfortable',

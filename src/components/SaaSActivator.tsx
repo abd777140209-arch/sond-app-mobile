@@ -39,6 +39,7 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' | null }>({ text: '', type: null });
   const [copiedHwid, setCopiedHwid] = useState(false);
   const [isCloud, setIsCloud] = useState(false);
+  const [showInvalidKeyModal, setShowInvalidKeyModal] = useState(false);
 
   useEffect(() => {
     setIsCloud(isFirebaseConfigured());
@@ -57,10 +58,8 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
       try {
         (window as any).AndroidInterface.showToast(msg);
       } catch {
-        alert(msg);
+        // Fallback to inline status banner without native browser alert
       }
-    } else if (typeof window !== 'undefined') {
-      alert(msg);
     }
   };
 
@@ -136,16 +135,22 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
               failMsg = '❌ انتهت صلاحية كود التفعيل المنسوب لهذا الترخيص!';
               break;
             case 'KEY_NOT_FOUND':
-              failMsg = '❌ كود التفعيل غير موجود بالسيرفر أو غير صحيح. تأكد من إدخال الرمز الدقيق المعتمد.';
+              setShowInvalidKeyModal(true);
+              failMsg = '⚠️ كود التفعيل غير مسجل أو تم إلغاؤه من قبل إدارة النظام. للتواصل والدعم الفني: 777140209';
               break;
             case 'MAX_DEVICES_REACHED':
-              failMsg = '❌ تم استهلاك الحد الأقصى لعدد الأجهزة المسجلة لهذا الترخيص!';
+              failMsg = '❌ تم استهلاك حد الأجهزة المسموح به لهذا الكود (2/2)';
               break;
             case 'SERVER_ERROR':
               failMsg = '❌ فشل الاتصال بالسيرفر السحابي. يرجى التأكد من توفر الاتصال بالإنترنت والمحاولة مجدداً.';
               break;
             default:
-              failMsg = `❌ فشلت عملية التفعيل: ${result.message || 'كود غير مقبول'}`;
+              if (result.message?.includes('تم استهلاك')) {
+                failMsg = `❌ ${result.message}`;
+              } else {
+                setShowInvalidKeyModal(true);
+                failMsg = '⚠️ كود التفعيل غير مسجل أو تم إلغاؤه من قبل إدارة النظام. للتواصل والدعم الفني: 777140209';
+              }
           }
 
           setStatusMessage({ text: failMsg, type: 'error' });
@@ -341,6 +346,52 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
         </div>
 
       </div>
+
+      {/* Clean Alert Modal for Invalid or Deleted Activation Key */}
+      {showInvalidKeyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn" dir="rtl">
+          <div className="w-full max-w-md bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-rose-900/40 rounded-3xl p-6 text-center space-y-5 shadow-2xl relative overflow-hidden">
+            
+            {/* Warning Icon Header */}
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800/50 flex items-center justify-center text-rose-600 dark:text-rose-400 shadow-inner">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                تنبيه نظام التفعيل
+              </h3>
+              <div className="text-xs text-slate-700 dark:text-slate-200 font-bold leading-relaxed p-4 rounded-2xl bg-rose-50/50 dark:bg-rose-950/30 border border-rose-200/60 dark:border-rose-900/30 text-right space-y-2">
+                <p className="text-sm text-rose-700 dark:text-rose-300 font-extrabold">
+                  ⚠️ كود التفعيل غير مسجل أو تم إلغاؤه من قبل إدارة النظام.
+                </p>
+                <p className="text-xs text-slate-600 dark:text-slate-300 font-bold pt-1 border-t border-rose-200/40 dark:border-rose-900/20">
+                  للتواصل والدعم الفني: <span className="font-mono text-sky-600 dark:text-sky-400 font-black text-sm select-all">777140209</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-1">
+              <a
+                href="https://wa.me/967777140209"
+                target="_blank"
+                rel="noreferrer"
+                className="flex-1 py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+              >
+                💬 التواصل عبر واتساب (777140209)
+              </a>
+              <button
+                type="button"
+                onClick={() => setShowInvalidKeyModal(false)}
+                className="py-3 px-5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition cursor-pointer"
+              >
+                إغلاق ❌
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }

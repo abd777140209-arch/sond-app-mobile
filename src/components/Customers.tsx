@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, 
   UserPlus, 
@@ -48,6 +48,7 @@ interface CustomersProps {
   onDeleteCustomer: (customerId: string) => void;
   currency: string;
   storeName?: string;
+  storeLogoUrl?: string;
   isPrivacyMode?: boolean;
   debtReminderTemplate?: string;
   onSaveReminderTemplate?: (template: string) => void;
@@ -63,6 +64,7 @@ export default function Customers({
   onDeleteCustomer,
   currency,
   storeName = 'سند المحاسبي',
+  storeLogoUrl,
   isPrivacyMode = false,
   debtReminderTemplate,
   onSaveReminderTemplate
@@ -702,28 +704,44 @@ export default function Customers({
       </motion.div>
 
       {/* BOTTOM SHEET MODAL 1: ADD NEW CUSTOMER */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-t-3xl sm:rounded-3xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-right">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
-                  <UserPlus className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">تسجيل عميل جديد بالدفتر</h3>
-                  <p className="text-[11px] text-slate-400">إضافة حساب جديد وتحديد تاريخ استحقاق الدين</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setShowAddModal(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <AnimatePresence>
+        {showAddModal && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAddModal(false)}
+              className="absolute inset-0"
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="relative w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-5 space-y-4 shadow-2xl z-10 max-h-[90vh] overflow-y-auto text-right text-slate-900"
+            >
+              {/* Drag Handle */}
+              <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto -mt-1 mb-1" />
 
-            <div className="p-5 space-y-4 overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3 bg-slate-50 p-2 rounded-xl">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                    <UserPlus className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">تسجيل عميل جديد بالدفتر</h3>
+                    <p className="text-[11px] text-slate-400">إضافة حساب جديد وتحديد تاريخ استحقاق الدين</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowAddModal(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
               {addError && (
                 <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" /> {addError}
@@ -777,34 +795,50 @@ export default function Customers({
                   <span>حفظ وتثبيت الحساب الجديد</span>
                 </button>
               </form>
-            </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* BOTTOM SHEET MODAL 2: PAYMENT RECEIPT */}
-      {showPaymentModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-t-3xl sm:rounded-3xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-right">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
-                  <CreditCard className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">سند قبض نقدية (تسديد دين)</h3>
-                  <p className="text-[11px] text-slate-400">تنزيل مديونية عميل نقدياً في الصندوق</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setShowPaymentModal(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <AnimatePresence>
+        {showPaymentModal && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowPaymentModal(false)}
+              className="absolute inset-0"
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="relative w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-5 space-y-4 shadow-2xl z-10 max-h-[90vh] overflow-y-auto text-right text-slate-900"
+            >
+              {/* Drag Handle */}
+              <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto -mt-1 mb-1" />
 
-            <div className="p-5 space-y-4 overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3 bg-slate-50 p-2 rounded-xl">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
+                    <CreditCard className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">سند قبض نقدية (تسديد دين)</h3>
+                    <p className="text-[11px] text-slate-400">تنزيل مديونية عميل نقدياً في الصندوق</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowPaymentModal(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
               {payError && (
                 <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" /> {payError}
@@ -868,10 +902,10 @@ export default function Customers({
                   <span>ترحيل سند المقبوضات نقدياً</span>
                 </button>
               </form>
-            </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* MODAL 3: Detailed Customer Account Statement & Print PDF */}
       {statementCustomer && (
@@ -883,6 +917,7 @@ export default function Customers({
           onClose={() => setStatementCustomer(null)}
           currency={currency}
           storeName={storeName}
+          storeLogoUrl={storeLogoUrl}
           isPrivacyMode={isPrivacyMode}
         />
       )}

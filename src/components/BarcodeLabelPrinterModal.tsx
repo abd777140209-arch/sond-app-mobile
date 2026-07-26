@@ -13,6 +13,7 @@ interface BarcodeLabelPrinterModalProps {
   onClose: () => void;
   products: Product[];
   storeName: string;
+  storeLogoUrl?: string;
   currency: string;
 }
 
@@ -21,6 +22,7 @@ export default function BarcodeLabelPrinterModal({
   onClose,
   products,
   storeName,
+  storeLogoUrl,
   currency
 }: BarcodeLabelPrinterModalProps) {
   const activeProducts = products.filter(p => !p.isDeleted);
@@ -222,7 +224,12 @@ export default function BarcodeLabelPrinterModal({
           
           <div className="flex justify-center py-2">
             <div className="bg-white border-2 border-dashed border-slate-300 p-4 rounded-xl text-center shadow-md min-w-[220px] max-w-[260px] space-y-2">
-              <div className="text-[10px] font-black text-slate-800 uppercase tracking-wider">{storeName || 'سند المحاسبي'}</div>
+              <div className="flex items-center justify-center gap-1.5">
+                {storeLogoUrl && (
+                  <img src={storeLogoUrl} alt={storeName} className="w-5 h-5 object-contain rounded" />
+                )}
+                <div className="text-[10px] font-black text-slate-800 uppercase tracking-wider">{storeName || 'سند المحاسبي'}</div>
+              </div>
               <div className="text-xs font-black text-slate-900 line-clamp-1">{customTitle || 'اسم السلعة'}</div>
               
               {/* Visual Barcode Pattern */}

@@ -21,6 +21,10 @@ import {
 export interface CloudLicense {
   key: string;
   hwid: string;
+  hwid1?: string;
+  hwid2?: string;
+  boundHwids?: string[];
+  maxDevices?: number;
   customerName: string;
   phone?: string;
   createdAt?: string;
@@ -215,10 +219,45 @@ export function isUnboundHwid(hwid: string | undefined | null): boolean {
   return norm === '' || norm === 'TRIAL' || norm === 'FREE' || norm === 'UNBOUND';
 }
 
+export function getLicenseHwidSlots(license: CloudLicense): { hwid1: string; hwid2: string } {
+  let h1 = (license.hwid1 || '').trim();
+  let h2 = (license.hwid2 || '').trim();
+
+  if (!h1 && !h2) {
+    if (license.boundHwids && license.boundHwids.length > 0) {
+      h1 = (license.boundHwids[0] || '').trim();
+      h2 = (license.boundHwids[1] || '').trim();
+    } else if (license.hwid) {
+      const parts = license.hwid.split(',').map(s => s.trim());
+      h1 = parts[0] || '';
+      h2 = parts[1] || '';
+    }
+  } else if (!h2 && license.boundHwids && license.boundHwids.length > 1) {
+    h2 = (license.boundHwids[1] || '').trim();
+  } else if (!h2 && license.hwid && license.hwid.includes(',')) {
+    const parts = license.hwid.split(',').map(s => s.trim());
+    if (parts[1]) h2 = parts[1];
+  }
+
+  return { hwid1: h1, hwid2: h2 };
+}
+
+export function getBoundHwids(license: CloudLicense): string[] {
+  const set = new Set<string>();
+  const { hwid1, hwid2 } = getLicenseHwidSlots(license);
+  
+  if (hwid1 && !isUnboundHwid(hwid1)) set.add(normalizeHWID(hwid1));
+  if (hwid2 && !isUnboundHwid(hwid2)) set.add(normalizeHWID(hwid2));
+
+  return Array.from(set);
+}
+
 // Check license key on Cloud / Local Mock Database
 export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ success: boolean; message: string; data?: CloudLicense }> {
   try {
     const db = getFirestoreDb();
+    const normCurrent = normalizeHWID(hwid);
+
     if (db) {
       try {
         const docRef = doc(db, 'licenses', key);
@@ -232,7 +271,22 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
           if (expiry < new Date()) {
             return { success: false, message: 'KEY_EXPIRED', data: license };
           }
-          // Allow auto-registration/re-binding for new device HWID upon valid code entry
+
+          const { hwid1, hwid2 } = getLicenseHwidSlots(license);
+          const norm1 = normalizeHWID(hwid1);
+          const norm2 = normalizeHWID(hwid2);
+
+          const isBoundToCurrent = (normCurrent && (normCurrent === norm1 || normCurrent === norm2));
+          const hasEmptySlot = isUnboundHwid(hwid1) || isUnboundHwid(hwid2);
+
+          if (normCurrent && !isBoundToCurrent && !hasEmptySlot) {
+            return { 
+              success: false, 
+              message: 'تم استهلاك الحد المسموح للأجهزة المربوطة بهذا الكود (2/2). يرجى التواصل مع الدعم', 
+              data: license 
+            };
+          }
+
           return { success: true, message: 'VALID', data: license };
         }
       } catch (cloudErr) {
@@ -252,6 +306,21 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
         return { success: false, message: 'KEY_EXPIRED', data: license };
       }
 
+      const { hwid1, hwid2 } = getLicenseHwidSlots(license);
+      const norm1 = normalizeHWID(hwid1);
+      const norm2 = normalizeHWID(hwid2);
+
+      const isBoundToCurrent = (normCurrent && (normCurrent === norm1 || normCurrent === norm2));
+      const hasEmptySlot = isUnboundHwid(hwid1) || isUnboundHwid(hwid2);
+
+      if (normCurrent && !isBoundToCurrent && !hasEmptySlot) {
+        return { 
+          success: false, 
+          message: 'تم استهلاك الحد المسموح للأجهزة المربوطة بهذا الكود (2/2). يرجى التواصل مع الدعم', 
+          data: license 
+        };
+      }
+
       return { success: true, message: 'VALID', data: license };
     }
 
@@ -266,6 +335,8 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
 export async function activateLicenseOnCloud(key: string, hwid: string, customerName?: string, phone?: string): Promise<{ success: boolean; message: string; data?: CloudLicense }> {
   try {
     const db = getFirestoreDb();
+    const normCurrent = normalizeHWID(hwid);
+
     if (db) {
       try {
         const docRef = doc(db, 'licenses', key);
@@ -281,10 +352,33 @@ export async function activateLicenseOnCloud(key: string, hwid: string, customer
             return { success: false, message: 'KEY_EXPIRED' };
           }
 
-          // Automatically bind/register the new device HWID to this valid license key
+          let { hwid1, hwid2 } = getLicenseHwidSlots(license);
+          const norm1 = normalizeHWID(hwid1);
+          const norm2 = normalizeHWID(hwid2);
+
+          const isBoundToCurrent = (normCurrent && (normCurrent === norm1 || normCurrent === norm2));
+
+          if (!isBoundToCurrent) {
+            if (isUnboundHwid(hwid1)) {
+              hwid1 = hwid;
+            } else if (isUnboundHwid(hwid2)) {
+              hwid2 = hwid;
+            } else {
+              return { 
+                success: false, 
+                message: 'تم استهلاك الحد المسموح للأجهزة المربوطة بهذا الكود (2/2). يرجى التواصل مع الدعم' 
+              };
+            }
+          }
+
+          const boundList = [hwid1, hwid2].filter(h => h && !isUnboundHwid(h));
           const updatedLicense: CloudLicense = {
             ...license,
-            hwid: hwid,
+            hwid1,
+            hwid2,
+            hwid: boundList.join(','),
+            boundHwids: boundList,
+            maxDevices: 2,
             customerName: customerName || license.customerName || 'عميل سند',
             phone: phone || license.phone || '',
             status: 'active'
@@ -293,44 +387,6 @@ export async function activateLicenseOnCloud(key: string, hwid: string, customer
           await withTimeout(setDoc(docRef, updatedLicense), 2500);
           return { success: true, message: 'ACTIVATED_SUCCESSFULLY', data: updatedLicense };
         } else {
-          // If key does not exist on cloud, check if it's a valid activation key format (e.g., MHTM-XXXX...)
-          // and auto-register it as a new CloudLicense for this device!
-          if (key.length >= 8) {
-            const upperKey = key.toUpperCase();
-            let subType: 'monthly' | 'yearly' | 'lifetime' | 'trial' = 'monthly';
-            let expDate = new Date();
-
-            if (upperKey.startsWith('MHTM')) {
-              subType = 'monthly';
-              expDate.setMonth(expDate.getMonth() + 1);
-            } else if (upperKey.startsWith('MHTY')) {
-              subType = 'yearly';
-              expDate.setFullYear(expDate.getFullYear() + 1);
-            } else if (upperKey.startsWith('MHTL')) {
-              subType = 'lifetime';
-              expDate.setFullYear(expDate.getFullYear() + 100);
-            } else if (upperKey.startsWith('MHTT')) {
-              subType = 'trial';
-              expDate.setDate(expDate.getDate() + 7);
-            } else {
-              subType = 'monthly';
-              expDate.setMonth(expDate.getMonth() + 1);
-            }
-
-            const newLicense: CloudLicense = {
-              key: key,
-              hwid: hwid,
-              customerName: customerName || 'محل سند للخدمات المحاسبية',
-              phone: phone || '',
-              createdAt: new Date().toISOString(),
-              expiresAt: expDate.toISOString(),
-              type: subType,
-              status: 'active'
-            };
-
-            await withTimeout(setDoc(docRef, newLicense), 2500);
-            return { success: true, message: 'ACTIVATED_SUCCESSFULLY', data: newLicense };
-          }
           return { success: false, message: 'KEY_NOT_FOUND' };
         }
       } catch (cloudErr) {
@@ -351,7 +407,31 @@ export async function activateLicenseOnCloud(key: string, hwid: string, customer
         return { success: false, message: 'KEY_EXPIRED' };
       }
 
-      license.hwid = hwid;
+      let { hwid1, hwid2 } = getLicenseHwidSlots(license);
+      const norm1 = normalizeHWID(hwid1);
+      const norm2 = normalizeHWID(hwid2);
+
+      const isBoundToCurrent = (normCurrent && (normCurrent === norm1 || normCurrent === norm2));
+
+      if (!isBoundToCurrent) {
+        if (isUnboundHwid(hwid1)) {
+          hwid1 = hwid;
+        } else if (isUnboundHwid(hwid2)) {
+          hwid2 = hwid;
+        } else {
+          return { 
+            success: false, 
+            message: 'تم استهلاك الحد المسموح للأجهزة المربوطة بهذا الكود (2/2). يرجى التواصل مع الدعم' 
+          };
+        }
+      }
+
+      const boundList = [hwid1, hwid2].filter(h => h && !isUnboundHwid(h));
+      license.hwid1 = hwid1;
+      license.hwid2 = hwid2;
+      license.hwid = boundList.join(',');
+      license.boundHwids = boundList;
+      license.maxDevices = 2;
       if (customerName) license.customerName = customerName;
       if (phone) license.phone = phone;
       license.status = 'active';
@@ -359,43 +439,6 @@ export async function activateLicenseOnCloud(key: string, hwid: string, customer
       saveMockDb(localDb);
 
       return { success: true, message: 'ACTIVATED_SUCCESSFULLY', data: license };
-    } else if (key.length >= 8) {
-      // Auto-register local mock key
-      const upperKey = key.toUpperCase();
-      let subType: 'monthly' | 'yearly' | 'lifetime' | 'trial' = 'monthly';
-      let expDate = new Date();
-
-      if (upperKey.startsWith('MHTM')) {
-        subType = 'monthly';
-        expDate.setMonth(expDate.getMonth() + 1);
-      } else if (upperKey.startsWith('MHTY')) {
-        subType = 'yearly';
-        expDate.setFullYear(expDate.getFullYear() + 1);
-      } else if (upperKey.startsWith('MHTL')) {
-        subType = 'lifetime';
-        expDate.setFullYear(expDate.getFullYear() + 100);
-      } else if (upperKey.startsWith('MHTT')) {
-        subType = 'trial';
-        expDate.setDate(expDate.getDate() + 7);
-      } else {
-        subType = 'monthly';
-        expDate.setMonth(expDate.getMonth() + 1);
-      }
-
-      const newLic: CloudLicense = {
-        key: key,
-        hwid: hwid,
-        customerName: customerName || 'محل سند للخدمات المحاسبية',
-        phone: phone || '',
-        createdAt: new Date().toISOString(),
-        expiresAt: expDate.toISOString(),
-        type: subType,
-        status: 'active'
-      };
-
-      localDb[key] = newLic;
-      saveMockDb(localDb);
-      return { success: true, message: 'ACTIVATED_SUCCESSFULLY', data: newLic };
     }
 
     return { success: false, message: 'KEY_NOT_FOUND' };
@@ -456,16 +499,31 @@ export async function getAllLicensesFromCloud(): Promise<CloudLicense[]> {
   }
 }
 
-// Developer Action: Delete central license (SaaS Admin)
+// Developer Action: Real Firestore Delete central license (SaaS Admin)
 export async function deleteLicenseFromCloud(key: string): Promise<boolean> {
   try {
     const db = getFirestoreDb();
     if (db) {
       try {
-        await withTimeout(deleteDoc(doc(db, 'licenses', key)), 1500);
+        // Execute direct real deleteDoc to permanently purge license AND store documents from Firestore (Cascade Delete)
+        await Promise.allSettled([
+          withTimeout(deleteDoc(doc(db, 'licenses', key)), 2500),
+          withTimeout(deleteDoc(doc(db, 'stores', key)), 2500)
+        ]);
+        
+        // Remove from local cache
+        const localDb = getMockDb();
+        delete localDb[key];
+        saveMockDb(localDb);
         return true;
       } catch (cloudErr) {
-        console.warn('Firestore deleteDoc offline or error, deleting from local DB:', cloudErr);
+        console.warn('Firestore deleteDoc timeout or error, attempting direct deleteDoc:', cloudErr);
+        try {
+          await deleteDoc(doc(db, 'licenses', key));
+          await deleteDoc(doc(db, 'stores', key));
+        } catch (err) {
+          console.error('Direct deleteDoc failed:', err);
+        }
       }
     }
 
@@ -479,9 +537,14 @@ export async function deleteLicenseFromCloud(key: string): Promise<boolean> {
   }
 }
 
-// Developer Action: Update license Device ID (HWID) for license transfer
-export async function updateLicenseHwidOnCloud(key: string, newHwid: string): Promise<boolean> {
+// Developer Action: Update license Device IDs (HWID 1 & HWID 2) for license management
+export async function updateLicenseHwidsOnCloud(key: string, newHwid1: string, newHwid2: string): Promise<boolean> {
   try {
+    const h1 = newHwid1.trim();
+    const h2 = newHwid2.trim();
+    const boundList = [h1, h2].filter(h => h && !isUnboundHwid(h));
+    const combinedHwid = boundList.join(',');
+
     const db = getFirestoreDb();
     if (db) {
       try {
@@ -489,25 +552,41 @@ export async function updateLicenseHwidOnCloud(key: string, newHwid: string): Pr
         const docSnap = await withTimeout(getDoc(docRef), 1500);
         if (docSnap.exists()) {
           const current = docSnap.data() as CloudLicense;
-          await withTimeout(setDoc(docRef, { ...current, hwid: newHwid.trim() }), 1500);
+          await withTimeout(setDoc(docRef, { 
+            ...current, 
+            hwid1: h1, 
+            hwid2: h2, 
+            hwid: combinedHwid, 
+            boundHwids: boundList,
+            maxDevices: 2
+          }), 1500);
           return true;
         }
       } catch (cloudErr) {
-        console.warn('Firestore update HWID error, trying local DB:', cloudErr);
+        console.warn('Firestore update HWIDs error, trying local DB:', cloudErr);
       }
     }
 
     const localDb = getMockDb();
     if (localDb[key]) {
-      localDb[key].hwid = newHwid.trim();
+      localDb[key].hwid1 = h1;
+      localDb[key].hwid2 = h2;
+      localDb[key].hwid = combinedHwid;
+      localDb[key].boundHwids = boundList;
+      localDb[key].maxDevices = 2;
       saveMockDb(localDb);
       return true;
     }
     return false;
   } catch (error) {
-    console.warn('SaaS HWID update fallback:', error);
+    console.warn('SaaS HWIDs update fallback:', error);
     return false;
   }
+}
+
+export async function updateLicenseHwidOnCloud(key: string, newHwid: string): Promise<boolean> {
+  const parts = newHwid.split(',').map(s => s.trim());
+  return updateLicenseHwidsOnCloud(key, parts[0] || '', parts[1] || '');
 }
 
 // Find license by hardware fingerprint (HWID)

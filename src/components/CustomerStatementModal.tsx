@@ -16,6 +16,7 @@ interface CustomerStatementModalProps {
   onClose: () => void;
   currency: string;
   storeName?: string;
+  storeLogoUrl?: string;
   isPrivacyMode?: boolean;
 }
 
@@ -27,6 +28,7 @@ export default function CustomerStatementModal({
   onClose,
   currency,
   storeName = 'سند المحاسبي',
+  storeLogoUrl,
   isPrivacyMode = false
 }: CustomerStatementModalProps) {
   const statementRef = useRef<HTMLDivElement>(null);
@@ -134,10 +136,19 @@ export default function CustomerStatementModal({
           
           {/* Statement Header Branding */}
           <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
-            <div>
-              <h2 className="text-xl font-black text-slate-900">{storeName}</h2>
-              <p className="text-xs font-bold text-slate-500 mt-0.5">نظام إدارة المبيعات والحسابات الشامل</p>
-              <p className="text-[10px] text-slate-400 mt-1 font-mono">تاريخ التقرير: {new Date().toLocaleDateString('ar-YE')}</p>
+            <div className="flex items-center gap-3">
+              {storeLogoUrl && (
+                <img 
+                  src={storeLogoUrl} 
+                  alt={storeName} 
+                  className="w-12 h-12 rounded-xl object-contain border border-slate-200 bg-white p-0.5" 
+                />
+              )}
+              <div>
+                <h2 className="text-xl font-black text-slate-900">{storeName}</h2>
+                <p className="text-xs font-bold text-slate-500 mt-0.5">نظام إدارة المبيعات والحسابات الشامل</p>
+                <p className="text-[10px] text-slate-400 mt-1 font-mono">تاريخ التقرير: {new Date().toLocaleDateString('ar-YE')}</p>
+              </div>
             </div>
             <div className="text-left font-mono">
               <div className="inline-block px-3 py-1 bg-slate-100 text-slate-900 border border-slate-300 rounded-lg text-xs font-bold">

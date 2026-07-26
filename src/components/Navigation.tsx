@@ -239,10 +239,7 @@ export default function Navigation({
           {/* Customers */}
           <button
             id="tab_trigger_customers"
-            onClick={() => {
-              soundManager.playScanBeep();
-              setActiveTab('customers');
-            }}
+            onClick={() => handleTabSelect('customers')}
             className={`group flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all cursor-pointer w-full text-right ${
               activeTab === 'customers'
                 ? 'bg-sky-50/90 text-sky-950 font-bold border-r-4 border-sky-600 shadow-xs'
@@ -262,10 +259,7 @@ export default function Navigation({
           {/* Employees */}
           <button
             id="tab_trigger_employees"
-            onClick={() => {
-              soundManager.playScanBeep();
-              setActiveTab('employees');
-            }}
+            onClick={() => handleTabSelect('employees')}
             className={`group flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all cursor-pointer w-full text-right ${
               activeTab === 'employees'
                 ? 'bg-teal-50/90 text-teal-950 font-bold border-r-4 border-teal-600 shadow-xs'
@@ -462,10 +456,7 @@ export default function Navigation({
 
         {/* 3. الحسابات / العملاء */}
         <button
-          onClick={() => {
-            soundManager.playScanBeep();
-            setActiveTab('customers');
-          }}
+          onClick={() => handleTabSelect('customers')}
           className={`relative flex flex-col items-center justify-center py-1.5 px-3 rounded-2xl transition-all flex-1 ${
             activeTab === 'customers' ? 'text-sky-600 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
           }`}
@@ -483,10 +474,7 @@ export default function Navigation({
 
         {/* 4. المخزن */}
         <button
-          onClick={() => {
-            soundManager.playScanBeep();
-            setActiveTab('inventory');
-          }}
+          onClick={() => handleTabSelect('inventory')}
           className={`relative flex flex-col items-center justify-center py-1.5 px-3 rounded-2xl transition-all flex-1 ${
             activeTab === 'inventory' ? 'text-purple-600 font-extrabold scale-105' : 'text-slate-500 hover:text-slate-800'
           }`}

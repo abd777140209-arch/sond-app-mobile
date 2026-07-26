@@ -43,7 +43,40 @@ const deobfuscate = (obfuscated: string): string => {
   }
 };
 
-// Generate deterministic Hardware ID (HWID) based on native Android ID or environment features to bind software
+// Canvas fingerprint generator for web devices
+const getCanvasFingerprint = (): string => {
+  if (typeof document === 'undefined') return '';
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 240;
+    canvas.height = 60;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+    
+    ctx.textBaseline = 'top';
+    ctx.font = '14px "Arial", "Segoe UI", sans-serif';
+    ctx.fillStyle = '#0284C7';
+    ctx.fillRect(100, 5, 80, 30);
+    
+    ctx.fillStyle = '#0F172A';
+    ctx.fillText('MHT-ACCOUNTING-SYSTEM-2026', 2, 15);
+    
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.8)';
+    ctx.font = '16px "Times New Roman", serif';
+    ctx.fillText('SAND-SAAS-LICENSE-VERIFIED', 4, 32);
+
+    ctx.beginPath();
+    ctx.arc(50, 50, 10, 0, Math.PI * 2, true);
+    ctx.closePath();
+    ctx.fill();
+
+    return canvas.toDataURL();
+  } catch {
+    return '';
+  }
+};
+
+// Generate deterministic Hardware ID (HWID) based on native Android ID or Canvas Fingerprint
 export const generateHWID = (): string => {
   try {
     const existing = localStorage.getItem('smart_accounting_hwid');
@@ -51,48 +84,52 @@ export const generateHWID = (): string => {
       return existing.trim();
     }
 
-    // Check if Android Native Interface is available in WebView
-    if (typeof window !== 'undefined' && (window as any).AndroidInterface?.getDeviceId) {
-      try {
-        const nativeDeviceId = (window as any).AndroidInterface.getDeviceId();
-        if (nativeDeviceId && typeof nativeDeviceId === 'string' && nativeDeviceId.trim().length > 0 && nativeDeviceId !== 'null') {
-          const hwid = `MHT-HWID-${nativeDeviceId.trim().toUpperCase()}`;
-          localStorage.setItem('smart_accounting_hwid', hwid);
-          return hwid;
+    // 1. Android Native ID (WebView)
+    if (typeof window !== 'undefined') {
+      const androidObj = (window as any).AndroidInterface || (window as any).Android;
+      if (androidObj) {
+        const getNativeId = androidObj.getDeviceId || androidObj.getAndroidId;
+        if (typeof getNativeId === 'function') {
+          try {
+            const nativeId = getNativeId.call(androidObj);
+            if (nativeId && typeof nativeId === 'string' && nativeId.trim().length > 0 && nativeId !== 'null' && nativeId !== 'undefined') {
+              const hwid = `MHT-HWID-${nativeId.trim().toUpperCase()}`;
+              localStorage.setItem('smart_accounting_hwid', hwid);
+              return hwid;
+            }
+          } catch (e) {
+            console.warn('Native Android device ID retrieval failed:', e);
+          }
         }
-      } catch (e) {
-        console.warn('Native Android getDeviceId call failed:', e);
       }
     }
 
-    // Fallback fingerprint generation based on environment features
+    // 2. Deterministic Web Canvas Fingerprint + Screen & Browser Specs
+    const canvasFp = getCanvasFingerprint();
     const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
     const screenWidth = typeof window !== 'undefined' && window.screen ? window.screen.width || 1080 : 1080;
     const screenHeight = typeof window !== 'undefined' && window.screen ? window.screen.height || 1920 : 1920;
+    const colorDepth = typeof window !== 'undefined' && window.screen ? window.screen.colorDepth || 24 : 24;
     const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4;
     const language = typeof navigator !== 'undefined' ? navigator.language || 'ar' : 'ar';
+    const timeZone = typeof Intl !== 'undefined' && Intl.DateTimeFormat ? Intl.DateTimeFormat().resolvedOptions().timeZone || '' : '';
 
-    let deviceSeed = localStorage.getItem('smart_accounting_device_seed');
-    if (!deviceSeed) {
-      deviceSeed = `${Date.now()}-${Math.floor(100000 + Math.random() * 900000)}`;
-      localStorage.setItem('smart_accounting_device_seed', deviceSeed);
-    }
+    const signature = `CANVAS:${canvasFp}|UA:${userAgent}|SCR:${screenWidth}x${screenHeight}x${colorDepth}|CPU:${cores}|LANG:${language}|TZ:${timeZone}`;
 
-    const combined = `${userAgent}-${screenWidth}x${screenHeight}-${cores}-${language}-${deviceSeed}`;
-    
     let hash = 0;
-    for (let i = 0; i < combined.length; i++) {
-      const char = combined.charCodeAt(i);
+    for (let i = 0; i < signature.length; i++) {
+      const char = signature.charCodeAt(i);
       hash = ((hash << 5) - hash) + char;
       hash |= 0;
     }
 
-    const hwid = `MHT-HWID-${Math.abs(hash).toString(16).toUpperCase()}`;
+    const hexHash = Math.abs(hash).toString(16).toUpperCase().padStart(8, '0');
+    const hwid = `MHT-HWID-${hexHash}`;
     localStorage.setItem('smart_accounting_hwid', hwid);
     return hwid;
   } catch (err) {
     console.error('HWID generation exception:', err);
-    const fallback = `MHT-HWID-DEV-${Math.floor(100000 + Math.random() * 900000)}`;
+    const fallback = 'MHT-HWID-DEV-WEB-2026';
     try {
       localStorage.setItem('smart_accounting_hwid', fallback);
     } catch {}
@@ -175,7 +212,11 @@ export const loadLicenseLocally = (): LicenseInfo => {
     
     // Safety check: verify if the license belongs to this device HWID
     // (Anti-copying security!)
-    if (!isUnboundHwid(info.hwid) && normalizeHWID(info.hwid) !== normalizeHWID(hwid) && info.licenseKey !== 'TRIAL-VERSION-FREE') {
+    const isMatchedDevice = isUnboundHwid(info.hwid) || 
+      info.licenseKey === 'TRIAL-VERSION-FREE' || 
+      info.hwid.split(',').some(h => normalizeHWID(h) === normalizeHWID(hwid));
+
+    if (!isMatchedDevice) {
       // Device ID mismatch! Lock the application.
       return {
         ...info,
