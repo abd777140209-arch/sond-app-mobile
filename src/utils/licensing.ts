@@ -76,7 +76,7 @@ const getCanvasFingerprint = (): string => {
   }
 };
 
-// Generate deterministic Hardware ID (HWID) based on native Android ID or Canvas Fingerprint
+// Generate deterministic Hardware ID (HWID)
 export const generateHWID = (): string => {
   try {
     const existing = localStorage.getItem('smart_accounting_hwid');
@@ -93,7 +93,11 @@ export const generateHWID = (): string => {
           try {
             const nativeId = getNativeId.call(androidObj);
             if (nativeId && typeof nativeId === 'string' && nativeId.trim().length > 0 && nativeId !== 'null' && nativeId !== 'undefined') {
-              const hwid = `MHT-HWID-${nativeId.trim().toUpperCase()}`;
+              // 🎯 تقليم وتنظيف معرف الجوال الطويل ليتوافق تماماً مع قواعد الفايربيس والويب
+              const cleanNative = nativeId.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+              const shortNative = cleanNative.length > 12 ? cleanNative.substring(0, 12) : cleanNative;
+              
+              const hwid = `MHT-HWID-${shortNative}`;
               localStorage.setItem('smart_accounting_hwid', hwid);
               return hwid;
             }
@@ -173,7 +177,7 @@ export const saveLicenseLocally = (info: LicenseInfo) => {
   localStorage.setItem(STORAGE_KEY, secureStr);
 };
 
-// Load license info safely without throwing HWID mismatch on initial load
+// Load license info safely
 export const loadLicenseLocally = (): LicenseInfo => {
   const secureStr = localStorage.getItem(STORAGE_KEY);
   const hwid = generateHWID();
