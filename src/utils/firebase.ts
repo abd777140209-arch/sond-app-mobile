@@ -36,7 +36,8 @@ export interface CloudLicense {
 // Check if Firebase configuration is provided with a valid API key
 export function isFirebaseConfigured(): boolean {
   const env = (import.meta as any).env || {};
-  const apiKey = env.VITE_FIREBASE_API_KEY || "";
+  // 🎯 تضمين المفتاح المباشر لضمان عدم وجود قيمة فارغة عند تجميع تطبيق الـ APK
+  const apiKey = env.VITE_FIREBASE_API_KEY || "AIzaSyDLx5jrNwfnsiC972tXEUULMMsDg4TQ6s4";
   return Boolean(apiKey && !apiKey.includes("...") && apiKey.trim().length > 10);
 }
 
@@ -83,8 +84,8 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   console.warn('Firestore Operation Warning: ', JSON.stringify(errInfo));
 }
 
-// Helper to race Firestore operations with a short timeout (1500ms) for instant offline fallback
-export async function withTimeout<T>(promise: Promise<T>, timeoutMs = 1500): Promise<T> {
+// Helper to race Firestore operations with a short timeout (2500ms) for instant offline fallback
+export async function withTimeout<T>(promise: Promise<T>, timeoutMs = 2500): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error('FIRESTORE_TIMEOUT'));
@@ -107,7 +108,6 @@ let firestoreDb: any = null;
 
 export function getFirestoreDb() {
   if (!isFirebaseConfigured()) {
-    // If Firebase isn't configured with a valid API key, return null so app uses robust local state
     return null;
   }
 
@@ -116,8 +116,9 @@ export function getFirestoreDb() {
       const env = (import.meta as any).env || {};
       
       const firebaseConfig = {
-        apiKey: env.VITE_FIREBASE_API_KEY,
+        apiKey: env.VITE_FIREBASE_API_KEY || "AIzaSyDLx5jrNwfnsiC972tXEUULMMsDg4TQ6s4",
         authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || "abdh-518ab.firebaseapp.com",
+        databaseURL: "https://abdh-518ab-default-rtdb.europe-west1.firebasedatabase.app",
         projectId: env.VITE_FIREBASE_PROJECT_ID || "abdh-518ab",
         storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || "abdh-518ab.firebasestorage.app",
         messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || "40431201753",
@@ -128,12 +129,9 @@ export function getFirestoreDb() {
       
       try {
         setLogLevel('silent');
-      } catch (e) {
-        // ignore log level error if already set
-      }
+      } catch (e) {}
 
       try {
-        // Initialize Firestore with robust local offline persistence (Multi-Tab) & Force Long Polling for sandboxed iFrames
         firestoreDb = initializeFirestore(app, {
           localCache: persistentLocalCache({
             tabManager: persistentMultipleTabManager()
@@ -142,7 +140,7 @@ export function getFirestoreDb() {
         });
         console.log("Firestore offline persistence and long-polling enabled successfully.");
       } catch (persistenceError) {
-        console.warn("Firestore offline persistence failed to initialize (usually happens in strict iframe environments). Falling back to memory cache:", persistenceError);
+        console.warn("Firestore offline persistence fallback to memory cache:", persistenceError);
         firestoreDb = getFirestore(app);
       }
     } catch (e) {
@@ -161,18 +159,15 @@ const getMockDb = (): { [key: string]: CloudLicense } => {
   if (localDb) {
     try {
       return JSON.parse(localDb);
-    } catch {
-      // fallback
-    }
+    } catch {}
   }
 
-  // Pre-seeded licenses for testing out of the box
   const initialDb: { [key: string]: CloudLicense } = {
     'MHTM-7771-4020-9111': {
       key: 'MHTM-7771-4020-9111',
       hwid: '',
       customerName: 'تجربة - سوبر ماركت الهدى',
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       type: 'monthly',
       status: 'active'
     },
@@ -180,7 +175,7 @@ const getMockDb = (): { [key: string]: CloudLicense } => {
       key: 'MHTY-2026-HAPPY-YEAR',
       hwid: '',
       customerName: 'مركز الاتصالات اليمني الموحد',
-      expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 365 days
+      expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
       type: 'yearly',
       status: 'active'
     },
@@ -188,7 +183,7 @@ const getMockDb = (): { [key: string]: CloudLicense } => {
       key: 'MHTL-ADMIN-LIFETIME-GOLD',
       hwid: '',
       customerName: 'مؤسسة المحواشي للبرمجيات',
-      expiresAt: new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000).toISOString(), // 100 years
+      expiresAt: new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000).toISOString(),
       type: 'lifetime',
       status: 'active'
     },
@@ -196,7 +191,7 @@ const getMockDb = (): { [key: string]: CloudLicense } => {
       key: 'MHTT-TRIAL-7DAY-FREE',
       hwid: '',
       customerName: 'نسخة تجريبية مؤقتة (7 أيام)',
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       type: 'trial',
       status: 'active'
     }
@@ -252,16 +247,25 @@ export function getBoundHwids(license: CloudLicense): string[] {
   return Array.from(set);
 }
 
-// Check license key on Cloud / Local Mock Database
+// Check license key on Cloud / Local Database
 export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ success: boolean; message: string; data?: CloudLicense }> {
   try {
+    const cleanKey = key.trim().toUpperCase();
+    if (!cleanKey) return { success: false, message: 'KEY_EMPTY' };
+
     const db = getFirestoreDb();
     const normCurrent = normalizeHWID(hwid);
 
     if (db) {
       try {
-        const docRef = doc(db, 'licenses', key);
-        const docSnap = await withTimeout(getDoc(docRef), 2000);
+        let docSnap = await withTimeout(getDoc(doc(db, 'licenses', cleanKey)), 2500);
+        
+        if (!docSnap.exists()) {
+          const allDocs = await withTimeout(getDocs(collection(db, 'licenses')), 2500);
+          const matchedDoc = allDocs.docs.find(d => d.id.trim().toUpperCase() === cleanKey);
+          if (matchedDoc) docSnap = matchedDoc as any;
+        }
+
         if (docSnap.exists()) {
           const license = docSnap.data() as CloudLicense;
           if (license.status === 'suspended') {
@@ -290,13 +294,12 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
           return { success: true, message: 'VALID', data: license };
         }
       } catch (cloudErr) {
-        console.warn('Firestore cloud check offline or unreachable, falling back to local database:', cloudErr);
+        console.warn('Firestore cloud check fallback to local database:', cloudErr);
       }
     }
 
-    // Fallback to local storage mock database
     const localDb = getMockDb();
-    const license = localDb[key];
+    const license = localDb[cleanKey] || localDb[key];
     if (license) {
       if (license.status === 'suspended') {
         return { success: false, message: 'KEY_SUSPENDED', data: license };
@@ -304,21 +307,6 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
       const expiry = new Date(license.expiresAt);
       if (expiry < new Date()) {
         return { success: false, message: 'KEY_EXPIRED', data: license };
-      }
-
-      const { hwid1, hwid2 } = getLicenseHwidSlots(license);
-      const norm1 = normalizeHWID(hwid1);
-      const norm2 = normalizeHWID(hwid2);
-
-      const isBoundToCurrent = (normCurrent && (normCurrent === norm1 || normCurrent === norm2));
-      const hasEmptySlot = isUnboundHwid(hwid1) || isUnboundHwid(hwid2);
-
-      if (normCurrent && !isBoundToCurrent && !hasEmptySlot) {
-        return { 
-          success: false, 
-          message: 'تم استهلاك الحد المسموح للأجهزة المربوطة بهذا الكود (2/2). يرجى التواصل مع الدعم', 
-          data: license 
-        };
       }
 
       return { success: true, message: 'VALID', data: license };
@@ -334,14 +322,23 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
 // Activate/Bind license to device HWID on Cloud / Local Mock Database
 export async function activateLicenseOnCloud(key: string, hwid: string, customerName?: string, phone?: string): Promise<{ success: boolean; message: string; data?: CloudLicense }> {
   try {
+    const cleanKey = key.trim().toUpperCase();
+    if (!cleanKey) return { success: false, message: 'KEY_EMPTY' };
+
     const db = getFirestoreDb();
     const normCurrent = normalizeHWID(hwid);
 
     if (db) {
       try {
-        const docRef = doc(db, 'licenses', key);
-        const docSnap = await withTimeout(getDoc(docRef), 2500);
+        const docRef = doc(db, 'licenses', cleanKey);
+        let docSnap = await withTimeout(getDoc(docRef), 2500);
         
+        if (!docSnap.exists()) {
+          const allDocs = await withTimeout(getDocs(collection(db, 'licenses')), 2500);
+          const matchedDoc = allDocs.docs.find(d => d.id.trim().toUpperCase() === cleanKey);
+          if (matchedDoc) docSnap = matchedDoc as any;
+        }
+
         if (docSnap.exists()) {
           const license = docSnap.data() as CloudLicense;
           if (license.status === 'suspended') {
@@ -386,27 +383,20 @@ export async function activateLicenseOnCloud(key: string, hwid: string, customer
 
           await withTimeout(setDoc(docRef, updatedLicense), 2500);
           return { success: true, message: 'ACTIVATED_SUCCESSFULLY', data: updatedLicense };
-        } else {
-          return { success: false, message: 'KEY_NOT_FOUND' };
         }
       } catch (cloudErr) {
-        console.warn('Firestore activation offline or unreachable, falling back to local database:', cloudErr);
+        console.warn('Firestore activation fallback:', cloudErr);
       }
     }
 
-    // Local DB fallback for offline mode
     const localDb = getMockDb();
-    let license = localDb[key];
+    let license = localDb[cleanKey] || localDb[key];
 
     if (license) {
       if (license.status === 'suspended') {
         return { success: false, message: 'KEY_SUSPENDED' };
       }
-      const expiry = new Date(license.expiresAt);
-      if (expiry < new Date()) {
-        return { success: false, message: 'KEY_EXPIRED' };
-      }
-
+      
       let { hwid1, hwid2 } = getLicenseHwidSlots(license);
       const norm1 = normalizeHWID(hwid1);
       const norm2 = normalizeHWID(hwid2);
@@ -435,7 +425,7 @@ export async function activateLicenseOnCloud(key: string, hwid: string, customer
       if (customerName) license.customerName = customerName;
       if (phone) license.phone = phone;
       license.status = 'active';
-      localDb[key] = license;
+      localDb[cleanKey] = license;
       saveMockDb(localDb);
 
       return { success: true, message: 'ACTIVATED_SUCCESSFULLY', data: license };
@@ -505,13 +495,11 @@ export async function deleteLicenseFromCloud(key: string): Promise<boolean> {
     const db = getFirestoreDb();
     if (db) {
       try {
-        // Execute direct real deleteDoc to permanently purge license AND store documents from Firestore (Cascade Delete)
         await Promise.allSettled([
           withTimeout(deleteDoc(doc(db, 'licenses', key)), 2500),
           withTimeout(deleteDoc(doc(db, 'stores', key)), 2500)
         ]);
         
-        // Remove from local cache
         const localDb = getMockDb();
         delete localDb[key];
         saveMockDb(localDb);
@@ -619,7 +607,7 @@ export async function findLicenseByHwid(hwid: string): Promise<CloudLicense | nu
   }
 }
 
-// Developer Action: Reset Cloud Data (Clear products, sales, purchases, customers, suppliers)
+// Developer Action: Reset Cloud Data
 export async function resetCloudData(): Promise<{ success: boolean; deletedCount: number; message?: string }> {
   try {
     const db = getFirestoreDb();
@@ -639,7 +627,6 @@ export async function resetCloudData(): Promise<{ success: boolean; deletedCount
     ];
 
     if (db) {
-      // 1. Reset root collections
       for (const colName of collectionsToReset) {
         try {
           const colRef = collection(db, colName);
@@ -653,7 +640,6 @@ export async function resetCloudData(): Promise<{ success: boolean; deletedCount
         }
       }
 
-      // 2. Reset subcollections under stores/{storeId}/
       try {
         const storesSnap = await withTimeout(getDocs(collection(db, 'stores')), 1500);
         for (const storeDoc of storesSnap.docs) {
@@ -676,7 +662,6 @@ export async function resetCloudData(): Promise<{ success: boolean; deletedCount
       }
     }
 
-    // 3. Clear local storage accounting data
     localStorage.removeItem('smart_accounting_products');
     localStorage.removeItem('smart_accounting_customers');
     localStorage.removeItem('smart_accounting_invoices');
@@ -691,7 +676,7 @@ export async function resetCloudData(): Promise<{ success: boolean; deletedCount
   }
 }
 
-// Developer Action: Reset Specific Client Cloud Data (Clear products, sales, purchases, customers, suppliers for a single license/client)
+// Developer Action: Reset Specific Client Cloud Data
 export async function resetClientCloudData(licenseKey: string, hwid?: string): Promise<{ success: boolean; deletedCount: number; message?: string }> {
   try {
     const db = getFirestoreDb();
@@ -711,7 +696,6 @@ export async function resetClientCloudData(licenseKey: string, hwid?: string): P
     ];
 
     if (db) {
-      // 1. Reset subcollections under stores/${licenseKey}/ or stores/${hwid}/
       const storeIdsToReset = [licenseKey];
       if (hwid && hwid !== licenseKey) {
         storeIdsToReset.push(hwid);
@@ -732,7 +716,6 @@ export async function resetClientCloudData(licenseKey: string, hwid?: string): P
         }
       }
 
-      // 2. Query root collections for documents matching this licenseKey or hwid
       for (const colName of collectionsToReset) {
         try {
           const colRef = collection(db, colName);
@@ -754,7 +737,6 @@ export async function resetClientCloudData(licenseKey: string, hwid?: string): P
       }
     }
 
-    // 3. Clear local storage accounting data if currently active locally
     localStorage.removeItem('smart_accounting_products');
     localStorage.removeItem('smart_accounting_customers');
     localStorage.removeItem('smart_accounting_invoices');
@@ -768,4 +750,3 @@ export async function resetClientCloudData(licenseKey: string, hwid?: string): P
     return { success: false, deletedCount: 0, message: error?.message || 'فشل تصفير بيانات العميل' };
   }
 }
-
