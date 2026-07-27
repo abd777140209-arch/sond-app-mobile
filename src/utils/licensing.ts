@@ -140,7 +140,7 @@ export const generateHWID = (): string => {
 export const getHWID = generateHWID;
 export const getDeviceId = generateHWID;
 
-// Generate cryptographically looking license key (useful for Abdulmajeed's admin panel)
+// Generate cryptographically looking license key
 export const generateLicenseKey = (type: 'monthly' | 'yearly' | 'lifetime' | 'trial'): string => {
   const prefix = type === 'monthly' ? 'MHTM' : type === 'yearly' ? 'MHTY' : type === 'lifetime' ? 'MHTL' : 'MHTT';
   const segment1 = Math.floor(1000 + Math.random() * 9000).toString();
@@ -157,9 +157,8 @@ export const getExpiryDate = (type: 'monthly' | 'yearly' | 'lifetime' | 'trial')
   } else if (type === 'yearly') {
     now.setFullYear(now.getFullYear() + 1);
   } else if (type === 'lifetime') {
-    now.setFullYear(now.getFullYear() + 100); // 100 years
+    now.setFullYear(now.getFullYear() + 100);
   } else {
-    // 7 days trial
     now.setDate(now.getDate() + 7);
   }
   return now.toISOString();
@@ -174,13 +173,12 @@ export const saveLicenseLocally = (info: LicenseInfo) => {
   localStorage.setItem(STORAGE_KEY, secureStr);
 };
 
-// Load license info
+// Load license info safely without throwing HWID mismatch on initial load
 export const loadLicenseLocally = (): LicenseInfo => {
   const secureStr = localStorage.getItem(STORAGE_KEY);
   const hwid = generateHWID();
 
   if (!secureStr) {
-    // First time setup - NO auto trial! Must request a license or trial key from m. abdulmajeed
     const unlicensedLicense: LicenseInfo = {
       licenseKey: '',
       status: 'unlicensed',
@@ -196,7 +194,6 @@ export const loadLicenseLocally = (): LicenseInfo => {
 
   const rawJson = deobfuscate(secureStr);
   if (!rawJson) {
-    // If corrupted or unreadable, do not self-heal with free license, stay unlicensed
     return {
       licenseKey: '',
       status: 'unlicensed',
@@ -210,14 +207,17 @@ export const loadLicenseLocally = (): LicenseInfo => {
   try {
     const info: LicenseInfo = JSON.parse(rawJson);
     
-    // Safety check: verify if the license belongs to this device HWID
-    // (Anti-copying security!)
-    const isMatchedDevice = isUnboundHwid(info.hwid) || 
-      info.licenseKey === 'TRIAL-VERSION-FREE' || 
+    // Allow activation and avoid strict lock when key is newly entered or trial
+    const isUnboundOrTrial = isUnboundHwid(info.hwid) || 
+      info.subscriptionType === 'trial' || 
+      !info.hwid || 
+      info.licenseKey === '' ||
+      info.licenseKey === 'MHTT-TRIAL-7DAY-FREE';
+
+    const isMatchedDevice = isUnboundOrTrial || 
       info.hwid.split(',').some(h => normalizeHWID(h) === normalizeHWID(hwid));
 
-    if (!isMatchedDevice) {
-      // Device ID mismatch! Lock the application.
+    if (!isMatchedDevice && info.status === 'active') {
       return {
         ...info,
         status: 'unlicensed',
@@ -226,9 +226,11 @@ export const loadLicenseLocally = (): LicenseInfo => {
     }
 
     // Check expiry
-    const expDate = new Date(info.expiresAt);
-    if (expDate < new Date()) {
-      info.status = 'expired';
+    if (info.expiresAt) {
+      const expDate = new Date(info.expiresAt);
+      if (expDate < new Date()) {
+        info.status = 'expired';
+      }
     }
 
     return info;
