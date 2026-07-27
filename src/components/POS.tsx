@@ -10,21 +10,16 @@ import {
   Trash2, 
   Plus, 
   Minus, 
-  User, 
   CreditCard, 
   Banknote, 
-  Tag, 
   ShieldCheck, 
   Barcode,
   X,
-  Check,
   AlertCircle,
   FileText,
   Mic,
   Camera,
-  Printer,
-  ShieldAlert,
-  Edit2
+  Printer
 } from 'lucide-react';
 import { Product, Customer, Invoice, InvoiceItem, InvoiceType, SystemSettings } from '../types';
 import { soundManager } from '../utils/sound';
@@ -331,7 +326,8 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
   });
 
   return (
-    <div id="pos_tab_view" className="space-y-2.5 md:space-y-4">
+    /* 🎯 هنا أضفنا الهامش السفلي pb-36 لرفع أزرار الفاتورة الإجمالية فوق القائمة السفلية */
+    <div id="pos_tab_view" className="space-y-2.5 md:space-y-4 pb-36 dir-rtl" dir="rtl">
       
       {/* 0. SMART TOOLS ACTION HEADER BAR */}
       <div className="bg-white border border-slate-200 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl shadow-sm flex flex-wrap items-center justify-between gap-2 sm:gap-3">
