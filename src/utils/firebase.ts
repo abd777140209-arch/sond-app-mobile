@@ -82,7 +82,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   console.warn('Firestore Operation Warning: ', JSON.stringify(errInfo));
 }
 
-export async function withTimeout<T>(promise: Promise<T>, timeoutMs = 2500): Promise<T> {
+export async function withTimeout<T>(promise: Promise<T>, timeoutMs = 3000): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error('FIRESTORE_TIMEOUT'));
@@ -233,13 +233,13 @@ export function getBoundHwids(license: CloudLicense): string[] {
   return Array.from(set);
 }
 
-// 🎯 1. دالة الفحص المباشر من الفايربيس السحابي
+// 🎯 1. دالة التحقق المباشر من قاعدة بيانات الفايربيس السحابية
 export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ success: boolean; message: string; data?: CloudLicense }> {
   try {
     const cleanKey = key.trim();
     if (!cleanKey) return { success: false, message: 'KEY_EMPTY' };
 
-    // 1. الكود المجاني المباشر
+    // الكود المجاني السريع
     if (cleanKey === 'MHTT-TRIAL-7DAY-FREE') {
       return { 
         success: true, 
@@ -255,7 +255,7 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
       };
     }
 
-    // 2. البحث المباشر في Firestore السحابية
+    // الفحص السحابي الحقيقي في Firestore
     const db = getFirestoreDb();
     if (db) {
       try {
@@ -279,7 +279,7 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
       }
     }
 
-    // 3. التراجع للذاكرة المحلية فقط عند انقطاع الشبكة
+    // التراجع للذاكرة المحلية فقط عند أوفلاين
     const localDb = getMockDb();
     const license = localDb[cleanKey];
     if (license) {
@@ -293,7 +293,7 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
   }
 }
 
-// 🎯 2. دالة التفعيل المباشر وتحديث حقول HWID سحابياً فوراً
+// 🎯 2. دالة التفعيل والربط المباشر لجميع الأكواد السحابية والتنفيذ الفوري
 export async function activateLicenseOnCloud(key: string, hwid: string, customerName?: string, phone?: string): Promise<{ success: boolean; message: string; data?: CloudLicense }> {
   try {
     const cleanKey = key.trim();
@@ -343,7 +343,7 @@ export async function activateLicenseOnCloud(key: string, hwid: string, customer
 
         const boundList = [hwid1, hwid2].filter(h => h && !isUnboundHwid(h));
         
-        // ربط معرف الجهاز سحابياً وتعديل كافة الحقول
+        // ربط المعرف مباشرة وسحابياً
         const updatedLicense: CloudLicense = {
           ...license,
           hwid: boundList.join(','),
@@ -356,10 +356,10 @@ export async function activateLicenseOnCloud(key: string, hwid: string, customer
           status: 'active'
         };
 
-        // تحديث المستند في الفايربيس سحابياً
+        // تحديث المستند فوراً في Firestore
         await setDoc(docRef, updatedLicense, { merge: true });
 
-        // حفظ نسخة محلية للتسريع المستقبلي
+        // حفظ نسخة محلية
         const localDb = getMockDb();
         localDb[cleanKey] = updatedLicense;
         saveMockDb(localDb);
