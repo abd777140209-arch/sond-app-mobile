@@ -17,12 +17,8 @@ import {
   MapPin, 
   Phone, 
   Palette, 
-  Maximize2, 
   LayoutGrid, 
-  Layers, 
-  Moon, 
   Sun, 
-  Square, 
   Mail, 
   HardDrive, 
   Cloud, 
@@ -59,7 +55,9 @@ export default function Settings({
 }: SettingsProps) {
   // Local state form variables
   const [storeName, setStoreName] = useState(settings.storeName);
-  const [storeLogoUrl, setStoreLogoUrl] = useState(settings.storeLogoUrl || '');
+  const [storeLogoUrl, setStoreLogoUrl] = useState(
+    settings.storeLogoUrl || localStorage.getItem('smart_accounting_company_logo') || ''
+  );
   const [currency, setCurrency] = useState(settings.currency);
   const [address, setAddress] = useState(settings.address);
   const [phone, setPhone] = useState(settings.phone);
@@ -70,7 +68,7 @@ export default function Settings({
   });
   const [privacyPinCode, setPrivacyPinCode] = useState(settings.privacyPinCode || settings.pinCode || '1234');
   const [isPrivacyPinEnabled, setIsPrivacyPinEnabled] = useState(settings.isPrivacyPinEnabled ?? true);
-  const [isBiometricEnabled, setIsBiometricEnabled] = useState(() => {
+  const [isBiometricEnabled] = useState(() => {
     return localStorage.getItem('sond_biometrics_enabled') === 'true';
   });
 
@@ -97,6 +95,10 @@ export default function Settings({
 
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [currentLicense, setCurrentLicense] = useState<LicenseInfo>(() => loadLicenseLocally());
+
+  // Refs
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const handleUpgradeLicense = async () => {
     if (!upgradeKey.trim()) {
@@ -259,74 +261,19 @@ export default function Settings({
     });
   };
 
-  const updateCardShapeInstantly = (newShape: CardShape) => {
-    soundManager.playScanBeep();
-    setCardShape(newShape);
-
-    const themeClass = `theme-${appTheme}`;
-    const shapeClass = `shape-${newShape}`;
-    const densityClass = `density-${density}`;
-    document.documentElement.className = `${themeClass} ${shapeClass} ${densityClass}`;
-
-    onSaveSettings({
-      ...settings,
-      storeName,
-      currency: selectedCurrencySymbol || currency,
-      currencies: currenciesList,
-      selectedCurrencySymbol: selectedCurrencySymbol || currency,
-      exchangeRates: getExchangeRatesMap(),
-      address,
-      phone,
-      pinCode,
-      isPinEnabled,
-      protectedSections,
-      privacyPinCode,
-      isPrivacyPinEnabled,
-      appTheme,
-      cardShape: newShape,
-      density,
-      deviceMode
-    });
+  // 🎯 دالة رفع ومعالجة الشعار الحقيقية
+  const handleLogoClick = () => {
+    if (logoInputRef.current) {
+      logoInputRef.current.click();
+    }
   };
-
-  const updateDensityInstantly = (newDensity: DisplayDensity) => {
-    soundManager.playScanBeep();
-    setDensity(newDensity);
-
-    const themeClass = `theme-${appTheme}`;
-    const shapeClass = `shape-${cardShape}`;
-    const densityClass = `density-${newDensity}`;
-    document.documentElement.className = `${themeClass} ${shapeClass} ${densityClass}`;
-
-    onSaveSettings({
-      ...settings,
-      storeName,
-      currency: selectedCurrencySymbol || currency,
-      currencies: currenciesList,
-      selectedCurrencySymbol: selectedCurrencySymbol || currency,
-      exchangeRates: getExchangeRatesMap(),
-      address,
-      phone,
-      pinCode,
-      isPinEnabled,
-      protectedSections,
-      privacyPinCode,
-      isPrivacyPinEnabled,
-      appTheme,
-      cardShape,
-      density: newDensity,
-      deviceMode
-    });
-  };
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      alert('حجم الصورة كبير جداً. يرجى اختيار صورة بحجم أقل من 5 ميجابايت.');
+    if (file.size > 3 * 1024 * 1024) {
+      alert('حجم الصورة كبير جداً، يرجى اختيار صورة بحجم أقل من 3 ميجابايت.');
       return;
     }
 
@@ -358,6 +305,7 @@ export default function Settings({
           ctx.drawImage(img, 0, 0, width, height);
           const compressedBase64 = canvas.toDataURL('image/png');
           setStoreLogoUrl(compressedBase64);
+          localStorage.setItem('smart_accounting_company_logo', compressedBase64);
           soundManager.playSuccessChime();
         }
       };
@@ -371,6 +319,11 @@ export default function Settings({
     soundManager.playSuccessChime();
     
     localStorage.setItem('sond_biometrics_enabled', isBiometricEnabled ? 'true' : 'false');
+    if (storeLogoUrl) {
+      localStorage.setItem('smart_accounting_company_logo', storeLogoUrl);
+    } else {
+      localStorage.removeItem('smart_accounting_company_logo');
+    }
 
     onSaveSettings({
       storeName: storeName.trim(),
@@ -436,7 +389,7 @@ export default function Settings({
   };
 
   return (
-    <div id="settings_tab_view" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start pb-12 dir-rtl" dir="rtl">
+    <div id="settings_tab_view" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start pb-28 dir-rtl" dir="rtl">
       
       {/* LEFT COLUMN: System Info & License (5 cols) */}
       <div className="lg:col-span-5 space-y-6">
@@ -496,7 +449,7 @@ export default function Settings({
             </div>
           </div>
 
-          {/* 🚀 2. نموذج ترقية الاشتراك المباشر داخل البطاقة */}
+          {/* نموذج ترقية الاشتراك */}
           <div className="mt-4 pt-3 border-t border-slate-100 bg-blue-50/70 p-3.5 rounded-xl border border-blue-200 space-y-2">
             <h4 className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-amber-500" />
@@ -667,7 +620,7 @@ export default function Settings({
 
           {saveSuccess && (
             <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 shrink-0" /> تم حفظ الإعدادات بنجاح!
+              <CheckCircle className="w-4 h-4 shrink-0" /> تم حفظ الإعدادات والشعار بنجاح!
             </div>
           )}
 
@@ -713,17 +666,23 @@ export default function Settings({
                 </div>
 
                 <div className="space-y-2 flex-1 w-full text-right">
+                  <input 
+                    type="file" 
+                    ref={logoInputRef}
+                    accept="image/png, image/jpeg, image/svg+xml" 
+                    onChange={handleLogoFileChange} 
+                    className="hidden" 
+                  />
+
                   <div className="flex flex-wrap gap-2">
-                    <label className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs">
+                    <button
+                      type="button"
+                      onClick={handleLogoClick}
+                      className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                    >
                       <Upload className="w-4 h-4" />
                       <span>{storeLogoUrl ? 'تغيير الشعار' : 'رفع شعار جديد'}</span>
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={handleLogoFileChange} 
-                        className="hidden" 
-                      />
-                    </label>
+                    </button>
 
                     {storeLogoUrl && (
                       <button
@@ -732,6 +691,7 @@ export default function Settings({
                           soundManager.playWarningBeep();
                           if (confirm('هل أنت متأكد من حذف شعار المنشأة العائد للترخيص الحالي؟')) {
                             setStoreLogoUrl('');
+                            localStorage.removeItem('smart_accounting_company_logo');
                           }
                         }}
                         className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-rose-200"
@@ -743,7 +703,7 @@ export default function Settings({
                   </div>
 
                   <p className="text-[10px] text-slate-400">
-                    الصيغ المدعومة: PNG, JPG, SVG. يتم حفظ الشعار بنجاح فور الضغط على زر "حفظ الإعدادات".
+                    الصيغ المدعومة: PNG, JPG, SVG. يتم حفظ الشعار بنجاح فور الضغط على زر "رفع شعار جديد" ثم الضغط على "حفظ وتثبيت إعدادات النظام".
                   </p>
                 </div>
               </div>
@@ -1252,7 +1212,7 @@ export default function Settings({
 
             <button
               type="submit"
-              className="w-full py-3 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 transition cursor-pointer flex items-center justify-center gap-2"
+              className="w-full py-3.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 transition cursor-pointer flex items-center justify-center gap-2 active:scale-98"
             >
               <Save className="w-4 h-4" />
               <span>حفظ وتثبيت إعدادات النظام</span>
