@@ -12,40 +12,35 @@ import {
   AlertTriangle, 
   KeyRound, 
   Award, 
-  Globe, 
-  Smartphone, 
-  RefreshCw, 
-  Sparkles, 
-  Key, 
-  CheckCircle, 
-  ShieldAlert,
-  Fingerprint,
+  Building2, 
+  DollarSign, 
+  MapPin, 
+  Phone, 
+  Palette, 
+  Maximize2, 
+  LayoutGrid, 
+  Layers, 
+  Moon, 
+  Sun, 
+  Square, 
+  Mail, 
+  HardDrive, 
+  Cloud, 
+  Wifi, 
+  Coins, 
+  Plus, 
+  Trash2, 
+  Image as ImageIcon,
   Check,
-  Building2,
-  DollarSign,
-  MapPin,
-  Phone,
-  Palette,
-  Maximize2,
-  LayoutGrid,
-  Layers,
-  Moon,
-  Sun,
-  Square,
-  Mail,
-  HardDrive,
-  Cloud,
-  Wifi,
-  WifiOff,
-  Coins,
-  Plus,
-  Trash2,
-  Image as ImageIcon
+  CheckCircle,
+  ShieldAlert,
+  Sparkles
 } from 'lucide-react';
 import { SystemSettings, AppTheme, CardShape, DisplayDensity, CurrencyRate } from '../types';
 import { DEFAULT_CURRENCIES } from '../utils/seedData';
 import { soundManager } from '../utils/sound';
 import { loadLicenseLocally, saveLicenseLocally, generateHWID, LicenseInfo } from '../utils/licensing';
+import { activateLicenseOnCloud } from '../utils/firebase';
 
 interface SettingsProps {
   settings: SystemSettings;
@@ -79,6 +74,10 @@ export default function Settings({
     return localStorage.getItem('sond_biometrics_enabled') === 'true';
   });
 
+  // Upgrade License State
+  const [upgradeKey, setUpgradeKey] = useState('');
+  const [isUpgrading, setIsUpgrading] = useState(false);
+
   // Theme & Layout state
   const [appTheme, setAppTheme] = useState<AppTheme>(settings.appTheme || 'financial-blue');
   const [cardShape, setCardShape] = useState<CardShape>(settings.cardShape || 'soft');
@@ -97,8 +96,52 @@ export default function Settings({
   };
 
   const [saveSuccess, setSaveSuccess] = useState(false);
-
   const [currentLicense, setCurrentLicense] = useState<LicenseInfo>(() => loadLicenseLocally());
+
+  const handleUpgradeLicense = async () => {
+    if (!upgradeKey.trim()) {
+      soundManager.playWarningBeep();
+      alert('⚠️ يرجى إدخال كود التفعيل أولاً!');
+      return;
+    }
+
+    setIsUpgrading(true);
+    try {
+      const hwid = currentLicense.hwid || generateHWID();
+      const res = await activateLicenseOnCloud(
+        upgradeKey.trim(), 
+        hwid, 
+        currentLicense.customerName || storeName, 
+        phone
+      );
+
+      if (res.success && res.data) {
+        soundManager.playSuccessChime();
+        alert('🎉 تم ترقية اشتراكك وتفعيل الترخيص الجديد بنجاح!');
+        const updatedLicense: LicenseInfo = {
+          licenseKey: res.data.key,
+          status: res.data.status,
+          activatedAt: new Date().toISOString(),
+          expiresAt: res.data.expiresAt,
+          hwid: hwid,
+          subscriptionType: res.data.type,
+          customerName: res.data.customerName || 'عميل سند'
+        };
+        saveLicenseLocally(updatedLicense);
+        setCurrentLicense(updatedLicense);
+        setUpgradeKey('');
+        window.location.reload();
+      } else {
+        soundManager.playWarningBeep();
+        alert(`❌ فشل التفعيل: ${res.message || 'الكود غير صالح أو مستخدم'}`);
+      }
+    } catch (err) {
+      soundManager.playWarningBeep();
+      alert('❌ حدث خطأ أثناء الاتصال بالخادم، يرجى المحاولة لاحقاً');
+    } finally {
+      setIsUpgrading(false);
+    }
+  };
 
   const handleDeactivate = () => {
     soundManager.playWarningBeep();
@@ -393,7 +436,7 @@ export default function Settings({
   };
 
   return (
-    <div id="settings_tab_view" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start pb-12">
+    <div id="settings_tab_view" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start pb-12 dir-rtl" dir="rtl">
       
       {/* LEFT COLUMN: System Info & License (5 cols) */}
       <div className="lg:col-span-5 space-y-6">
@@ -453,6 +496,33 @@ export default function Settings({
             </div>
           </div>
 
+          {/* 🚀 2. نموذج ترقية الاشتراك المباشر داخل البطاقة */}
+          <div className="mt-4 pt-3 border-t border-slate-100 bg-blue-50/70 p-3.5 rounded-xl border border-blue-200 space-y-2">
+            <h4 className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              ترقية الاشتراك إلى ترخيص دائم / مدفوع
+            </h4>
+            <p className="text-[11px] text-slate-600">أدخل كود التفعيل الجديد المولد لترقية حسابك فوراً دون فقدان بياناتك:</p>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="أدخل كود التفعيل (مثال: MHTL-...)"
+                value={upgradeKey}
+                onChange={(e) => setUpgradeKey(e.target.value)}
+                className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white text-slate-800 font-mono text-center tracking-wider"
+              />
+              <button
+                type="button"
+                onClick={handleUpgradeLicense}
+                disabled={isUpgrading}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50 cursor-pointer shadow-xs"
+              >
+                {isUpgrading ? 'جاري...' : 'تفعيل 🚀'}
+              </button>
+            </div>
+          </div>
+
           <button
             onClick={handleDeactivate}
             className="w-full py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer flex items-center justify-center gap-1.5"
@@ -481,7 +551,6 @@ export default function Settings({
 
           {/* Backup Channel Options Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            {/* Local Storage File */}
             <button
               type="button"
               onClick={() => {
@@ -494,7 +563,6 @@ export default function Settings({
               <span>الذاكرة المحلية (JSON)</span>
             </button>
 
-            {/* Email Backup */}
             <button
               type="button"
               onClick={() => {
@@ -512,7 +580,6 @@ export default function Settings({
               <span>إرسال عبر البريد</span>
             </button>
 
-            {/* Google Drive / Cloud Backup */}
             <button
               type="button"
               onClick={() => {
@@ -530,6 +597,7 @@ export default function Settings({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
             <button
+              type="button"
               onClick={() => fileInputRef.current?.click()}
               className="py-3 px-4 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition cursor-pointer flex items-center justify-center gap-2"
             >
@@ -545,6 +613,7 @@ export default function Settings({
             />
 
             <button
+              type="button"
               onClick={() => {
                 if (confirm('🚨 تنبيه خطير: هل أنت متأكد من رغبتك في مسح وتصفير كافة قاعدة البيانات المحلية والبدء من جديد؟ لا يمكن التراجع عن هذا الإجراء!')) {
                   soundManager.playWarningBeep();
@@ -559,7 +628,7 @@ export default function Settings({
           </div>
         </div>
 
-        {/* Offline-First Operational Guarantee Card */}
+        {/* Offline Guarantee Card */}
         <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 to-indigo-950 text-white shadow-sm space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -612,8 +681,8 @@ export default function Settings({
                     <ImageIcon className="w-4 h-4" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-black text-slate-900">شعار المنشأة / المحل التجاري (خاص بالترخيص)</h4>
-                    <p className="text-[10px] text-slate-500">يُحفظ الشعار محلياً وخاص بهذا الجهاز فقط، ويظهر في الهيدر، الفواتير، التقارير وكشوف الحسابات</p>
+                    <h4 className="text-xs font-black text-slate-900">شعار المنشأة / المحل التجاري</h4>
+                    <p className="text-[10px] text-slate-500">يُحفظ الشعار محلياً وخاص بهذا الجهاز فقط، ويظهر في الهيدر، الفواتير، والتقارير</p>
                   </div>
                 </div>
                 {storeLogoUrl ? (
@@ -628,7 +697,6 @@ export default function Settings({
               </div>
 
               <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
-                {/* Logo Preview Container */}
                 <div className="relative w-24 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
                   {storeLogoUrl ? (
                     <img 
@@ -644,7 +712,6 @@ export default function Settings({
                   )}
                 </div>
 
-                {/* Actions & File Input */}
                 <div className="space-y-2 flex-1 w-full text-right">
                   <div className="flex flex-wrap gap-2">
                     <label className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs">
@@ -714,7 +781,7 @@ export default function Settings({
               </div>
             </div>
 
-            {/* Multi-currency & Exchange Rates Manager */}
+            {/* Multi-currency Rates Manager */}
             <div className="p-4 rounded-2xl bg-slate-50/90 border border-slate-200/90 space-y-4 shadow-xs">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-slate-200">
                 <div className="flex items-center gap-2">
@@ -932,7 +999,7 @@ export default function Settings({
                 <Shield className="w-4 h-4 text-blue-600" /> الحماية وقفل الدخول الأمني
               </h4>
 
-              {/* PIN Section Protection Customizer */}
+              {/* PIN Protection */}
               <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/80 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1016,37 +1083,7 @@ export default function Settings({
                 )}
               </div>
 
-              {/* General Manager PIN */}
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-bold text-slate-900 text-xs">تفعيل قفل البصمة / رمز PIN العام</div>
-                    <div className="text-[10px] text-slate-400">قفل الواجهة لحماية الحسابات عند الابتعاد عن الشاشة</div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={isBiometricEnabled}
-                    onChange={(e) => setIsBiometricEnabled(e.target.checked)}
-                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
-                  />
-                </div>
-
-                {isBiometricEnabled && (
-                  <div className="pt-2 border-t border-slate-200 space-y-1">
-                    <label className="text-xs font-bold text-slate-700">رمز PIN السري لإلغاء القفل (4 أرقام):</label>
-                    <input
-                      type="password"
-                      maxLength={6}
-                      value={pinCode}
-                      onChange={(e) => setPinCode(e.target.value)}
-                      placeholder="1234"
-                      className="w-full bg-white border border-slate-200 text-xs font-mono rounded-xl px-3.5 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Privacy Mode Password Settings */}
+              {/* Privacy PIN */}
               <div className="p-3.5 rounded-xl bg-amber-50/60 border border-amber-200/80 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1079,16 +1116,13 @@ export default function Settings({
                       placeholder="1234"
                       className="w-full bg-white border border-amber-300 text-xs font-mono font-extrabold rounded-xl px-3.5 py-2 text-amber-950 focus:outline-none focus:ring-2 focus:ring-amber-500 text-center tracking-widest shadow-inner"
                     />
-                    <div className="text-[10px] text-amber-800/80 font-medium text-right">
-                      💡 افتراضياً: <code className="font-mono bg-amber-100/80 px-1 py-0.5 rounded text-amber-900 font-bold">1234</code>. يمكنك تغييرها لأي رمز سري يتكون من 4 أرقام.
-                    </div>
                   </div>
                 )}
               </div>
 
             </div>
 
-            {/* Theme & Layout Customization Section */}
+            {/* Theme & Layout Customization */}
             <div className="pt-4 border-t border-slate-100 space-y-4">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
@@ -1100,16 +1134,13 @@ export default function Settings({
                 </span>
               </div>
 
-              {/* 0. Dual Layout Architecture Preference Radio Buttons */}
               <div className="space-y-3 p-3.5 bg-sky-50/70 border border-sky-200 rounded-2xl shadow-xs">
                 <label className="text-xs font-bold text-sky-950 flex items-center gap-1.5">
-                  <Smartphone className="w-4 h-4 text-sky-600" />
+                  <LayoutGrid className="w-4 h-4 text-sky-600" />
                   <span>معمارية الواجهات (Dual Layout Architecture):</span>
                 </label>
-                <p className="text-[10.5px] text-slate-500">اختر نمط الواجهة المفضلة. يتم التبديل فورياً وتخزين خيارك في النظام:</p>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                  {/* Radio 1: Mobile View */}
                   <label
                     onClick={() => handleLayoutPreferenceChange('mobile')}
                     className={`p-3 rounded-xl border text-right transition cursor-pointer flex items-center gap-3 select-none ${
@@ -1126,18 +1157,12 @@ export default function Settings({
                       onChange={() => handleLayoutPreferenceChange('mobile')}
                       className="w-4 h-4 text-sky-600 focus:ring-sky-500 cursor-pointer shrink-0"
                     />
-                    <div className="p-2 rounded-lg bg-sky-100 text-sky-700 shrink-0">
-                      <Smartphone className="w-5 h-5" />
-                    </div>
                     <div>
-                      <div className="text-xs font-bold text-slate-900 flex items-center gap-1">
-                        <span>واجهة الجوال المبسطة (Mobile View)</span>
-                      </div>
-                      <div className="text-[9.5px] text-slate-500 mt-0.5">شبكة بلاطات ملونة وشريط تنقل سفلي ثابت</div>
+                      <div className="text-xs font-bold text-slate-900">واجهة الجوال المبسطة (Mobile View)</div>
+                      <div className="text-[9.5px] text-slate-500 mt-0.5">بلاطات ملونة وشريط تنقل سفلي</div>
                     </div>
                   </label>
 
-                  {/* Radio 2: Desktop View */}
                   <label
                     onClick={() => handleLayoutPreferenceChange('desktop')}
                     className={`p-3 rounded-xl border text-right transition cursor-pointer flex items-center gap-3 select-none ${
@@ -1154,220 +1179,75 @@ export default function Settings({
                       onChange={() => handleLayoutPreferenceChange('desktop')}
                       className="w-4 h-4 text-sky-600 focus:ring-sky-500 cursor-pointer shrink-0"
                     />
-                    <div className="p-2 rounded-lg bg-sky-100 text-sky-700 shrink-0">
-                      <HardDrive className="w-5 h-5" />
-                    </div>
                     <div>
-                      <div className="text-xs font-bold text-slate-900">واجهة الكمبيوتر والشاشات العريضة (Desktop View)</div>
-                      <div className="text-[9.5px] text-slate-500 mt-0.5">كامل القوائم الجانبية والهيدر العريض</div>
+                      <div className="text-xs font-bold text-slate-900">واجهة الكمبيوتر والشاشات العريضة</div>
+                      <div className="text-[9.5px] text-slate-500 mt-0.5">قوائم جانبية وهيدر عريض</div>
                     </div>
                   </label>
                 </div>
               </div>
 
-              {/* 1. App Color Theme */}
+              {/* Theme Selector Buttons */}
               <div className="space-y-2">
                 <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
                   <Sun className="w-3.5 h-3.5 text-amber-500" />
-                  <span>ثيم ألوان التطبيق (Color Theme):</span>
+                  <span>ثيم ألوان التطبيق:</span>
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {/* Financial Blue */}
                   <button
                     type="button"
                     onClick={() => updateThemeInstantly('financial-blue')}
                     className={`p-3 rounded-xl border text-right transition cursor-pointer flex flex-col justify-between h-20 ${
                       appTheme === 'financial-blue'
                         ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-500/30'
-                        : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                        : 'bg-slate-50 border-slate-200'
                     }`}
                   >
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex gap-1">
-                        <span className="w-3.5 h-3.5 rounded-full bg-blue-600 shadow-xs" />
-                        <span className="w-3.5 h-3.5 rounded-full bg-slate-200 border border-slate-300" />
-                      </div>
-                      {appTheme === 'financial-blue' && <Check className="w-3.5 h-3.5 text-blue-600 font-bold" />}
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-slate-900">الأزرق المالي</div>
-                      <div className="text-[9.5px] text-slate-500">افتراضي واحترافي</div>
-                    </div>
+                    <div className="text-xs font-bold text-slate-900">الأزرق المالي</div>
+                    <div className="text-[9.5px] text-slate-500">افتراضي واحترافي</div>
                   </button>
 
-                  {/* Emerald Green */}
                   <button
                     type="button"
                     onClick={() => updateThemeInstantly('emerald-green')}
                     className={`p-3 rounded-xl border text-right transition cursor-pointer flex flex-col justify-between h-20 ${
                       appTheme === 'emerald-green'
                         ? 'bg-emerald-50 border-emerald-600 ring-2 ring-emerald-500/30'
-                        : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                        : 'bg-slate-50 border-slate-200'
                     }`}
                   >
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex gap-1">
-                        <span className="w-3.5 h-3.5 rounded-full bg-emerald-600 shadow-xs" />
-                        <span className="w-3.5 h-3.5 rounded-full bg-emerald-200 border border-emerald-300" />
-                      </div>
-                      {appTheme === 'emerald-green' && <Check className="w-3.5 h-3.5 text-emerald-600 font-bold" />}
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-slate-900">الأخضر الزمردي</div>
-                      <div className="text-[9.5px] text-slate-500">حيوية المبيعات</div>
-                    </div>
+                    <div className="text-xs font-bold text-slate-900">الأخضر الزمردي</div>
+                    <div className="text-[9.5px] text-slate-500">حيوية المبيعات</div>
                   </button>
 
-                  {/* Warm Amber */}
                   <button
                     type="button"
                     onClick={() => updateThemeInstantly('warm-amber')}
                     className={`p-3 rounded-xl border text-right transition cursor-pointer flex flex-col justify-between h-20 ${
                       appTheme === 'warm-amber'
                         ? 'bg-amber-50 border-amber-600 ring-2 ring-amber-500/30'
-                        : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                        : 'bg-slate-50 border-slate-200'
                     }`}
                   >
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex gap-1">
-                        <span className="w-3.5 h-3.5 rounded-full bg-amber-600 shadow-xs" />
-                        <span className="w-3.5 h-3.5 rounded-full bg-[#C5A862]" />
-                      </div>
-                      {appTheme === 'warm-amber' && <Check className="w-3.5 h-3.5 text-amber-600 font-bold" />}
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-slate-900">البني الدافئ</div>
-                      <div className="text-[9.5px] text-slate-500">فخامة وذهب</div>
-                    </div>
+                    <div className="text-xs font-bold text-slate-900">البني الدافئ</div>
+                    <div className="text-[9.5px] text-slate-500">فخامة وذهب</div>
                   </button>
 
-                  {/* Dark Luxury */}
                   <button
                     type="button"
                     onClick={() => updateThemeInstantly('dark-luxury')}
                     className={`p-3 rounded-xl border text-right transition cursor-pointer flex flex-col justify-between h-20 ${
                       appTheme === 'dark-luxury'
                         ? 'bg-slate-900 border-amber-500 ring-2 ring-amber-500/30 text-white'
-                        : 'bg-slate-800 border-slate-700 hover:border-slate-600 text-slate-200'
+                        : 'bg-slate-800 border-slate-700 text-slate-200'
                     }`}
                   >
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex gap-1">
-                        <span className="w-3.5 h-3.5 rounded-full bg-slate-950 border border-slate-700" />
-                        <span className="w-3.5 h-3.5 rounded-full bg-[#C5A862]" />
-                      </div>
-                      {appTheme === 'dark-luxury' && <Check className="w-3.5 h-3.5 text-amber-400 font-bold" />}
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-amber-400 flex items-center gap-1">
-                        <Moon className="w-3 h-3" /> الداكن الفخم
-                      </div>
-                      <div className="text-[9.5px] text-slate-400">ليلي مريح جداً</div>
-                    </div>
+                    <div className="text-xs font-bold text-amber-400">الداكن الفخم</div>
+                    <div className="text-[9.5px] text-slate-400">ليلي مريح</div>
                   </button>
                 </div>
               </div>
 
-              {/* 2. Card Shapes */}
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
-                  <Square className="w-3.5 h-3.5 text-blue-600" />
-                  <span>شكل الكروت والمربعات (Card Shapes):</span>
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {/* Soft Rounded */}
-                  <button
-                    type="button"
-                    onClick={() => updateCardShapeInstantly('soft')}
-                    className={`p-2.5 rounded-2xl border text-center transition cursor-pointer ${
-                      cardShape === 'soft'
-                        ? 'bg-blue-50 border-blue-600 text-blue-950 font-bold ring-2 ring-blue-500/20'
-                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    <div className="text-xs font-bold mb-0.5">حواف ناعمة</div>
-                    <div className="text-[9.5px] text-slate-500">انسيابية Rounded</div>
-                  </button>
-
-                  {/* Sharp */}
-                  <button
-                    type="button"
-                    onClick={() => updateCardShapeInstantly('sharp')}
-                    className={`p-2.5 rounded-none border text-center transition cursor-pointer ${
-                      cardShape === 'sharp'
-                        ? 'bg-blue-50 border-blue-600 text-blue-950 font-bold ring-2 ring-blue-500/20'
-                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    <div className="text-xs font-bold mb-0.5">حواف حادة</div>
-                    <div className="text-[9.5px] text-slate-500">كلاسيكية Sharp</div>
-                  </button>
-
-                  {/* Glassmorphism */}
-                  <button
-                    type="button"
-                    onClick={() => updateCardShapeInstantly('glass')}
-                    className={`p-2.5 rounded-2xl border text-center transition cursor-pointer backdrop-blur-md ${
-                      cardShape === 'glass'
-                        ? 'bg-blue-50/80 border-blue-600 text-blue-950 font-bold ring-2 ring-blue-500/20 shadow-md'
-                        : 'bg-slate-50/80 border-slate-200 text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    <div className="text-xs font-bold mb-0.5 flex items-center justify-center gap-1">
-                      <span>زجاجية</span>
-                      <Sparkles className="w-3 h-3 text-purple-600" />
-                    </div>
-                    <div className="text-[9.5px] text-slate-500">بلورية Glass</div>
-                  </button>
-                </div>
-              </div>
-
-              {/* 3. Screen Density */}
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
-                  <Maximize2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>كثافة عرض الشاشة والبيانات (Display Density):</span>
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {/* Comfortable */}
-                  <button
-                    type="button"
-                    onClick={() => updateDensityInstantly('comfortable')}
-                    className={`p-3 rounded-xl border text-right transition cursor-pointer flex items-center gap-3 ${
-                      density === 'comfortable'
-                        ? 'bg-emerald-50 border-emerald-600 text-emerald-950 font-bold ring-2 ring-emerald-500/20'
-                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700 shrink-0">
-                      <LayoutGrid className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold">مريح واسع (Comfortable)</div>
-                      <div className="text-[9.5px] text-slate-500">مساحات واسعة وسهولة المس</div>
-                    </div>
-                  </button>
-
-                  {/* Compact */}
-                  <button
-                    type="button"
-                    onClick={() => updateDensityInstantly('compact')}
-                    className={`p-3 rounded-xl border text-right transition cursor-pointer flex items-center gap-3 ${
-                      density === 'compact'
-                        ? 'bg-emerald-50 border-emerald-600 text-emerald-950 font-bold ring-2 ring-emerald-500/20'
-                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700 shrink-0">
-                      <Layers className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold">مكثف (Compact)</div>
-                      <div className="text-[9.5px] text-slate-500">عرض أقصى قدر من الجداول</div>
-                    </div>
-                  </button>
-                </div>
-              </div>
             </div>
 
             <button
