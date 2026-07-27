@@ -5,393 +5,246 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  KeyRound, 
-  Cpu, 
-  CalendarClock, 
-  Copy, 
-  RefreshCw, 
-  LockKeyhole, 
-  ShieldAlert, 
   ShieldCheck, 
-  XCircle,
-  Smartphone,
-  Store,
-  Fingerprint
+  Key, 
+  Smartphone, 
+  Building2, 
+  Phone, 
+  Sparkles, 
+  CheckCircle, 
+  AlertTriangle, 
+  X, 
+  MessageCircle,
+  HelpCircle
 } from 'lucide-react';
 import { soundManager } from '../utils/sound';
-import { LicenseInfo, saveLicenseLocally, generateHWID } from '../utils/licensing';
-import { isFirebaseConfigured, checkLicenseOnCloud, activateLicenseOnCloud, isUnboundHwid } from '../utils/firebase';
+import { generateHWID, saveLicenseLocally, LicenseInfo } from '../utils/licensing';
+import { activateLicenseOnCloud, checkLicenseOnCloud } from '../utils/firebase';
 
 interface SaaSActivatorProps {
-  license: LicenseInfo;
-  setLicense: React.Dispatch<React.SetStateAction<LicenseInfo>>;
-  onActivationSuccess: (license: LicenseInfo) => void;
+  onSuccess: (license: LicenseInfo) => void;
+  initialKey?: string;
 }
 
-export default function SaaSActivator({ license, setLicense, onActivationSuccess }: SaaSActivatorProps) {
-  const [activationKeyInput, setActivationKeyInput] = useState('');
-  const [phoneInput, setPhoneInput] = useState('');
-  const [customerNameInput, setCustomerNameInput] = useState('');
-  const [enableBiometrics, setEnableBiometrics] = useState(true);
+export default function SaaSActivator({ onSuccess, initialKey = '' }: SaaSActivatorProps) {
+  const [licenseKey, setLicenseKey] = useState(initialKey);
+  const [customerName, setCustomerName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [deviceHwid, setDeviceHwid] = useState('');
   
-  // UX UI states
-  const [loading, setLoading] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' | null }>({ text: '', type: null });
-  const [copiedHwid, setCopiedHwid] = useState(false);
-  const [isCloud, setIsCloud] = useState(false);
-  const [showInvalidKeyModal, setShowInvalidKeyModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [showErrorModal, setShowErrorModal] = useState(false);
 
   useEffect(() => {
-    setIsCloud(isFirebaseConfigured());
+    const hwid = generateHWID();
+    setDeviceHwid(hwid);
   }, []);
 
-  // Copy Hardware ID helper
-  const handleCopyHwid = () => {
-    soundManager.playSuccessChime();
-    navigator.clipboard.writeText(license.hwid);
-    setCopiedHwid(true);
-    setTimeout(() => setCopiedHwid(false), 2000);
-  };
-
-  const showToastOrAlert = (msg: string) => {
-    if (typeof window !== 'undefined' && (window as any).AndroidInterface?.showToast) {
-      try {
-        (window as any).AndroidInterface.showToast(msg);
-      } catch {
-        // Fallback to inline status banner without native browser alert
-      }
-    }
-  };
-
-  // Submit Activation Request
-  const handleActivateLicense = async (e: React.FormEvent) => {
+  const handleActivate = async (e: React.FormEvent) => {
     e.preventDefault();
-    setStatusMessage({ text: '', type: null });
-    
-    const key = activationKeyInput.trim();
-    const phone = phoneInput.trim();
-    const storeName = customerNameInput.trim() || 'محل سند للخدمات المحاسبية';
+    const cleanKey = licenseKey.trim();
 
-    if (!phone) {
+    if (!cleanKey) {
       soundManager.playWarningBeep();
-      const warningMsg = '⚠️ الرجاء إدخال رقم الهاتف أولاً للتأكيد والتوثيق!';
-      setStatusMessage({ text: warningMsg, type: 'error' });
-      showToastOrAlert(warningMsg);
+      setErrorMessage('يرجى إدخال مفتاح التفعيل أولاً.');
+      setShowErrorModal(true);
       return;
     }
 
-    if (!key) {
-      soundManager.playWarningBeep();
-      const warningMsg = '⚠️ الرجاء إدخال رمز التفعيل (Activation Code) أولاً!';
-      setStatusMessage({ text: warningMsg, type: 'error' });
-      showToastOrAlert(warningMsg);
-      return;
-    }
+    setIsLoading(true);
+    setErrorMessage('');
 
-    setLoading(true);
+    try {
+      const currentHwid = deviceHwid || generateHWID();
 
-    setTimeout(async () => {
-      try {
-        localStorage.removeItem('smart_accounting_logged_out');
+      // 🎯 ربط المفتاح مباشرة برقم الجهاز سحابياً في الفايربيس
+      const result = await activateLicenseOnCloud(cleanKey, currentHwid, customerName, phone);
 
-        if (enableBiometrics) {
-          localStorage.setItem('sond_biometrics_enabled', 'true');
-        } else {
-          localStorage.setItem('sond_biometrics_enabled', 'false');
-        }
+      if (result.success && result.data) {
+        soundManager.playSuccessChime();
 
-        const currentHwid = generateHWID();
+        const newLicense: LicenseInfo = {
+          licenseKey: result.data.key,
+          status: 'active',
+          activatedAt: new Date().toISOString(),
+          expiresAt: result.data.expiresAt,
+          hwid: currentHwid,
+          subscriptionType: result.data.type,
+          customerName: result.data.customerName || customerName || 'عميل سند'
+        };
 
-        // Attempt direct cloud activation and device binding
-        const result = await activateLicenseOnCloud(key, currentHwid, storeName, phone);
-        
-        if (result.success && result.data) {
-          const activeLic: LicenseInfo = {
-            licenseKey: key,
-            status: 'active',
-            activatedAt: new Date().toISOString(),
-            expiresAt: result.data.expiresAt,
-            hwid: currentHwid,
-            subscriptionType: result.data.type,
-            customerName: storeName,
-            phone: phone
-          };
-          saveLicenseLocally(activeLic);
-          setLicense(activeLic);
-          soundManager.playSuccessChime();
-          const succMsg = `🎉 تم تفعيل وتوثيق الترخيص وربط جهازك الجديد بنجاح برقم الهاتف (${phone})`;
-          setStatusMessage({ text: succMsg, type: 'success' });
-          showToastOrAlert(succMsg);
-          onActivationSuccess(activeLic);
-        } else {
-          soundManager.playWarningBeep();
-          let failMsg = '';
-
-          switch (result.message) {
-            case 'KEY_SUSPENDED':
-              failMsg = '❌ تم إيقاف وتعطيل هذا الترخيص من قبل إدارة النظام!';
-              break;
-            case 'KEY_EXPIRED':
-              failMsg = '❌ انتهت صلاحية كود التفعيل المنسوب لهذا الترخيص!';
-              break;
-            case 'KEY_NOT_FOUND':
-              setShowInvalidKeyModal(true);
-              failMsg = '⚠️ كود التفعيل غير مسجل أو تم إلغاؤه من قبل إدارة النظام. للتواصل والدعم الفني: 777140209';
-              break;
-            case 'MAX_DEVICES_REACHED':
-              failMsg = '❌ تم استهلاك حد الأجهزة المسموح به لهذا الكود (2/2)';
-              break;
-            case 'SERVER_ERROR':
-              failMsg = '❌ فشل الاتصال بالسيرفر السحابي. يرجى التأكد من توفر الاتصال بالإنترنت والمحاولة مجدداً.';
-              break;
-            default:
-              if (result.message?.includes('تم استهلاك')) {
-                failMsg = `❌ ${result.message}`;
-              } else {
-                setShowInvalidKeyModal(true);
-                failMsg = '⚠️ كود التفعيل غير مسجل أو تم إلغاؤه من قبل إدارة النظام. للتواصل والدعم الفني: 777140209';
-              }
-          }
-
-          setStatusMessage({ text: failMsg, type: 'error' });
-          showToastOrAlert(failMsg);
-        }
-      } catch (err: any) {
+        saveLicenseLocally(newLicense);
+        onSuccess(newLicense);
+        window.location.reload();
+      } else {
         soundManager.playWarningBeep();
-        const errStr = `❌ حدث خطأ أثناء التفعيل: ${err.message || 'فشل الاتصال'}`;
-        setStatusMessage({ text: errStr, type: 'error' });
-        showToastOrAlert(errStr);
-      } finally {
-        setLoading(false);
+        if (result.message === 'KEY_SUSPENDED') {
+          setErrorMessage('كود التفعيل موقوف أو معطل من قبل إدارة النظام.');
+        } else if (result.message === 'KEY_EXPIRED') {
+          setErrorMessage('انتهت صلاحية كود التفعيل المرفق.');
+        } else {
+          setErrorMessage('كود التفعيل غير مسجل أو تم إلغاؤه من قبل إدارة النظام.');
+        }
+        setShowErrorModal(true);
       }
-    }, 400);
+    } catch (error) {
+      console.error('Activation Error:', error);
+      soundManager.playWarningBeep();
+      setErrorMessage('حدث خطأ أثناء الاتصال بخادم التراخيص، يرجى التأكد من الشابكة والمحاولة لاحقاً.');
+      setShowErrorModal(true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleTrialActivation = () => {
+    setLicenseKey('MHTT-TRIAL-7DAY-FREE');
   };
 
   return (
-    <div id="saas_activator_panel" className="min-h-screen bg-[#F8FAFC] text-slate-800 flex flex-col justify-center items-center p-4 md:p-8 relative overflow-y-auto font-sans" dir="rtl">
+    <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 dir-rtl text-slate-800" dir="rtl">
       
-      {/* Top Header Badge */}
-      <div className="absolute top-4 left-4 text-[11px] text-slate-400 dark:text-sky-400/80 font-mono tracking-widest hidden md:block">
-        SOND ACCOUNTING SYSTEM v2.4 • MOBILE & DESKTOP
-      </div>
-      <div className="absolute top-4 right-4 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 font-bold font-mono">
-        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-        {isCloud ? 'سحابي موثق (FIREBASE ONLINE)' : 'نظام محمي متكامل'}
-      </div>
-
-      <div className="w-full max-w-xl bg-white dark:bg-[#0F172A] rounded-3xl border border-slate-200 dark:border-sky-800/40 p-6 md:p-8 shadow-2xl relative space-y-6 my-8">
+      {/* 💳 بطاقة نافذة التفعيل الرئيسية */}
+      <div className="bg-white w-full max-w-md rounded-3xl border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
-        {/* White Luxury App Icon Header */}
-        <div className="text-center space-y-3">
-          <div className="w-20 h-20 mx-auto rounded-3xl bg-white border border-slate-200 p-2.5 shadow-xl flex items-center justify-center relative group">
-            <div className="absolute -inset-1 bg-gradient-to-r from-sky-400 to-blue-600 rounded-3xl blur opacity-25 group-hover:opacity-40 transition duration-300" />
-            <svg viewBox="0 0 512 512" className="w-16 h-16 relative z-10">
-              <rect width="512" height="512" rx="120" fill="#FFFFFF" />
-              <g transform="translate(256, 256)">
-                <rect x="-90" y="-120" width="180" height="48" rx="24" fill="#0284C7" transform="rotate(-45)" />
-                <rect x="-90" y="72" width="180" height="48" rx="24" fill="#0284C7" transform="rotate(-45)" />
-                <rect x="-100" y="-24" width="200" height="48" rx="24" fill="#0284C7" transform="rotate(45)" />
-              </g>
-            </svg>
+        {/* الهيدر العلوي */}
+        <div className="bg-gradient-to-r from-blue-700 to-indigo-800 p-6 text-white text-center space-y-2 relative">
+          <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center mx-auto shadow-inner">
+            <ShieldCheck className="w-7 h-7 text-emerald-400" />
           </div>
-          
-          <h1 className="text-2xl font-black text-slate-900 dark:text-white">
-            تفعيل نظام سند الذكي المحاسبي
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed font-medium">
-            شاشة التوثيق والتسجيل المباشر برقم الهاتف وكود التفعيل الخاص بنشاطك التجاري.
-          </p>
+          <h2 className="text-lg font-black tracking-wide">تفعيل نظام سند المحاسبي</h2>
+          <p className="text-xs text-blue-100">أدخل كود التفعيل المعتمد لربط منشأتك بالسحابة</p>
         </div>
 
-        {/* Dynamic Trial / Expired Banner */}
-        {license.status === 'trial' && (
-          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-3">
-            <CalendarClock className="w-5 h-5 shrink-0 text-amber-500 mt-0.5" />
+        {/* جسم النموذج */}
+        <form onSubmit={handleActivate} className="p-6 space-y-4">
+          
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+              <Key className="w-3.5 h-3.5 text-blue-600" /> كود الترخيص / المفتاح السري:
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="MHTL-XXXX-XXXX-XXXX"
+              value={licenseKey}
+              onChange={(e) => setLicenseKey(e.target.value)}
+              className="w-full px-3.5 py-2.5 text-xs font-mono font-bold text-center text-slate-900 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition uppercase tracking-wider"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <span className="font-bold block">🚨 نسخة تجريبية مجانية نشطة:</span>
-              تاريخ الانتهاء: <span className="font-mono font-bold">{new Date(license.expiresAt).toLocaleDateString('ar-YE')}</span>.
-              يرجى التفعيل بكود التفعيل المعتمد لاستمرار الخدمات المحاسبية.
+              <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center gap-1">
+                <Building2 className="w-3.5 h-3.5 text-blue-600" /> اسم المنشأة / المحل:
+              </label>
+              <input
+                type="text"
+                placeholder="مؤسسة البركة"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                className="w-full px-3 py-2 text-xs text-slate-900 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center gap-1">
+                <Phone className="w-3.5 h-3.5 text-blue-600" /> رقم الهاتف:
+              </label>
+              <input
+                type="text"
+                placeholder="777140209"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full px-3 py-2 text-xs font-mono text-slate-900 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-right"
+              />
             </div>
           </div>
-        )}
 
-        {/* Status messages banner */}
-        {statusMessage.text && (
-          <div className={`p-3.5 rounded-2xl text-xs font-bold text-center leading-relaxed ${
-            statusMessage.type === 'success' ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300' :
-            statusMessage.type === 'error' ? 'bg-rose-500/15 border border-rose-500/30 text-rose-700 dark:text-rose-300' :
-            'bg-sky-500/15 border border-sky-500/30 text-sky-700 dark:text-sky-300'
-          }`}>
-            {statusMessage.text}
-          </div>
-        )}
-
-        {/* Hardware ID Copy Card */}
-        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#060B10] border border-slate-200 dark:border-slate-800 space-y-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-              <Cpu className="w-4 h-4 text-sky-600 dark:text-sky-400" /> بصمة الجهاز الموثقة (Hardware ID):
-            </span>
-            <span className="text-[10px] text-slate-400 font-mono">SHA-1 SECURED</span>
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+            <span className="text-slate-500 font-bold block">معرف الجهاز (HWID):</span>
+            <code className="text-[10px] font-mono font-bold text-slate-700 block truncate">
+              {deviceHwid || 'جاري توليد معرف الجهاز...'}
+            </code>
           </div>
 
-          <div className="flex gap-2" dir="ltr">
-            <button
-              type="button"
-              onClick={handleCopyHwid}
-              className="p-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 hover:text-sky-600 cursor-pointer active:scale-95 transition flex items-center justify-center shrink-0 shadow-sm"
-              title="نسخ بصمة الجهاز"
-            >
-              {copiedHwid ? '✓' : <Copy className="w-4 h-4" />}
-            </button>
-            <div className="flex-1 font-mono text-center text-xs font-black bg-white dark:bg-black/50 border border-slate-200 dark:border-slate-800 rounded-xl px-2 py-2.5 select-all text-sky-700 dark:text-sky-300 tracking-wider shadow-inner">
-              {license.hwid}
-            </div>
-          </div>
-        </div>
-
-        {/* Phone + Code Activation Form */}
-        <form onSubmit={handleActivateLicense} className="space-y-4">
-          
-          {/* Store / Business Name */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-              <Store className="w-4 h-4 text-sky-600 dark:text-sky-400" /> اسم المحل أو النشاط التجاري:
-            </label>
-            <input
-              type="text"
-              value={customerNameInput}
-              onChange={(e) => setCustomerNameInput(e.target.value)}
-              placeholder="مثال: مركز سند للالكترونيات والهواتف"
-              className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-[#060B10] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder-slate-400 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-sky-500 transition"
-              required
-            />
-          </div>
-
-          {/* Customer Phone Number */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-              <Smartphone className="w-4 h-4 text-sky-600 dark:text-sky-400" /> رقم هاتف المالك للتوثيق والربط:
-            </label>
-            <input
-              type="tel"
-              value={phoneInput}
-              onChange={(e) => setPhoneInput(e.target.value)}
-              placeholder="77XXXXXXX"
-              className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-[#060B10] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder-slate-400 text-xs font-bold font-mono focus:outline-none focus:ring-2 focus:ring-sky-500 transition text-right"
-              required
-            />
-          </div>
-
-          {/* Activation Key Code */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-              <KeyRound className="w-4 h-4 text-sky-600 dark:text-sky-400" /> كود التفعيل (Activation Key / OTP):
-            </label>
-            <input
-              type="text"
-              value={activationKeyInput}
-              onChange={(e) => setActivationKeyInput(e.target.value)}
-              placeholder="XXXX-XXXX-XXXX-XXXX"
-              className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-[#060B10] border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder-slate-400 text-xs font-bold font-mono tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-sky-500 transition uppercase"
-              required
-            />
-          </div>
-
-          {/* Enable Biometrics Option */}
-          <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Fingerprint className="w-5 h-5 text-sky-600 dark:text-sky-400" />
-              <div>
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">تفعيل الدخول بالبصمة / PIN</span>
-                <p className="text-[10px] text-slate-400">فتح التطبيق فوراً في المرات القادمة بلمسة بصمة</p>
-              </div>
-            </div>
-            <input
-              type="checkbox"
-              checked={enableBiometrics}
-              onChange={(e) => setEnableBiometrics(e.target.checked)}
-              className="w-5 h-5 accent-sky-600 rounded cursor-pointer"
-            />
-          </div>
-
-          {/* Submit Button */}
+          {/* زر التفعيل الرئيسي */}
           <button
             type="submit"
-            disabled={loading}
-            className="w-full py-4 rounded-2xl bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white font-black text-sm transition-all duration-300 shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+            disabled={isLoading}
+            className="w-full py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs rounded-xl transition shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
           >
-            {loading ? (
-              <>
-                <RefreshCw className="w-5 h-5 animate-spin" />
-                <span>جاري التحقق من التفعيل برقم الهاتف...</span>
-              </>
+            {isLoading ? (
+              <span>جاري التحقق وربط الجهاز...</span>
             ) : (
               <>
-                <ShieldCheck className="w-5 h-5" />
-                <span>توثيق وتفعيل المحل فوراً</span>
+                <Sparkles className="w-4 h-4 text-amber-300" />
+                <span>تفعيل الترخيص وفتح النظام 🚀</span>
               </>
             )}
           </button>
-        </form>
 
-        {/* WhatsApp Developer Contact Footnote */}
-        <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-center space-y-1">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-            💬 للتفعيل المباشر، انسخ بصمة جهازك وتواصل عبر واتساب: <a href="https://wa.me/967777140209" target="_blank" rel="noreferrer" className="text-sky-600 dark:text-sky-400 font-bold font-mono hover:underline">777140209</a>
-          </p>
-          <p className="text-[10px] text-slate-400">
-            برمجة وتطوير: م. عبدالمجيد المحواشي • نظام سند المحاسبي
-          </p>
-        </div>
+          {/* زر تجربة الكود المجاني المباشر */}
+          <div className="text-center pt-2">
+            <button
+              type="button"
+              onClick={handleTrialActivation}
+              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer"
+            >
+              استخدام كود النسخة التجريبية المجانية (7 أيام)
+            </button>
+          </div>
+
+        </form>
 
       </div>
 
-      {/* Clean Alert Modal for Invalid or Deleted Activation Key */}
-      {showInvalidKeyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn" dir="rtl">
-          <div className="w-full max-w-md bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-rose-900/40 rounded-3xl p-6 text-center space-y-5 shadow-2xl relative overflow-hidden">
+      {/* 🚨 النافذة المنبثقة للتنبيه عند الخطأ */}
+      {showErrorModal && (
+        <div className="fixed inset-0 z-60 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl text-center space-y-4 animate-in zoom-in-95 duration-150 border border-slate-100">
             
-            {/* Warning Icon Header */}
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800/50 flex items-center justify-center text-rose-600 dark:text-rose-400 shadow-inner">
-              <ShieldAlert className="w-8 h-8" />
+            <div className="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto border border-rose-200">
+              <AlertTriangle className="w-8 h-8" />
             </div>
 
-            <div className="space-y-3">
-              <h3 className="text-lg font-black text-slate-900 dark:text-white">
-                تنبيه نظام التفعيل
-              </h3>
-              <div className="text-xs text-slate-700 dark:text-slate-200 font-bold leading-relaxed p-4 rounded-2xl bg-rose-50/50 dark:bg-rose-950/30 border border-rose-200/60 dark:border-rose-900/30 text-right space-y-2">
-                <p className="text-sm text-rose-700 dark:text-rose-300 font-extrabold">
-                  ⚠️ كود التفعيل غير مسجل أو تم إلغاؤه من قبل إدارة النظام.
-                </p>
-                <p className="text-xs text-slate-600 dark:text-slate-300 font-bold pt-1 border-t border-rose-200/40 dark:border-rose-900/20">
-                  للتواصل والدعم الفني: <span className="font-mono text-sky-600 dark:text-sky-400 font-black text-sm select-all">777140209</span>
-                </p>
-              </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-black text-slate-900">تنبيه نظام التفعيل</h3>
+              <p className="text-xs font-bold text-rose-600 bg-rose-50 p-3 rounded-2xl border border-rose-100 leading-relaxed">
+                ⚠️ {errorMessage || 'كود التفعيل غير مسجل أو تم إلغاؤه من قبل إدارة النظام.'}
+              </p>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-2 pt-1">
+            <div className="text-xs text-slate-500 font-bold">
+              للتواصل والدعم الفني: <span className="font-mono text-blue-700 dir-ltr inline-block">777140209</span>
+            </div>
+
+            <div className="space-y-2 pt-2">
               <a
-                href="https://wa.me/967777140209"
+                href="https://wa.me/96777140209"
                 target="_blank"
                 rel="noreferrer"
-                className="flex-1 py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-xs"
               >
-                💬 التواصل عبر واتساب (777140209)
+                <MessageCircle className="w-4 h-4" />
+                <span>التواصل عبر واتساب (777140209)</span>
               </a>
+
               <button
                 type="button"
-                onClick={() => setShowInvalidKeyModal(false)}
-                className="py-3 px-5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition cursor-pointer"
+                onClick={() => setShowErrorModal(false)}
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1 cursor-pointer"
               >
-                إغلاق ❌
+                <X className="w-4 h-4" />
+                <span>إغلاق ✖</span>
               </button>
             </div>
 
           </div>
         </div>
       )}
+
     </div>
   );
 }
