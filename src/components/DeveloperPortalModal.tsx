@@ -42,6 +42,7 @@ interface DeveloperPortalModalProps {
 export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onResetCloudComplete }: DeveloperPortalModalProps) {
   const [devPassword, setDevPassword] = useState('');
   const [isDevUnlocked, setIsDevUnlocked] = useState(false);
+  const [showLoginSection, setShowLoginSection] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isCloud, setIsCloud] = useState(false);
   
@@ -103,6 +104,13 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
       handleFetchCloudLicenses();
     }
   }, [isDevUnlocked]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setShowLoginSection(false);
+      setDevPassword('');
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -346,32 +354,82 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
           )}
 
           {!isDevUnlocked ? (
-            <div className="max-w-md mx-auto py-10 space-y-4 text-center">
-              <div className="inline-flex p-4 rounded-full bg-slate-900 border border-gray-800">
-                <LockKeyhole className="w-10 h-10 text-amber-500" />
+            <div className="max-w-lg mx-auto py-6 space-y-5 text-center">
+              {/* Developer Info Card */}
+              <div className="p-5 rounded-2xl bg-[#0f172a] border border-[#C5A862]/30 space-y-4 shadow-xl text-right">
+                <div className="flex items-center gap-3 border-b border-gray-800 pb-3">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-yellow-600/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                    <Laptop className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-white">بطاقة معلومات المطور والدعم الفني</h3>
+                    <p className="text-[10px] text-gray-400 font-mono">SOND ACCOUNTING SYSTEM • DEVELOPER PORTAL</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div className="p-2.5 rounded-xl bg-[#080d1a] border border-gray-800/80 flex justify-between items-center">
+                    <span className="text-gray-400 font-bold">مهندس ومطور النظام:</span>
+                    <span className="font-extrabold text-amber-400">م. عبدالمجيد المحواشي</span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-[#080d1a] border border-gray-800/80 flex justify-between items-center">
+                    <span className="text-gray-400 font-bold">رقم الهاتف / واتساب:</span>
+                    <span className="font-mono font-black text-sky-400 text-sm select-all" dir="ltr">777140209</span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-[#080d1a] border border-gray-800/80 flex justify-between items-center">
+                    <span className="text-gray-400 font-bold">إصدار النظام:</span>
+                    <span className="font-mono text-emerald-400 font-bold">v2.4 (SaaS Cloud Enabled)</span>
+                  </div>
+                </div>
+
+                {/* Direct Action Contact Buttons */}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <a
+                    href="https://wa.me/967777140209"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="py-2.5 px-3 rounded-xl bg-emerald-600/90 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-md"
+                  >
+                    💬 واتساب المطور
+                  </a>
+                  <a
+                    href="tel:777140209"
+                    className="py-2.5 px-3 rounded-xl bg-sky-600/90 hover:bg-sky-500 text-white font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-md"
+                  >
+                    📞 اتصال مباشر
+                  </a>
+                </div>
               </div>
-              <h3 className="text-sm font-bold text-gray-200">التحقق من هوية مطور البرنامج</h3>
-              <p className="text-[11px] text-gray-400 leading-relaxed max-w-sm mx-auto">
-                هذه البوابة مخصصة حصرياً للمبرمج عبدالمجيد المحواشي لتوليد أكواد التراخيص السحابية وإدارة الأجهزة.
-              </p>
-              
-              <form onSubmit={handleUnlockDeveloperPortal} className="flex gap-2 text-xs pt-2">
-                <input
-                  type="password"
-                  required
-                  placeholder="أدخل الرمز السري للمطور"
-                  value={devPassword}
-                  onChange={(e) => setDevPassword(e.target.value)}
-                  className="flex-1 bg-[#04060b] border border-gray-800 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-[#C5A862] text-center font-mono tracking-widest"
-                  autoFocus
-                />
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 bg-yellow-600 hover:bg-yellow-500 text-black rounded-lg cursor-pointer transition font-bold text-xs"
-                >
-                  تأكيد الهوية 🔐
-                </button>
-              </form>
+
+              {/* Password Unlock Section (Shown only when hidden trigger point is clicked) */}
+              {showLoginSection && (
+                <div className="p-4 rounded-2xl bg-[#0b101d] border border-gray-800 space-y-3 animate-fadeIn">
+                  <div className="flex items-center justify-center gap-2 text-xs font-bold text-gray-300">
+                    <LockKeyhole className="w-4 h-4 text-amber-500" />
+                    <span>دخول لوحة تحكم المطور والربط (/admin)</span>
+                  </div>
+                  
+                  <form onSubmit={handleUnlockDeveloperPortal} className="flex gap-2 text-xs">
+                    <input
+                      type="password"
+                      required
+                      placeholder="أدخل الرمز السري للمطور"
+                      value={devPassword}
+                      onChange={(e) => setDevPassword(e.target.value)}
+                      className="flex-1 bg-[#04060b] border border-gray-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-[#C5A862] text-center font-mono tracking-widest text-xs"
+                      autoFocus
+                    />
+                    <button
+                      type="submit"
+                      className="px-4 py-2.5 bg-yellow-600 hover:bg-yellow-500 text-black rounded-xl cursor-pointer transition font-bold text-xs shrink-0"
+                    >
+                      تأكيد الهوية 🔐
+                    </button>
+                  </form>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-6">
@@ -679,10 +737,10 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                             </td>
                           </tr>
                         ) : (
-                          Object.values(allLicenseKeys).map((lk: any) => {
+                          Object.values(allLicenseKeys).map((lk: any, idx: number) => {
                             const { hwid1, hwid2 } = getLicenseHwidSlots(lk);
                             return (
-                              <tr key={lk.key} className="hover:bg-slate-900/60 transition">
+                              <tr key={lk.key ? `lic-${lk.key}-${idx}` : `lic-idx-${idx}`} className="hover:bg-slate-900/60 transition">
                                 <td className="p-3 text-white font-bold">{lk.customerName}</td>
                                 <td className="p-3">
                                   {lk.phone ? (
@@ -809,8 +867,16 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
         </div>
 
         {/* Footer Credit */}
-        <div className="p-4 border-t border-gray-800 text-center text-[10px] text-gray-500 bg-[#070b13]">
-          بوابة الإدارة السحابية المركزية الذكية • مبرمج النظام عبدالمجيد المحواشي © 2026
+        <div className="p-4 border-t border-gray-800 text-center text-[10px] text-gray-500 bg-[#070b13] select-none">
+          <span>بوابة الإدارة السحابية المركزية الذكية</span>{' '}
+          <span
+            onClick={() => setShowLoginSection(prev => !prev)}
+            className="cursor-pointer font-black text-gray-400 hover:text-amber-400 transition-colors px-1 py-0.5 inline-block"
+            title="تفعيل دخول لوحة تحكم المطور"
+          >
+            .
+          </span>{' '}
+          <span>مبرمج النظام عبدالمجيد المحواشي - 2026</span>
         </div>
 
         {/* Custom Confirmation Modal for Delete License */}

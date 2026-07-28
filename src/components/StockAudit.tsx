@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   ClipboardCheck, 
   Boxes, 
@@ -74,6 +74,19 @@ export default function StockAudit({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showImportPreviewModal, setShowImportPreviewModal] = useState<boolean>(false);
   const [importedRows, setImportedRows] = useState<ImportedAuditRow[]>([]);
+
+  useEffect(() => {
+    const handleBack = () => {
+      if (showZaraAuditModal) {
+        setShowZaraAuditModal(false);
+      }
+      if (showImportPreviewModal) {
+        setShowImportPreviewModal(false);
+      }
+    };
+    window.addEventListener('android-modal-close', handleBack);
+    return () => window.removeEventListener('android-modal-close', handleBack);
+  }, [showZaraAuditModal, showImportPreviewModal]);
 
   // Export Stock Audit Sheet to CSV / Excel
   const handleExportCSV = () => {
@@ -252,30 +265,37 @@ export default function StockAudit({
 
   // Zara Speech Synthesis for Stock Audit
   const handleSpeakZaraAudit = () => {
-    if (!('speechSynthesis' in window)) {
-      alert('ميزة التقرير الصوتي غير مدعومة في متصفحك الحالي.');
+    setShowZaraAuditModal(true);
+    if (typeof window === 'undefined' || !('speechSynthesis' in window) || !window.speechSynthesis) {
       return;
     }
-    window.speechSynthesis.cancel();
-    
-    let text = `أهلاً بك! أنا زارا، مساعدتك الذكية لجرد وتدقيق المنشأة والمخزون في ${storeName}. تم فحص أرصدة المستودع الميدانية، إجمالي الأصناف المسجلة بالمستودع ${activeProducts.length} صنف. `;
-    
-    if (totalDeficitValue > 0) {
-      text += `تم حصر عجز بالكميات الميدانية بقيمة ${totalDeficitValue.toLocaleString()} ${currency} لعدد ${totalDeficitCount} قطعة مفقودة. `;
-    } else {
-      text += `الكميات الميدانية متطابقة ولا يوجد عجز مالي بالكميات المحصورة. `;
+    try {
+      window.speechSynthesis.cancel();
+      
+      let text = `أهلاً بك! أنا زارا، مساعدتك الذكية لجرد وتدقيق المنشأة والمخزون في ${storeName}. تم فحص أرصدة المستودع الميدانية، إجمالي الأصناف المسجلة بالمستودع ${activeProducts.length} صنف. `;
+      
+      if (totalDeficitValue > 0) {
+        text += `تم حصر عجز بالكميات الميدانية بقيمة ${totalDeficitValue.toLocaleString()} ${currency} لعدد ${totalDeficitCount} قطعة مفقودة. `;
+      } else {
+        text += `الكميات الميدانية متطابقة ولا يوجد عجز مالي بالكميات المحصورة. `;
+      }
+
+      if (stagnantProducts.length > 0) {
+        text += `توجد لدينا ${stagnantProducts.length} سلع راكضة برأس مال مجمد قدره ${totalTiedUpCapital.toLocaleString()} ${currency}. أنصحك بتشغيل عروض تصفية لتسريع تدوير رأس المال. `;
+      }
+
+      text += `شكراً لك، ويمكنك الاعتماد النهائي لتسوية الجرد مباشرة.`;
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ar-SA';
+      utterance.rate = 0.95;
+      utterance.onerror = (e) => {
+        console.warn('Zara speech error:', e);
+      };
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn('Zara speech exception:', e);
     }
-
-    if (stagnantProducts.length > 0) {
-      text += `توجد لدينا ${stagnantProducts.length} سلع راكضة برأس مال مجمد قدره ${totalTiedUpCapital.toLocaleString()} ${currency}. أنصحك بتشغيل عروض تصفية لتسريع تدوير رأس المال. `;
-    }
-
-    text += `شكراً لك، ويمكنك الاعتماد النهائي لتسوية الجرد مباشرة.`;
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'ar-SA';
-    utterance.rate = 0.95;
-    window.speechSynthesis.speak(utterance);
   };
 
   // Audit Physical Counts State: Map of productId -> actualPhysicalCount

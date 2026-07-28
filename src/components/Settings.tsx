@@ -46,6 +46,7 @@ interface SettingsProps {
   onBackupData: () => void;
   onRestoreData: (restoredData: any) => boolean | Promise<boolean>;
   onResetDatabase: () => void;
+  onOpenDevPortal?: () => void;
 }
 
 export default function Settings({
@@ -53,7 +54,8 @@ export default function Settings({
   onSaveSettings,
   onBackupData,
   onRestoreData,
-  onResetDatabase
+  onResetDatabase,
+  onOpenDevPortal
 }: SettingsProps) {
   // Local state form variables
   const [storeName, setStoreName] = useState(settings.storeName);
@@ -529,13 +531,26 @@ export default function Settings({
             </div>
           </div>
 
-          <button
-            onClick={handleDeactivate}
-            className="w-full py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer flex items-center justify-center gap-1.5"
-          >
-            <ShieldAlert className="w-4 h-4" />
-            <span>إلغاء تفعيل الترخيص وتسجيل الخروج</span>
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (onOpenDevPortal) onOpenDevPortal();
+                else window.location.href = '/admin';
+              }}
+              className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+            >
+              <span>👨‍💻 معلومات المطور واللوحة (/admin)</span>
+            </button>
+
+            <button
+              onClick={handleDeactivate}
+              className="py-2.5 px-4 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <ShieldAlert className="w-4 h-4" />
+              <span>إلغاء التفعيل الخروج</span>
+            </button>
+          </div>
         </div>
 
         {/* Database Backup & Restore Card */}
@@ -602,14 +617,22 @@ export default function Settings({
                 soundManager.playSuccessChime();
                 try {
                   await onBackupData();
-                  if (!Capacitor.isNativePlatform()) {
-                    window.open('https://drive.google.com/drive/my-drive', '_blank');
+                  if (Capacitor.isNativePlatform() || (window as any).Capacitor) {
+                    alert('⚡ تم تصدير ومشاركة ملف النسخة الاحتياطية بنجاح عبر مدير الملفات وتطبيقات المشاركة بأندرويد.');
                   } else {
-                    alert('⚡ تم تصدير ومشاركة ملف النسخة الاحتياطية بنجاح عبر حافظة ومشارك أندرويد.');
+                    try {
+                      const win = window.open('https://drive.google.com/drive/my-drive', '_blank');
+                      if (!win) {
+                        alert('⚡ تم حفظ النسخة الاحتياطية محلياً. يرجى السماح بالنوافذ المنبثقة لفتح Google Drive.');
+                      }
+                    } catch (openErr) {
+                      console.warn('Google Drive window.open error:', openErr);
+                      alert('⚡ تم حفظ النسخة الاحتياطية محلياً بنجاح.');
+                    }
                   }
                 } catch (err) {
                   console.warn('Google Drive export error:', err);
-                  alert('تم حفظ النسخة الاحتياطية محلياً بنجاح.');
+                  alert('✓ تم حفظ النسخة الاحتياطية محلياً بنجاح.');
                 }
               }}
               className="p-3 rounded-xl border border-amber-200 bg-amber-50/50 hover:bg-amber-100 text-amber-900 font-bold text-xs transition cursor-pointer flex flex-col items-center justify-center gap-1.5 text-center shadow-xs"

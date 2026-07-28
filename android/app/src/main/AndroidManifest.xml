@@ -25,8 +25,9 @@
     <!-- 5. إذن الاهتزاز والتنبيهات الصوتية عند إجراء عمليات البيع أوالصيانة -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
-    <!-- 6. إذن المايكروفون (للمساعد الصوتي والذكاء الاصطناعي) -->
+    <!-- 6. إذن المايكروفون والصوتيات (للمساعد الصوتي والذكاء الاصطناعي) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <application

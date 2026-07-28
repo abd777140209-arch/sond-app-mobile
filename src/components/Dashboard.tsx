@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   TrendingUp, 
   Users, 
@@ -59,18 +59,35 @@ export default function Dashboard({
 
   const [showZaraModal, setShowZaraModal] = useState(false);
 
+  useEffect(() => {
+    const handleBack = () => {
+      if (showZaraModal) {
+        setShowZaraModal(false);
+      }
+    };
+    window.addEventListener('android-modal-close', handleBack);
+    return () => window.removeEventListener('android-modal-close', handleBack);
+  }, [showZaraModal]);
+
   // Speech synthesis audio summary
   const handleSpeakSummary = () => {
-    if (!('speechSynthesis' in window)) {
-      alert('ميزة التقرير الصوتي غير مدعومة في متصفحك الحالي.');
+    setShowZaraModal(true);
+    if (typeof window === 'undefined' || !('speechSynthesis' in window) || !window.speechSynthesis) {
       return;
     }
-    window.speechSynthesis.cancel();
-    const text = `أهلاً بك! أنا زارا، المساعد المحاسبي الذكي لنظام سند في نشاطك التجاري ${settings.storeName || 'سند'}. إليك التقرير المالي الصوتي المباشر: إجمالي المبيعات بلغ ${totalSales.toLocaleString()} ${settings.currency}. إجمالي ديون العملاء المتبقية ${totalDebts.toLocaleString()} ${settings.currency}. عدد الأصناف بالمخزن ${activeProducts.length} صنف بقيمة أرباح متوقعة قدرها ${expectedProfit.toLocaleString()} ${settings.currency}. شكراً لاستخدامك نظام سند المحاسبي.`;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'ar-SA';
-    utterance.rate = 0.95;
-    window.speechSynthesis.speak(utterance);
+    try {
+      window.speechSynthesis.cancel();
+      const text = `أهلاً بك! أنا زارا، المساعد المحاسبي الذكي لنظام سند في نشاطك التجاري ${settings.storeName || 'سند'}. إليك التقرير المالي الصوتي المباشر: إجمالي المبيعات بلغ ${totalSales.toLocaleString()} ${settings.currency}. إجمالي ديون العملاء المتبقية ${totalDebts.toLocaleString()} ${settings.currency}. عدد الأصناف بالمخزن ${activeProducts.length} صنف بقيمة أرباح متوقعة قدرها ${expectedProfit.toLocaleString()} ${settings.currency}. شكراً لاستخدامك نظام سند المحاسبي.`;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ar-SA';
+      utterance.rate = 0.95;
+      utterance.onerror = (e) => {
+        console.warn('Zara speech error:', e);
+      };
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn('Zara speech exception:', e);
+    }
   };
 
   // Calculations

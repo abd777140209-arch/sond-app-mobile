@@ -48,12 +48,13 @@ import SaaSActivator from './components/SaaSActivator';
 import BiometricLockModal from './components/BiometricLockModal';
 import FloatingCalculator from './components/FloatingCalculator';
 import PinCheckModal from './components/PinCheckModal';
+import DeveloperPortalModal from './components/DeveloperPortalModal';
 
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
-import { LicenseInfo, loadLicenseLocally, saveLicenseLocally } from './utils/licensing';
+import { LicenseInfo, loadLicenseLocally, saveLicenseLocally, generateHWID } from './utils/licensing';
 import { 
   saveStoreDocument, 
   deleteStoreDocument, 
@@ -261,8 +262,41 @@ export default function App() {
     }
   };
 
+  const [isDevAdminRoute, setIsDevAdminRoute] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const path = window.location.pathname.toLowerCase();
+    const search = window.location.search.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    return path === '/admin' || path.endsWith('/admin') || search.includes('admin') || hash.includes('admin');
+  });
+
+  const [showDeveloperModal, setShowDeveloperModal] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const path = window.location.pathname.toLowerCase();
+    const search = window.location.search.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    return path === '/admin' || path.endsWith('/admin') || search.includes('admin') || hash.includes('admin');
+  });
+
+  useEffect(() => {
+    const checkAdminRoute = () => {
+      if (typeof window !== 'undefined') {
+        const path = window.location.pathname.toLowerCase();
+        const search = window.location.search.toLowerCase();
+        const hash = window.location.hash.toLowerCase();
+        if (path === '/admin' || path.endsWith('/admin') || search.includes('admin') || hash.includes('admin')) {
+          setIsDevAdminRoute(true);
+          setShowDeveloperModal(true);
+        }
+      }
+    };
+    checkAdminRoute();
+    window.addEventListener('popstate', checkAdminRoute);
+    return () => window.removeEventListener('popstate', checkAdminRoute);
+  }, []);
+
   const [license, setLicense] = useState<LicenseInfo>(() => loadLicenseLocally());
-  const isActivated = license.status === 'active' || license.status === 'trial';
+  const isActivated = license.status === 'active' || license.status === 'trial' || isDevAdminRoute;
   const [isBiometricLocked, setIsBiometricLocked] = useState<boolean>(() => {
     return localStorage.getItem('sond_biometrics_enabled') === 'true';
   });
@@ -316,6 +350,13 @@ export default function App() {
   // 📱 التعامل مع زر الرجوع لإنهاء/إغلاق القوائم أو العودة للرئيسية في أندرويد
   useEffect(() => {
     const handleAndroidBack = async () => {
+      // إرسال حدث مخصص لإغلاق النوافذ الفرعية المفتوحة (مثل المساعد الصوتي، نافذة زارا، أو الجرد)
+      window.dispatchEvent(new CustomEvent('android-modal-close'));
+
+      if (showDeveloperModal) {
+        setShowDeveloperModal(false);
+        return;
+      }
       if (activeInvoice) {
         setActiveInvoice(null);
         return;
@@ -354,6 +395,11 @@ export default function App() {
     }
 
     const handlePopState = () => {
+      window.dispatchEvent(new CustomEvent('android-modal-close'));
+      if (showDeveloperModal) {
+        setShowDeveloperModal(false);
+        return;
+      }
       if (activeInvoice) {
         setActiveInvoice(null);
         return;
@@ -379,7 +425,7 @@ export default function App() {
       }
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [activeTab, activeInvoice, showPinCheckModal, showPrivacyPinModal]);
+  }, [activeTab, activeInvoice, showPinCheckModal, showPrivacyPinModal, showDeveloperModal]);
 
   const handleSaveSettings = (newSettings: SystemSettings) => {
     localStorage.setItem('smart_accounting_settings', JSON.stringify(newSettings));
@@ -637,11 +683,22 @@ export default function App() {
 
   if (!isActivated) {
     return (
-      <SaaSActivator 
-        license={license}
-        setLicense={setLicense}
-        onActivationSuccess={(updatedLicense) => setLicense(updatedLicense)} 
-      />
+      <>
+        <SaaSActivator 
+          license={license}
+          setLicense={setLicense}
+          onActivationSuccess={(updatedLicense) => setLicense(updatedLicense)} 
+          onOpenDevPortal={() => {
+            setIsDevAdminRoute(true);
+            setShowDeveloperModal(true);
+          }}
+        />
+        <DeveloperPortalModal
+          isOpen={showDeveloperModal}
+          onClose={() => setShowDeveloperModal(false)}
+          currentHwid={license.hwid || generateHWID()}
+        />
+      </>
     );
   }
 
@@ -712,6 +769,16 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Developer Modal Button */}
+          <button
+            onClick={() => setShowDeveloperModal(true)}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold transition cursor-pointer shadow-2xs"
+            title="معلومات المطور ولوحة التحكم والترخيص (/admin)"
+          >
+            <span>👨‍💻</span>
+            <span className="hidden sm:inline font-bold">المطور</span>
+          </button>
+
           {/* Active User Badge & Switcher Trigger */}
           <button
             onClick={() => handleTabSelect('users')}
@@ -920,6 +987,7 @@ export default function App() {
                 onBackupData={handleBackupData}
                 onRestoreData={handleRestoreData}
                 onResetDatabase={handleResetDatabase}
+                onOpenDevPortal={() => setShowDeveloperModal(true)}
               />
             )}
           </motion.div>
@@ -996,6 +1064,12 @@ export default function App() {
         pinCode={settings.privacyPinCode || settings.pinCode || '1234'}
         title="كلمة سر وضع الخصوصية 👁️"
         subtitle="يرجى إدخال رمز PIN لإلغاء إخفاء المبالغ"
+      />
+
+      <DeveloperPortalModal
+        isOpen={showDeveloperModal}
+        onClose={() => setShowDeveloperModal(false)}
+        currentHwid={license.hwid || generateHWID()}
       />
 
     </div>

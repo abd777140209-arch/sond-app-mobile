@@ -48,45 +48,55 @@ export default function VoicePOSModal({
       return;
     }
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      try {
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'ar-SA';
-        recognition.continuous = true;
-        recognition.interimResults = true;
+    const handleBack = () => {
+      onClose();
+    };
+    window.addEventListener('android-modal-close', handleBack);
 
-        recognition.onresult = (event: any) => {
-          let currentTranscript = '';
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            currentTranscript += event.results[i][0].transcript;
-          }
-          setTranscript(currentTranscript);
-          processVoiceCommand(currentTranscript);
-        };
+    try {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        try {
+          const recognition = new SpeechRecognition();
+          recognition.lang = 'ar-SA';
+          recognition.continuous = true;
+          recognition.interimResults = true;
 
-        recognition.onerror = (event: any) => {
-          console.warn('Speech recognition error:', event.error);
-          if (event.error === 'not-allowed') {
-            setVoiceError('⚠️ المايكروفون غير متاح أو محظور. يمكنك استخدام وضع كتابة/محاكاة الأوامر الصوتي بالأسفل.');
-          }
-          setIsListening(false);
-        };
+          recognition.onresult = (event: any) => {
+            let currentTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              currentTranscript += event.results[i][0].transcript;
+            }
+            setTranscript(currentTranscript);
+            processVoiceCommand(currentTranscript);
+          };
 
-        recognition.onend = () => {
-          setIsListening(false);
-        };
+          recognition.onerror = (event: any) => {
+            console.warn('Speech recognition error:', event.error);
+            setVoiceError('⚠️ تعذر تشغيل الصوت المباشر أو المايكروفون محظور. تم تفعيل وضع الكتابة والمحاكاة بالأزرار السريعة بالأسفل.');
+            setIsListening(false);
+          };
 
-        recognitionRef.current = recognition;
-      } catch (err) {
-        console.warn('Failed to setup speech recognition:', err);
+          recognition.onend = () => {
+            setIsListening(false);
+          };
+
+          recognitionRef.current = recognition;
+        } catch (err) {
+          console.warn('Failed to setup speech recognition:', err);
+          setVoiceError('💡 المايكروفون غير متاح في هذه البيئة. استخدم خيارات المحاكاة والكتابة النصية بالأسفل.');
+        }
+      } else {
+        setVoiceError('💡 المايكروفون غير متاح كمتحدث مباشر. تتوفر المحاكاة بالأوامر النصية والأزرار السريعة بالأسفل.');
       }
-    } else {
-      setVoiceError('💡 متصفحك لا يدعم التعرف الصوتي المباشر بشكل تلقائي. يرجى تجربة خيارات المحاكاة السريعة بالأسفل.');
+    } catch (e) {
+      console.warn('Speech Recognition init error:', e);
+      setVoiceError('💡 يمكنك استخدام المحاكاة بالأوامر النصية بالأزرار السريعة بالأسفل.');
     }
 
     return () => {
       stopListening();
+      window.removeEventListener('android-modal-close', handleBack);
     };
   }, [isOpen]);
 
@@ -96,12 +106,14 @@ export default function VoicePOSModal({
     setTranscript('');
     setParsedFeedback([]);
 
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    let micReady = false;
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true });
+        micReady = true;
       } catch (err: any) {
         console.warn('Microphone permission error:', err);
-        setVoiceError('⚠️ تعذر تشغيل المايكروفون أو لم يتم إعطاء الإذن في أندرويد. يمكنك استخدام خيارات الإدخال بالأوامر السريعة بالأسفل.');
+        setVoiceError('⚠️ تعذر إعطاء إذن المايكروفون في أندرويد. تم تفعيل وضع المحاكاة والكتابة بالأسفل مباشرة.');
       }
     }
 
@@ -111,10 +123,12 @@ export default function VoicePOSModal({
         setIsListening(true);
       } catch (err) {
         console.warn('Could not start recognition:', err);
-        setIsListening(true);
+        setIsListening(false);
+        setVoiceError('⚠️ متعذر البدء بالمايكروفون المباشر. يمكنك الاستمرار باستخدام خانة كتابة الأوامر أو الضغط على الأزرار بالأسفل.');
       }
     } else {
-      setIsListening(true);
+      setIsListening(false);
+      setVoiceError('💡 المايكروفون غير متاح. يرجى كتابة الأمر الصوتي أو اختياره من الأزرار السريعة بالأسفل.');
     }
   };
 

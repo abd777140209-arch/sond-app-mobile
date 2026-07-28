@@ -31,6 +31,7 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
   const [showWhatsAppForm, setShowWhatsAppForm] = useState(false);
   const [phoneInput, setPhoneInput] = useState('');
   const [isExportingPDF, setIsExportingPDF] = useState(false);
+  const [isBluetoothConnecting, setIsBluetoothConnecting] = useState(false);
 
   useEffect(() => {
     if (invoice && customers) {
@@ -43,9 +44,26 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
     }
   }, [invoice, customers]);
 
-  if (!invoice) return null;
+  // Auto-route print when invoice loads if configured
+  useEffect(() => {
+    if (autoDirectPrint && invoice) {
+      const timer = setTimeout(() => {
+        handlePrint();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [invoice, autoDirectPrint]);
 
-  const [isBluetoothConnecting, setIsBluetoothConnecting] = useState(false);
+  useEffect(() => {
+    if (!invoice) return;
+    const handleBack = () => {
+      onClose();
+    };
+    window.addEventListener('android-modal-close', handleBack);
+    return () => window.removeEventListener('android-modal-close', handleBack);
+  }, [invoice, onClose]);
+
+  if (!invoice) return null;
 
   const getHtml2CanvasOptions = () => ({
     scale: 3,
@@ -224,14 +242,23 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
       pdf.addImage(imgData, 'PNG', 0, 1, pdfWidth, pdfHeight);
       const fileName = `فاتورة_${invoice.invoiceNumber}.pdf`;
 
-      if (Capacitor.isNativePlatform()) {
+      if (Capacitor.isNativePlatform() || (window as any).Capacitor) {
         try {
           const base64Data = pdf.output('datauristring').split(',')[1];
-          const fileResult = await Filesystem.writeFile({
-            path: fileName,
-            data: base64Data,
-            directory: Directory.Cache
-          });
+          let fileResult;
+          try {
+            fileResult = await Filesystem.writeFile({
+              path: fileName,
+              data: base64Data,
+              directory: Directory.Documents
+            });
+          } catch (docErr) {
+            fileResult = await Filesystem.writeFile({
+              path: fileName,
+              data: base64Data,
+              directory: Directory.Cache
+            });
+          }
           await Share.share({
             title: `فاتورة ${invoice.invoiceNumber}`,
             text: `فاتورة مبيعات من ${settings.storeName} - رقم ${invoice.invoiceNumber}`,
@@ -269,16 +296,6 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
       setIsExportingPDF(false);
     }
   };
-
-  // Auto-route print when invoice loads if configured
-  useEffect(() => {
-    if (autoDirectPrint && invoice) {
-      const timer = setTimeout(() => {
-        handlePrint();
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [invoice, autoDirectPrint]);
 
   const handleAutoPrintToggle = (checked: boolean) => {
     setAutoDirectPrint(checked);

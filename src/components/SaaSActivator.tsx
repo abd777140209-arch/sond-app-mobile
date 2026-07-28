@@ -24,9 +24,10 @@ interface SaaSActivatorProps {
   license: LicenseInfo;
   setLicense: React.Dispatch<React.SetStateAction<LicenseInfo>>;
   onActivationSuccess: (license: LicenseInfo) => void;
+  onOpenDevPortal?: () => void;
 }
 
-export default function SaaSActivator({ license, setLicense, onActivationSuccess }: SaaSActivatorProps) {
+export default function SaaSActivator({ license, setLicense, onActivationSuccess, onOpenDevPortal }: SaaSActivatorProps) {
   const [activationKeyInput, setActivationKeyInput] = useState('');
   const [phoneInput, setPhoneInput] = useState('');
   const [customerNameInput, setCustomerNameInput] = useState('');
@@ -334,10 +335,24 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
         </form>
 
         {/* WhatsApp Developer Contact Footnote */}
-        <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-center space-y-1">
+        <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-center space-y-2">
           <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
             💬 للتفعيل المباشر، انسخ بصمة جهازك وتواصل عبر واتساب: <a href="https://wa.me/967777140209" target="_blank" rel="noreferrer" className="text-sky-600 dark:text-sky-400 font-bold font-mono hover:underline">777140209</a>
           </p>
+
+          <div className="flex items-center justify-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                if (onOpenDevPortal) onOpenDevPortal();
+                else window.location.href = '/admin';
+              }}
+              className="px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <span>👨‍💻 معلومات المطور واللوحة (/admin)</span>
+            </button>
+          </div>
+
           <p className="text-[10px] text-slate-400">
             برمجة وتطوير: م. عبدالمجيد المحواشي • نظام سند المحاسبي
           </p>
