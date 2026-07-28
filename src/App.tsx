@@ -47,6 +47,8 @@ import BiometricLockModal from './components/BiometricLockModal';
 import FloatingCalculator from './components/FloatingCalculator';
 import PinCheckModal from './components/PinCheckModal';
 
+import { App as CapacitorApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { LicenseInfo, loadLicenseLocally, saveLicenseLocally } from './utils/licensing';
 import { 
   saveStoreDocument, 
@@ -183,6 +185,74 @@ export default function App() {
     };
   }, [license.licenseKey, isActivated]);
 
+  // 📱 التعامل مع زر الرجوع لإنهاء/إغلاق القوائم أو العودة للرئيسية في أندرويد
+  useEffect(() => {
+    const handleAndroidBack = async () => {
+      if (activeInvoice) {
+        setActiveInvoice(null);
+        return;
+      }
+      if (showPinCheckModal) {
+        setShowPinCheckModal(false);
+        return;
+      }
+      if (showPrivacyPinModal) {
+        setShowPrivacyPinModal(false);
+        return;
+      }
+
+      if (activeTab !== 'dashboard') {
+        setActiveTab('dashboard');
+        return;
+      }
+
+      // إذا كان المستخدم في الشاشة الرئيسية ولا توجد نوافذ مفتوحة، يصغّر التطبيق
+      try {
+        await CapacitorApp.minimizeApp();
+      } catch (e) {
+        // متصفح عادي
+      }
+    };
+
+    let listenerHandler: any = null;
+    if (Capacitor.isNativePlatform()) {
+      try {
+        CapacitorApp.addListener('backButton', handleAndroidBack).then(h => {
+          listenerHandler = h;
+        }).catch(() => {});
+      } catch (err) {
+        // Fallback
+      }
+    }
+
+    const handlePopState = () => {
+      if (activeInvoice) {
+        setActiveInvoice(null);
+        return;
+      }
+      if (showPinCheckModal) {
+        setShowPinCheckModal(false);
+        return;
+      }
+      if (showPrivacyPinModal) {
+        setShowPrivacyPinModal(false);
+        return;
+      }
+      if (activeTab !== 'dashboard') {
+        setActiveTab('dashboard');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      if (listenerHandler && typeof listenerHandler.remove === 'function') {
+        listenerHandler.remove();
+      }
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [activeTab, activeInvoice, showPinCheckModal, showPrivacyPinModal]);
+
   const handleSaveSettings = (newSettings: SystemSettings) => {
     localStorage.setItem('smart_accounting_settings', JSON.stringify(newSettings));
     setSettings(newSettings);
@@ -233,11 +303,14 @@ export default function App() {
     setActiveInvoice(newInvoice);
   };
 
-  const handleAddCustomer = (custData: Omit<Customer, 'id' | 'totalDebt' | 'createdAt'>) => {
+  const handleAddCustomer = (custData: Omit<Customer, 'id' | 'createdAt'> & { totalDebt?: number }) => {
+    const debtAmount = custData.totalDebt ?? custData.initialDebt ?? custData.balance ?? 0;
     const newCustomer: Customer = {
       id: `c-${Date.now()}`,
       ...custData,
-      totalDebt: 0,
+      totalDebt: debtAmount,
+      balance: debtAmount,
+      initialDebt: debtAmount,
       createdAt: new Date().toISOString()
     };
     if (license.licenseKey) saveStoreDocument(license.licenseKey, 'customers', newCustomer.id, newCustomer);

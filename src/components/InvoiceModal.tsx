@@ -8,6 +8,9 @@ import { Printer, Download, X, ShieldCheck, Heart, Smartphone, SlidersHorizontal
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { QRCodeSVG } from 'qrcode.react';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
+import { Capacitor } from '@capacitor/core';
 import { Invoice, SystemSettings, Customer } from '../types';
 import { soundManager } from '../utils/sound';
 import { requestStoragePermissionOnDemand } from '../utils/androidPermissions';
@@ -44,8 +47,116 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
 
   const [isBluetoothConnecting, setIsBluetoothConnecting] = useState(false);
 
-  const handlePrint = () => {
+  const getHtml2CanvasOptions = () => ({
+    scale: 3,
+    useCORS: true,
+    backgroundColor: '#ffffff',
+    logging: false,
+    onclone: (clonedDoc: Document) => {
+      // 1. Sanitize all <style> elements in clonedDoc to replace oklch(...) with rgb(...)
+      const styleElements = clonedDoc.querySelectorAll('style');
+      styleElements.forEach((styleEl) => {
+        if (styleEl.textContent && styleEl.textContent.includes('oklch')) {
+          styleEl.textContent = styleEl.textContent.replace(/oklch\([^)]+\)/g, 'rgb(30, 41, 59)');
+        }
+      });
+
+      // 2. Replace any inline oklch values on cloned elements
+      const allClonedElements = clonedDoc.querySelectorAll('*');
+      allClonedElements.forEach((node) => {
+        const el = node as HTMLElement;
+        if (el.style) {
+          for (let i = 0; i < el.style.length; i++) {
+            const propName = el.style[i];
+            const propVal = el.style.getPropertyValue(propName);
+            if (propVal && propVal.includes('oklch')) {
+              el.style.setProperty(propName, 'rgb(30, 41, 59)');
+            }
+          }
+        }
+      });
+
+      // 3. Transfer computed colors from original DOM elements to cloned elements
+      const origCard = document.getElementById('invoice-printable-card');
+      const clonedCard = clonedDoc.getElementById('invoice-printable-card');
+      if (origCard && clonedCard) {
+        const origElements = Array.from(origCard.querySelectorAll('*'));
+        const clonedElements = Array.from(clonedCard.querySelectorAll('*'));
+
+        const cardComputed = window.getComputedStyle(origCard);
+        clonedCard.style.color = cardComputed.color.includes('oklch') ? '#1e293b' : cardComputed.color;
+        clonedCard.style.backgroundColor = cardComputed.backgroundColor.includes('oklch') ? '#ffffff' : cardComputed.backgroundColor;
+
+        origElements.forEach((origEl, idx) => {
+          const clonedEl = clonedElements[idx] as HTMLElement;
+          if (clonedEl) {
+            const computed = window.getComputedStyle(origEl);
+            if (computed.color && !computed.color.includes('oklch')) {
+              clonedEl.style.color = computed.color;
+            }
+            if (computed.backgroundColor && !computed.backgroundColor.includes('oklch') && computed.backgroundColor !== 'rgba(0, 0, 0, 0)') {
+              clonedEl.style.backgroundColor = computed.backgroundColor;
+            }
+            if (computed.borderColor && !computed.borderColor.includes('oklch')) {
+              clonedEl.style.borderColor = computed.borderColor;
+            }
+          }
+        });
+      }
+    }
+  });
+
+  const handlePrint = async () => {
     soundManager.playSuccessChime();
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const element = document.getElementById('invoice-printable-card');
+        if (element) {
+          const originalMaxHeight = element.style.maxHeight;
+          const originalOverflow = element.style.overflow;
+          element.style.maxHeight = 'none';
+          element.style.overflow = 'visible';
+
+          const canvas = await html2canvas(element, getHtml2CanvasOptions());
+
+          element.style.maxHeight = originalMaxHeight;
+          element.style.overflow = originalOverflow;
+
+          const imgData = canvas.toDataURL('image/png');
+          const imgWidth = canvas.width;
+          const imgHeight = canvas.height;
+
+          const pdfWidth = paperSize === '80mm' ? 80 : 58;
+          const pdfHeight = (imgHeight * pdfWidth) / imgWidth;
+
+          const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: [pdfWidth, pdfHeight + 2],
+          });
+
+          pdf.addImage(imgData, 'PNG', 0, 1, pdfWidth, pdfHeight);
+          const fileName = `طباعة_فاتورة_${invoice.invoiceNumber}.pdf`;
+
+          const base64Data = pdf.output('datauristring').split(',')[1];
+          const fileResult = await Filesystem.writeFile({
+            path: fileName,
+            data: base64Data,
+            directory: Directory.Cache
+          });
+
+          await Share.share({
+            title: `طباعة فاتورة ${invoice.invoiceNumber}`,
+            text: `طباعة فاتورة رقم ${invoice.invoiceNumber}`,
+            url: fileResult.uri,
+            dialogTitle: 'اختر تطبيق الطباعة أو مشاركة الفاتورة'
+          });
+          return;
+        }
+      } catch (err) {
+        console.warn('Native print fallback:', err);
+      }
+    }
     window.print();
   };
 
@@ -91,12 +202,7 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
       element.style.maxHeight = 'none';
       element.style.overflow = 'visible';
 
-      const canvas = await html2canvas(element, {
-        scale: 3,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-      });
+      const canvas = await html2canvas(element, getHtml2CanvasOptions());
 
       // Restore original styling
       element.style.maxHeight = originalMaxHeight;
@@ -117,6 +223,26 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
 
       pdf.addImage(imgData, 'PNG', 0, 1, pdfWidth, pdfHeight);
       const fileName = `فاتورة_${invoice.invoiceNumber}.pdf`;
+
+      if (Capacitor.isNativePlatform()) {
+        try {
+          const base64Data = pdf.output('datauristring').split(',')[1];
+          const fileResult = await Filesystem.writeFile({
+            path: fileName,
+            data: base64Data,
+            directory: Directory.Cache
+          });
+          await Share.share({
+            title: `فاتورة ${invoice.invoiceNumber}`,
+            text: `فاتورة مبيعات من ${settings.storeName} - رقم ${invoice.invoiceNumber}`,
+            url: fileResult.uri,
+            dialogTitle: 'تصدير ومشاركة الفاتورة PDF'
+          });
+          return;
+        } catch (nativeErr) {
+          console.warn('Native PDF export fallback:', nativeErr);
+        }
+      }
 
       const pdfBlob = pdf.output('blob');
       const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
@@ -160,11 +286,13 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
     soundManager.playScanBeep();
   };
 
-  // Simulates downloading the invoice receipt as a clean text-based file
-  const handleDownload = () => {
+  // Downloads the invoice receipt as a clean text-based file with UTF-8 BOM encoding for Arabic clarity
+  const handleDownload = async () => {
     soundManager.playSuccessChime();
     
-    let text = `-----------------------------------------\n`;
+    // \uFEFF is UTF-8 Byte Order Mark (BOM) ensuring Arabic text displays clearly in text editors
+    let text = `\uFEFF`;
+    text += `-----------------------------------------\n`;
     text += `        ${settings.storeName.toUpperCase()}        \n`;
     text += `        ${settings.address}        \n`;
     text += `        هاتف: ${settings.phone}        \n`;
@@ -190,12 +318,36 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
     text += `       شكراً لتعاملكم وزيارتكم لنا!       \n`;
     text += `-----------------------------------------\n`;
 
+    const fileName = `smart_invoice_${invoice.invoiceNumber}.txt`;
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const fileResult = await Filesystem.writeFile({
+          path: fileName,
+          data: text,
+          directory: Directory.Cache,
+          encoding: 'utf8' as any
+        });
+        await Share.share({
+          title: `فاتورة ${invoice.invoiceNumber}`,
+          text: `ملف نصي للفاتورة رقم ${invoice.invoiceNumber}`,
+          url: fileResult.uri,
+          dialogTitle: 'تصدير ومشاركة الفاتورة النصية'
+        });
+        return;
+      } catch (nativeErr) {
+        console.warn('Native TXT export fallback:', nativeErr);
+      }
+    }
+
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `smart_invoice_${invoice.invoiceNumber}.txt`;
+    link.download = fileName;
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 

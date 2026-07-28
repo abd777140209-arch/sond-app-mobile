@@ -32,6 +32,8 @@ import {
   ShieldAlert,
   Sparkles
 } from 'lucide-react';
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Capacitor } from '@capacitor/core';
 import { SystemSettings, AppTheme, CardShape, DisplayDensity, CurrencyRate } from '../types';
 import { DEFAULT_CURRENCIES } from '../utils/seedData';
 import { soundManager } from '../utils/sound';
@@ -261,8 +263,59 @@ export default function Settings({
     });
   };
 
-  // 🎯 دالة رفع ومعالجة الشعار الحقيقية
-  const handleLogoClick = () => {
+  // 🎯 دالة رفع ومعالجة الشعار الحقيقية عبر الكاميرا/المعرض المباشر في أندرويد والمتصفح
+  const handleLogoClick = async () => {
+    if (Capacitor.isNativePlatform() || (window as any).Capacitor?.isNativePlatform?.()) {
+      try {
+        const image = await Camera.getPhoto({
+          quality: 90,
+          allowEditing: false,
+          resultType: CameraResultType.Base64,
+          source: CameraSource.Photos
+        });
+
+        if (image && image.base64String) {
+          const format = image.format || 'png';
+          const base64Data = `data:image/${format};base64,${image.base64String}`;
+          
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const maxDim = 320;
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+              if (width > maxDim) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              }
+            } else {
+              if (height > maxDim) {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              const compressedBase64 = canvas.toDataURL('image/png');
+              setStoreLogoUrl(compressedBase64);
+              localStorage.setItem('smart_accounting_company_logo', compressedBase64);
+              soundManager.playSuccessChime();
+            }
+          };
+          img.src = base64Data;
+          return;
+        }
+      } catch (err) {
+        console.warn('تجاوز منتقي الصور بـ Capacitor أو خطأ، جاري الرجوع لمنتقي الملفات القياسي:', err);
+      }
+    }
+
     if (logoInputRef.current) {
       logoInputRef.current.click();
     }

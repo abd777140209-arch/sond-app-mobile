@@ -20,6 +20,8 @@ export interface Customer {
   name: string;
   phone: string;
   totalDebt: number;
+  initialDebt?: number;
+  balance?: number;
   createdAt: string;
   debtDueDate?: string; // تاريخ استحقاق الدين
   loyaltyPoints?: number; // نقاط الولاء

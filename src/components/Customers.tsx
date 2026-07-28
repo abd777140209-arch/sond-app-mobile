@@ -42,7 +42,7 @@ interface CustomersProps {
   customers: Customer[];
   payments: Payment[];
   invoices?: Invoice[];
-  onAddCustomer: (customer: Omit<Customer, 'id' | 'totalDebt' | 'createdAt'>) => void;
+  onAddCustomer: (customer: Omit<Customer, 'id' | 'createdAt'> & { totalDebt?: number }) => void;
   onUpdateCustomer?: (customer: Customer) => void;
   onPayDebt: (customerId: string, amount: number, note: string) => void;
   onDeleteCustomer: (customerId: string) => void;
@@ -83,6 +83,7 @@ export default function Customers({
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [newCustName, setNewCustName] = useState('');
   const [newCustPhone, setNewCustPhone] = useState('');
+  const [newCustInitialDebt, setNewCustInitialDebt] = useState<number>(0);
   const [newCustDueDate, setNewCustDueDate] = useState('');
   const [newCustNotes, setNewCustNotes] = useState('');
   const [addError, setAddError] = useState('');
@@ -125,16 +126,22 @@ export default function Customers({
       return;
     }
 
+    const initialDebtVal = Math.max(0, Number(newCustInitialDebt) || 0);
+
     onAddCustomer({
       name: newCustName.trim(),
       phone: newCustPhone.trim() || 'بدون هاتف',
       debtDueDate: newCustDueDate || undefined,
       notes: newCustNotes.trim(),
-      loyaltyPoints: 0
+      loyaltyPoints: 0,
+      totalDebt: initialDebtVal,
+      initialDebt: initialDebtVal,
+      balance: initialDebtVal
     });
 
     setNewCustName('');
     setNewCustPhone('');
+    setNewCustInitialDebt(0);
     setNewCustDueDate('');
     setNewCustNotes('');
     setAddError('');
@@ -784,6 +791,26 @@ export default function Customers({
                       className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-xl px-2.5 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
                     />
                   </div>
+                </div>
+
+                <div className="space-y-1 bg-amber-50/70 border border-amber-200 p-3 rounded-2xl">
+                  <label className="text-xs font-bold text-slate-800 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Wallet className="w-3.5 h-3.5 text-amber-600" />
+                      <span>الرصيد الافتتاحي / الدين السابق ({currency}):</span>
+                    </span>
+                  </label>
+                  <input
+                    id="new_cust_initial_debt"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={newCustInitialDebt || ''}
+                    onChange={(e) => setNewCustInitialDebt(parseFloat(e.target.value) || 0)}
+                    placeholder="0 (أدخل الدين السابق إن وجد)"
+                    className="w-full bg-white border border-amber-300 text-xs font-bold font-mono rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 transition"
+                  />
+                  <p className="text-[10px] text-slate-500">سيتم تسجيل هذا المبلغ كمديونية أولية سابقة على العميل فور الحفظ</p>
                 </div>
 
                 <button

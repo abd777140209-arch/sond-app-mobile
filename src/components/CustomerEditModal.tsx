@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Save, User, Phone, Calendar, Award, FileText, AlertCircle, Check } from 'lucide-react';
+import { X, Save, User, Phone, Calendar, Award, FileText, AlertCircle, Check, Wallet } from 'lucide-react';
 import { Customer } from '../types';
 import { soundManager } from '../utils/sound';
 
@@ -26,6 +26,7 @@ export default function CustomerEditModal({
 }: CustomerEditModalProps) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [totalDebt, setTotalDebt] = useState<number>(0);
   const [debtDueDate, setDebtDueDate] = useState('');
   const [loyaltyPoints, setLoyaltyPoints] = useState<number>(0);
   const [notes, setNotes] = useState('');
@@ -35,6 +36,7 @@ export default function CustomerEditModal({
     if (customer) {
       setName(customer.name || '');
       setPhone(customer.phone || '');
+      setTotalDebt(customer.totalDebt ?? customer.balance ?? customer.initialDebt ?? 0);
       setDebtDueDate(customer.debtDueDate || '');
       setLoyaltyPoints(customer.loyaltyPoints || 0);
       setNotes(customer.notes || '');
@@ -52,10 +54,14 @@ export default function CustomerEditModal({
       return;
     }
 
+    const currentDebt = Math.max(0, Number(totalDebt) || 0);
+
     const updated: Customer = {
       ...customer,
       name: name.trim(),
       phone: phone.trim() || 'بدون هاتف',
+      totalDebt: currentDebt,
+      balance: currentDebt,
       debtDueDate: debtDueDate || undefined,
       loyaltyPoints: Math.max(0, loyaltyPoints),
       notes: notes.trim()
@@ -145,6 +151,29 @@ export default function CustomerEditModal({
                   className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 text-right focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
                   placeholder="77XXXXXXX"
                 />
+              </div>
+
+              {/* Total Debt Editing (إجمالي المديونية الحالية) */}
+              <div className="space-y-1 bg-amber-50/60 border border-amber-200/80 p-3 rounded-2xl">
+                <label className="text-xs font-bold text-slate-800 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Wallet className="w-3.5 h-3.5 text-amber-600" />
+                    <span>إجمالي المديونية الحالية ({currency}):</span>
+                  </span>
+                  <span className="text-[10px] text-amber-700 font-mono font-black">
+                    {Math.max(0, totalDebt).toLocaleString()} {currency}
+                  </span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={totalDebt}
+                  onChange={(e) => setTotalDebt(parseFloat(e.target.value) || 0)}
+                  className="w-full bg-white border border-amber-300 text-xs font-bold font-mono rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 transition"
+                  placeholder="0 (أدخل المديونية الحالية)"
+                />
+                <p className="text-[10px] text-slate-500">تعديل قيمة الدين الإجمالية المسجلة على حساب العميل مباشرة</p>
               </div>
 
               {/* Debt Due Date (تاريخ استحقاق الدين) */}
