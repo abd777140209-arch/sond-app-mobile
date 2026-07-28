@@ -90,11 +90,21 @@ export default function VoicePOSModal({
     };
   }, [isOpen]);
 
-  const startListening = () => {
+  const startListening = async () => {
     soundManager.playScanBeep();
     setVoiceError('');
     setTranscript('');
     setParsedFeedback([]);
+
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (err: any) {
+        console.warn('Microphone permission error:', err);
+        setVoiceError('⚠️ تعذر تشغيل المايكروفون أو لم يتم إعطاء الإذن في أندرويد. يمكنك استخدام خيارات الإدخال بالأوامر السريعة بالأسفل.');
+      }
+    }
+
     if (recognitionRef.current) {
       try {
         recognitionRef.current.start();

@@ -30,7 +30,8 @@ import {
   Sparkles,
   Clock,
   X,
-  Plus
+  Plus,
+  ShieldCheck
 } from 'lucide-react';
 import { Customer, Payment, Invoice } from '../types';
 import { soundManager } from '../utils/sound';
@@ -84,6 +85,7 @@ export default function Customers({
   const [newCustName, setNewCustName] = useState('');
   const [newCustPhone, setNewCustPhone] = useState('');
   const [newCustInitialDebt, setNewCustInitialDebt] = useState<number>(0);
+  const [newCustCreditLimit, setNewCustCreditLimit] = useState<number | ''>('');
   const [newCustDueDate, setNewCustDueDate] = useState('');
   const [newCustNotes, setNewCustNotes] = useState('');
   const [addError, setAddError] = useState('');
@@ -132,6 +134,7 @@ export default function Customers({
       name: newCustName.trim(),
       phone: newCustPhone.trim() || 'بدون هاتف',
       debtDueDate: newCustDueDate || undefined,
+      creditLimit: newCustCreditLimit === '' ? undefined : Math.max(0, Number(newCustCreditLimit)),
       notes: newCustNotes.trim(),
       loyaltyPoints: 0,
       totalDebt: initialDebtVal,
@@ -142,6 +145,7 @@ export default function Customers({
     setNewCustName('');
     setNewCustPhone('');
     setNewCustInitialDebt(0);
+    setNewCustCreditLimit('');
     setNewCustDueDate('');
     setNewCustNotes('');
     setAddError('');
@@ -469,6 +473,26 @@ export default function Customers({
                               </span>
                             )}
                           </div>
+
+                          {/* Credit Limit Badge */}
+                          {customer.creditLimit !== undefined && customer.creditLimit > 0 && (
+                            <div className="flex items-center justify-between text-[10px] pt-1">
+                              <span className="text-slate-400 font-sans flex items-center gap-1">
+                                <ShieldCheck className="w-3 h-3 text-slate-400" />
+                                <span>سقف الدين (حد الإئتمان):</span>
+                              </span>
+                              {customer.totalDebt >= customer.creditLimit ? (
+                                <span className="font-bold px-1.5 py-0.5 rounded bg-rose-600 text-white flex items-center gap-1">
+                                  <span>⚠️ {customer.creditLimit.toLocaleString()} {currency}</span>
+                                  <span className="bg-rose-950/40 px-1 rounded text-[9px]">تجاوز الحد</span>
+                                </span>
+                              ) : (
+                                <span className="font-mono font-bold text-slate-700 px-1.5 py-0.5 rounded bg-slate-100">
+                                  {customer.creditLimit.toLocaleString()} {currency}
+                                </span>
+                              )}
+                            </div>
+                          )}
 
                           {/* Debt Due Date Badge */}
                           <div className="flex items-center justify-between text-[10px] font-mono">
@@ -811,6 +835,26 @@ export default function Customers({
                     className="w-full bg-white border border-amber-300 text-xs font-bold font-mono rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 transition"
                   />
                   <p className="text-[10px] text-slate-500">سيتم تسجيل هذا المبلغ كمديونية أولية سابقة على العميل فور الحفظ</p>
+                </div>
+
+                <div className="space-y-1 bg-rose-50/60 border border-rose-200 p-3 rounded-2xl">
+                  <label className="text-xs font-bold text-slate-800 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-rose-600" />
+                      <span>سقف الدين / حد الإئتمان المسموح ({currency}):</span>
+                    </span>
+                  </label>
+                  <input
+                    id="new_cust_credit_limit"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={newCustCreditLimit}
+                    onChange={(e) => setNewCustCreditLimit(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    placeholder="مثال: 50000 (أترك فارغاً لفتح الدين بدون سقف)"
+                    className="w-full bg-white border border-rose-300 text-xs font-bold font-mono rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500 transition"
+                  />
+                  <p className="text-[10px] text-slate-500">حد إئتماني أقصى. سيتم إيقاف وحظر المبيعات الآجلة للعميل فور تجاوزه</p>
                 </div>
 
                 <button

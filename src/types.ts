@@ -24,6 +24,7 @@ export interface Customer {
   balance?: number;
   createdAt: string;
   debtDueDate?: string; // تاريخ استحقاق الدين
+  creditLimit?: number; // سقف الدين / حد الإئتمان
   loyaltyPoints?: number; // نقاط الولاء
   notes?: string;
   isDeleted?: boolean;
@@ -63,6 +64,17 @@ export interface Payment {
   note: string;
 }
 
+export type ChecklistStatus = 'intact' | 'damaged' | 'untested';
+
+export interface DeviceChecklist {
+  screen?: ChecklistStatus;     // الشاشة
+  battery?: ChecklistStatus;    // البطارية
+  camera?: ChecklistStatus;     // الكاميرا
+  fingerprint?: ChecklistStatus;// البصمة/الوجه
+  sound?: ChecklistStatus;      // الصوت/السماعة
+  power?: ChecklistStatus;      // الباور/الشحن
+}
+
 export interface MaintenanceOrder {
   id: string;
   orderNumber: string;
@@ -71,10 +83,14 @@ export interface MaintenanceOrder {
   deviceName: string;
   issueDescription: string;
   cost: number;
+  sparePartsCost?: number;   // تكلفة قطع الغيار المستخدمة
+  laborFee?: number;         // أجور اليد والخدمة
+  technicianName?: string;   // اسم الفني المسكّن
   status: 'received' | 'repairing' | 'completed' | 'delivered';
   dateReceived: string;
   dateDelivered?: string;
   notes: string;
+  checklist?: DeviceChecklist;
 }
 
 export interface Transaction {
@@ -128,6 +144,29 @@ export interface Employee {
   totalAdvances: number;
   hireDate: string;
   isDeleted?: boolean;
+}
+
+export type UserRole = 'admin' | 'cashier' | 'technician' | 'accountant';
+
+export interface UserAccount {
+  id: string;
+  username: string;
+  name: string;
+  role: UserRole;
+  phone?: string;
+  pin?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface AuditLog {
+  id: string;
+  timestamp: string;
+  userName: string;
+  userRole: UserRole;
+  actionType: string;
+  actionLabel: string;
+  details?: string;
 }
 
 export interface PayrollRecord {

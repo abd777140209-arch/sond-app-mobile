@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Save, User, Phone, Calendar, Award, FileText, AlertCircle, Check, Wallet } from 'lucide-react';
+import { X, Save, User, Phone, Calendar, Award, FileText, AlertCircle, Check, Wallet, ShieldCheck } from 'lucide-react';
 import { Customer } from '../types';
 import { soundManager } from '../utils/sound';
 
@@ -28,6 +28,7 @@ export default function CustomerEditModal({
   const [phone, setPhone] = useState('');
   const [totalDebt, setTotalDebt] = useState<number>(0);
   const [debtDueDate, setDebtDueDate] = useState('');
+  const [creditLimit, setCreditLimit] = useState<number | ''>('');
   const [loyaltyPoints, setLoyaltyPoints] = useState<number>(0);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
@@ -38,6 +39,7 @@ export default function CustomerEditModal({
       setPhone(customer.phone || '');
       setTotalDebt(customer.totalDebt ?? customer.balance ?? customer.initialDebt ?? 0);
       setDebtDueDate(customer.debtDueDate || '');
+      setCreditLimit(customer.creditLimit !== undefined && customer.creditLimit !== null ? customer.creditLimit : '');
       setLoyaltyPoints(customer.loyaltyPoints || 0);
       setNotes(customer.notes || '');
       setError('');
@@ -63,6 +65,7 @@ export default function CustomerEditModal({
       totalDebt: currentDebt,
       balance: currentDebt,
       debtDueDate: debtDueDate || undefined,
+      creditLimit: creditLimit === '' ? undefined : Math.max(0, Number(creditLimit)),
       loyaltyPoints: Math.max(0, loyaltyPoints),
       notes: notes.trim()
     };
@@ -189,6 +192,31 @@ export default function CustomerEditModal({
                   className="w-full bg-slate-50 border border-slate-200 text-xs font-mono font-bold rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
                 />
                 <p className="text-[10px] text-slate-400">حدد التاريخ النهائي المتفق عليه لتسديد المديونية</p>
+              </div>
+
+              {/* Credit Limit / Debt Ceiling (سقف الدين / حد الإئتمان) */}
+              <div className="space-y-1 bg-rose-50/50 border border-rose-200/80 p-3 rounded-2xl">
+                <label className="text-xs font-bold text-slate-800 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-rose-600" />
+                    <span>سقف الدين / حد الإئتمان ({currency}):</span>
+                  </span>
+                  {creditLimit !== '' && (
+                    <span className="text-[10px] text-rose-700 font-mono font-black">
+                      الحد: {Number(creditLimit).toLocaleString()} {currency}
+                    </span>
+                  )}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={creditLimit}
+                  onChange={(e) => setCreditLimit(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                  className="w-full bg-white border border-rose-300 text-xs font-bold font-mono rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500 transition"
+                  placeholder="مثال: 50000 (أترك فارغاً إذا لا يوجد حد)"
+                />
+                <p className="text-[10px] text-slate-500">الحد الأقصى المسموح للعميل بالاستدانة. يمنع النظام البيع الآجل عند تجاوزه.</p>
               </div>
 
               {/* Loyalty Points (نقاط الولاء) */}

@@ -17,10 +17,11 @@ import {
   Eye, 
   EyeOff, 
   LogOut, 
-  ArrowRight
+  ArrowRight,
+  Shield
 } from 'lucide-react';
 
-import { Product, Customer, Invoice, Payment, Transaction, SystemSettings, MaintenanceOrder, Employee, PayrollRecord } from './types';
+import { Product, Customer, Invoice, Payment, Transaction, SystemSettings, MaintenanceOrder, Employee, PayrollRecord, UserAccount, AuditLog } from './types';
 import { soundManager } from './utils/sound';
 import { 
   DEFAULT_SETTINGS, 
@@ -42,6 +43,7 @@ import InvoiceModal from './components/InvoiceModal';
 import Maintenance from './components/Maintenance';
 import ProfitReports from './components/ProfitReports';
 import Employees from './components/Employees';
+import UsersComponent from './components/Users';
 import SaaSActivator from './components/SaaSActivator';
 import BiometricLockModal from './components/BiometricLockModal';
 import FloatingCalculator from './components/FloatingCalculator';
@@ -49,6 +51,8 @@ import PinCheckModal from './components/PinCheckModal';
 
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 import { LicenseInfo, loadLicenseLocally, saveLicenseLocally } from './utils/licensing';
 import { 
   saveStoreDocument, 
@@ -103,6 +107,130 @@ export default function App() {
     const data = localStorage.getItem('smart_accounting_payroll');
     return data ? JSON.parse(data) : [];
   });
+
+  const DEFAULT_USERS: UserAccount[] = [
+    {
+      id: 'usr-1',
+      username: 'admin',
+      name: 'المدير العام',
+      role: 'admin',
+      phone: '770000000',
+      pin: '1234',
+      isActive: true,
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 'usr-2',
+      username: 'cashier',
+      name: 'أحمد الكاشير',
+      role: 'cashier',
+      phone: '771111111',
+      pin: '0000',
+      isActive: true,
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 'usr-3',
+      username: 'tech',
+      name: 'مهندس الورشة والصيانة',
+      role: 'technician',
+      phone: '772222222',
+      pin: '1111',
+      isActive: true,
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 'usr-4',
+      username: 'accountant',
+      name: 'المحاسب المالي',
+      role: 'accountant',
+      phone: '773333333',
+      pin: '2222',
+      isActive: true,
+      createdAt: new Date().toISOString()
+    }
+  ];
+
+  const [users, setUsers] = useState<UserAccount[]>(() => {
+    const data = localStorage.getItem('smart_accounting_users');
+    return data ? JSON.parse(data) : DEFAULT_USERS;
+  });
+
+  const [currentUser, setCurrentUser] = useState<UserAccount>(() => {
+    const data = localStorage.getItem('smart_accounting_current_user');
+    if (data) {
+      try { return JSON.parse(data); } catch (e) {}
+    }
+    return DEFAULT_USERS[0];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('smart_accounting_users', JSON.stringify(users));
+  }, [users]);
+
+  useEffect(() => {
+    localStorage.setItem('smart_accounting_current_user', JSON.stringify(currentUser));
+  }, [currentUser]);
+
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
+    const data = localStorage.getItem('smart_accounting_audit_logs');
+    return data ? JSON.parse(data) : [
+      {
+        id: 'log-1',
+        timestamp: new Date().toISOString(),
+        userName: 'المدير العام',
+        userRole: 'admin',
+        actionType: 'system_start',
+        actionLabel: 'تشغيل النظام وإعداد جدول الصلاحيات والتدقيق',
+        details: 'تم تجهيز الأدوار الأربعة (مدير، كاشير، فني صيانة، محاسب)'
+      }
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('smart_accounting_audit_logs', JSON.stringify(auditLogs));
+  }, [auditLogs]);
+
+  const addAuditLog = (actionType: string, actionLabel: string, details?: string) => {
+    const newLog: AuditLog = {
+      id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      timestamp: new Date().toISOString(),
+      userName: currentUser?.name || 'مستخدم النظام',
+      userRole: currentUser?.role || 'admin',
+      actionType,
+      actionLabel,
+      details
+    };
+    setAuditLogs(prev => [newLog, ...prev]);
+  };
+
+  const handleAddUser = (user: Omit<UserAccount, 'id' | 'createdAt'>) => {
+    const newUser: UserAccount = {
+      ...user,
+      id: `usr-${Date.now()}`,
+      createdAt: new Date().toISOString()
+    };
+    setUsers(prev => [...prev, newUser]);
+    addAuditLog('user_created', `إضافة مستخدم جديد: ${newUser.name}`, `الدور: ${newUser.role}`);
+  };
+
+  const handleUpdateUser = (id: string, updated: Partial<UserAccount>) => {
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updated } : u));
+    addAuditLog('user_updated', `تحديث بيانات المستخدم ID: ${id}`, JSON.stringify(updated));
+  };
+
+  const handleDeleteUser = (id: string) => {
+    const target = users.find(u => u.id === id);
+    setUsers(prev => prev.filter(u => u.id !== id));
+    if (target) {
+      addAuditLog('user_deleted', `حذف حساب المستخدم: ${target.name}`, `اسم المستخدم: ${target.username}`);
+    }
+  };
+
+  const handleClearAuditLogs = () => {
+    setAuditLogs([]);
+    addAuditLog('audit_cleared', 'مسح سجل الأنشطة والتدقيق', 'قام المدير بمسح السجل القديم');
+  };
 
   const [isPrivacyMode, setIsPrivacyMode] = useState<boolean>(() => {
     return localStorage.getItem('smart_accounting_privacy_mode') === 'true';
@@ -257,6 +385,7 @@ export default function App() {
     localStorage.setItem('smart_accounting_settings', JSON.stringify(newSettings));
     setSettings(newSettings);
     if (license.licenseKey) saveStoreSettings(license.licenseKey, newSettings);
+    addAuditLog('settings_updated', 'تحديث إعدادات النظام واسم النشاط التجارية');
   };
 
   const handleCompleteSale = (saleData: Omit<Invoice, 'id' | 'invoiceNumber'>) => {
@@ -300,6 +429,7 @@ export default function App() {
       setTransactions(prev => [...prev, newTransaction]);
     }
 
+    addAuditLog('sale_completed', `إصدار فاتورة مبيعات #${nextInvoiceNum}`, `العميل: ${saleData.customerName} - المبلغ: ${saleData.finalAmount} ${settings.currency}`);
     setActiveInvoice(newInvoice);
   };
 
@@ -389,14 +519,98 @@ export default function App() {
     else setTransactions(prev => prev.filter(t => t.id !== id));
   };
 
-  const handleBackupData = () => {
+  const handleAddMaintenanceOrder = (orderData: Omit<MaintenanceOrder, 'id' | 'orderNumber' | 'dateReceived'>) => {
+    const orderNum = `${Math.floor(1000 + Math.random() * 9000)}`;
+    const newOrder: MaintenanceOrder = {
+      id: `m-${Date.now()}`,
+      orderNumber: orderNum,
+      dateReceived: new Date().toISOString(),
+      ...orderData
+    };
+
+    setMaintenanceOrders(prev => {
+      const updated = [...prev, newOrder];
+      localStorage.setItem('smart_accounting_maintenance', JSON.stringify(updated));
+      return updated;
+    });
+
+    if (license.licenseKey) {
+      saveStoreDocument(license.licenseKey, 'maintenanceOrders', newOrder.id, newOrder);
+    }
+
+    addAuditLog('maintenance_created', `استلام جهاز صيانة جديد #${orderNum}`, `العميل: ${newOrder.customerName} - الجهاز: ${newOrder.deviceName}`);
+  };
+
+  const handleUpdateMaintenanceStatus = (id: string, status: MaintenanceOrder['status']) => {
+    const order = maintenanceOrders.find(o => o.id === id);
+    if (!order) return;
+    const updated = { ...order, status };
+
+    setMaintenanceOrders(prev => {
+      const updatedList = prev.map(o => o.id === id ? updated : o);
+      localStorage.setItem('smart_accounting_maintenance', JSON.stringify(updatedList));
+      return updatedList;
+    });
+
+    if (license.licenseKey) {
+      saveStoreDocument(license.licenseKey, 'maintenanceOrders', id, updated);
+    }
+
+    const statusMap = { received: 'مستلم', repairing: 'جاري الصيانة', completed: 'جاهز للاستلام', delivered: 'تم التسليم' };
+    addAuditLog('maintenance_status_changed', `تغيير حالة كرت الصيانة #${order.orderNumber}`, `الحالة الجديدة: ${statusMap[status] || status}`);
+  };
+
+  const handleDeleteMaintenanceOrder = (id: string) => {
+    const order = maintenanceOrders.find(o => o.id === id);
+    setMaintenanceOrders(prev => {
+      const updatedList = prev.filter(o => o.id !== id);
+      localStorage.setItem('smart_accounting_maintenance', JSON.stringify(updatedList));
+      return updatedList;
+    });
+
+    if (license.licenseKey) {
+      deleteStoreDocument(license.licenseKey, 'maintenanceOrders', id);
+    }
+
+    if (order) {
+      addAuditLog('maintenance_deleted', `حذف كرت صيانة #${order.orderNumber}`, `العميل: ${order.customerName} - الجهاز: ${order.deviceName}`);
+    }
+  };
+
+  const handleBackupData = async () => {
     const backupObj = { settings, products, customers, invoices, payments, transactions, exportedAt: new Date().toISOString() };
-    const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json' });
+    const fileName = `sanad_accounting_backup_${new Date().toISOString().split('T')[0]}.json`;
+    const jsonStr = JSON.stringify(backupObj, null, 2);
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const fileResult = await Filesystem.writeFile({
+          path: fileName,
+          data: jsonStr,
+          directory: Directory.Cache,
+          encoding: 'utf8' as any
+        });
+        await Share.share({
+          title: 'نسخة احتياطية - نظام سند المحاسبي',
+          text: `ملف النسخة الاحتياطية لقاعدة البيانات بتاريخ ${new Date().toLocaleDateString('ar-YE')}`,
+          url: fileResult.uri,
+          dialogTitle: 'حفظ وتصدير النسخة الاحتياطية'
+        });
+        return;
+      } catch (err) {
+        console.warn('Native backup export error:', err);
+      }
+    }
+
+    const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `sanad_accounting_backup_${new Date().toISOString().split('T')[0]}.json`;
+    link.download = fileName;
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const handleRestoreData = async (restored: any) => {
@@ -461,6 +675,7 @@ export default function App() {
       case 'transactions': return 'سجل القيود والمصاريف';
       case 'maintenance': return 'قسم الصيانة والورشة';
       case 'employees': return 'إدارة العمال والرواتب';
+      case 'users': return 'نظام الصلاحيات وسجل الأنشطة (Audit)';
       case 'settings': return 'إعدادات النظام والترخيص';
       default: return settings.storeName || license.customerName || 'نظام سند المحاسبي';
     }
@@ -496,7 +711,22 @@ export default function App() {
           </h1>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          {/* Active User Badge & Switcher Trigger */}
+          <button
+            onClick={() => handleTabSelect('users')}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 text-purple-900 border border-purple-200 text-xs font-bold hover:bg-purple-100 transition cursor-pointer shadow-2xs"
+            title="انقر لإدارة المستخدمين أو التبديل بين الحسابات"
+          >
+            <Shield className="w-3.5 h-3.5 text-purple-600" />
+            <span className="hidden sm:inline font-bold">{currentUser?.name}</span>
+            <span className="text-[10px] px-1.5 py-0.5 bg-purple-200 text-purple-950 rounded-md font-mono">
+              {currentUser?.role === 'admin' ? 'مدير' :
+               currentUser?.role === 'cashier' ? 'كاشير' :
+               currentUser?.role === 'technician' ? 'فني' : 'محاسب'}
+            </span>
+          </button>
+
           <button
             onClick={() => {
               if (isPrivacyMode) {
@@ -613,6 +843,7 @@ export default function App() {
                 products={products}
                 transactions={transactions}
                 customers={customers}
+                maintenanceOrders={maintenanceOrders}
                 currency={settings.currency}
                 settings={settings}
                 isPrivacyMode={isPrivacyMode}
@@ -646,10 +877,11 @@ export default function App() {
             {activeTab === 'maintenance' && (
               <Maintenance
                 orders={maintenanceOrders}
-                onAddOrder={() => {}}
-                onUpdateStatus={() => {}}
-                onDeleteOrder={() => {}}
+                onAddOrder={handleAddMaintenanceOrder}
+                onUpdateStatus={handleUpdateMaintenanceStatus}
+                onDeleteOrder={handleDeleteMaintenanceOrder}
                 currency={settings.currency}
+                storeName={settings.storeName}
               />
             )}
 
@@ -662,6 +894,22 @@ export default function App() {
                 onPaySalary={() => {}}
                 onDeleteEmployee={() => {}}
                 currency={settings.currency}
+              />
+            )}
+
+            {activeTab === 'users' && (
+              <UsersComponent
+                users={users}
+                currentUser={currentUser}
+                setCurrentUser={(usr) => {
+                  setCurrentUser(usr);
+                  addAuditLog('user_switch', `تم التبديل إلى المستخدم: ${usr.name}`, `الدور: ${usr.role}`);
+                }}
+                onAddUser={handleAddUser}
+                onUpdateUser={handleUpdateUser}
+                onDeleteUser={handleDeleteUser}
+                auditLogs={auditLogs}
+                onClearAuditLogs={handleClearAuditLogs}
               />
             )}
 

@@ -23,9 +23,10 @@ import {
   Unlock, 
   Eye, 
   EyeOff, 
-  AlertCircle 
+  AlertCircle,
+  Shield
 } from 'lucide-react';
-import { SystemSettings, MaintenanceOrder, Product } from '../types';
+import { SystemSettings, MaintenanceOrder, Product, UserAccount } from '../types';
 import { soundManager } from '../utils/sound';
 
 interface NavigationProps {
@@ -42,6 +43,9 @@ interface NavigationProps {
   setShowPinCheckModal: (show: boolean) => void;
   setShowPrivacyPinModal: (show: boolean) => void;
   handleLogout: () => void;
+  currentUser?: UserAccount;
+  users?: UserAccount[];
+  setCurrentUser?: (user: UserAccount) => void;
 }
 
 export default function Navigation({
@@ -57,7 +61,10 @@ export default function Navigation({
   setIsPrivacyMode,
   setShowPinCheckModal,
   setShowPrivacyPinModal,
-  handleLogout
+  handleLogout,
+  currentUser,
+  users,
+  setCurrentUser
 }: NavigationProps) {
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
 
@@ -68,8 +75,26 @@ export default function Navigation({
   const lowStockCount = products.filter(p => p.stock <= p.minStock && p.isDeleted !== true).length;
   const activeMaintenanceCount = maintenanceOrders.filter(o => o.status === 'received' || o.status === 'repairing').length;
 
+  const isTabAllowed = (tabId: string) => {
+    if (!currentUser) return true;
+    const role = currentUser.role;
+    if (role === 'admin') return true;
+    if (role === 'cashier') return ['pos', 'customers', 'maintenance'].includes(tabId);
+    if (role === 'technician') return ['maintenance', 'inventory'].includes(tabId);
+    if (role === 'accountant') return ['dashboard', 'customers', 'inventory', 'transactions', 'reports', 'stock_audit'].includes(tabId);
+    return true;
+  };
+
   // Secondary options in "More" Drawer for Mobile Mode
   const secondaryTabs = [
+    {
+      id: 'users',
+      label: 'المستخدمين والصلاحيات (Audit)',
+      sublabel: 'إدارة أدوار المستخدمين وسجل الأنشطة',
+      icon: Shield,
+      color: 'purple',
+      protected: true
+    },
     {
       id: 'employees',
       label: 'قسم العمال والرواتب',
@@ -116,7 +141,7 @@ export default function Navigation({
       color: 'slate',
       protected: true
     }
-  ];
+  ].filter(t => isTabAllowed(t.id));
 
   const onNavigateAndCloseDrawer = (tabId: string) => {
     setIsMoreMenuOpen(false);
@@ -348,30 +373,56 @@ export default function Navigation({
             )}
           </button>
 
-          {/* Settings */}
-          <button
-            id="tab_trigger_settings"
-            onClick={() => handleTabSelect('settings')}
-            className={`group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs transition-all cursor-pointer w-full text-right ${
-              activeTab === 'settings'
-                ? 'bg-slate-100 text-slate-900 font-bold border-r-4 border-slate-700 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${
-                activeTab === 'settings'
-                  ? 'bg-slate-700 text-white'
-                  : 'bg-slate-100 text-slate-700 group-hover:bg-slate-700 group-hover:text-white'
-              }`}>
-                <SettingsIcon className="w-4 h-4" />
+          {/* Users & Roles (Audit Log) */}
+          {isTabAllowed('users') && (
+            <button
+              id="tab_trigger_users"
+              onClick={() => handleTabSelect('users')}
+              className={`group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs transition-all cursor-pointer w-full text-right ${
+                activeTab === 'users'
+                  ? 'bg-purple-50/90 text-purple-950 font-bold border-r-4 border-purple-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                  activeTab === 'users'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'
+                }`}>
+                  <Shield className="w-4 h-4" />
+                </div>
+                <span>المستخدمين والصلاحيات (Audit)</span>
               </div>
-              <span>إعدادات النظام</span>
-            </div>
-            {(isCashierMode || settings.isPinEnabled) && (
-              <Lock className="w-3.5 h-3.5 text-amber-500" />
-            )}
-          </button>
+            </button>
+          )}
+
+          {/* Settings */}
+          {isTabAllowed('settings') && (
+            <button
+              id="tab_trigger_settings"
+              onClick={() => handleTabSelect('settings')}
+              className={`group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs transition-all cursor-pointer w-full text-right ${
+                activeTab === 'settings'
+                  ? 'bg-slate-100 text-slate-900 font-bold border-r-4 border-slate-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                  activeTab === 'settings'
+                    ? 'bg-slate-700 text-white'
+                    : 'bg-slate-100 text-slate-700 group-hover:bg-slate-700 group-hover:text-white'
+                }`}>
+                  <SettingsIcon className="w-4 h-4" />
+                </div>
+                <span>إعدادات النظام</span>
+              </div>
+              {(isCashierMode || settings.isPinEnabled) && (
+                <Lock className="w-3.5 h-3.5 text-amber-500" />
+              )}
+            </button>
+          )}
         </nav>
 
         {/* Sidebar Logout button */}

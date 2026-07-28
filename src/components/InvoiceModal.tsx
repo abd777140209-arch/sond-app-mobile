@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Printer, Download, X, ShieldCheck, Heart, Smartphone, SlidersHorizontal, MessageCircle, FileDown, Loader2, Share2, Bluetooth, QrCode } from 'lucide-react';
+import { Printer, Download, X, ShieldCheck, Heart, Smartphone, SlidersHorizontal, MessageCircle, FileDown, Loader2, Share2, Bluetooth, QrCode, ArrowRight } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { QRCodeSVG } from 'qrcode.react';
@@ -439,21 +439,33 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
       <div className="w-full max-w-sm rounded-2xl bg-white text-black shadow-2xl border border-gray-200 overflow-hidden relative animate-fadeIn flex flex-col justify-between no-print">
         
         {/* Modal Top Control Bar (Non-printed) */}
-        <div className="p-4 bg-slate-900 text-white flex justify-between items-center border-b border-gray-800">
-          <div className="flex items-center gap-1.5">
-            <Smartphone className="w-4 h-4 text-[#C5A862]" />
-            <span className="text-xs font-bold text-[#F3E7C4]">
-              معاينة الفاتورة الحرارية
-            </span>
-          </div>
-          
+        <div className="p-3 bg-slate-900 text-white flex justify-between items-center border-b border-gray-800">
           <button
-            id="close_invoice_modal_btn"
+            id="return_to_pos_btn"
             onClick={onClose}
-            className="p-1.5 hover:bg-slate-800 rounded-lg text-gray-400 hover:text-white cursor-pointer transition"
+            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
           >
-            <X className="w-4 h-4" />
+            <ArrowRight className="w-4 h-4" />
+            <span>رجوع لشاشة المبيعات</span>
           </button>
+
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 text-[#C5A862]">
+              <Smartphone className="w-4 h-4" />
+              <span className="text-xs font-bold text-[#F3E7C4] hidden sm:inline">
+                معاينة الفاتورة الحرارية
+              </span>
+            </div>
+            
+            <button
+              id="close_invoice_modal_btn"
+              onClick={onClose}
+              className="p-1.5 hover:bg-slate-800 rounded-lg text-gray-400 hover:text-white cursor-pointer transition"
+              title="إغلاق"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Paper format selector and auto print toggle (Non-printed) */}

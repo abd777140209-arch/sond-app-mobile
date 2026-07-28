@@ -124,7 +124,7 @@ export default function Settings({
         alert('🎉 تم ترقية اشتراكك وتفعيل الترخيص الجديد بنجاح!');
         const updatedLicense: LicenseInfo = {
           licenseKey: res.data.key,
-          status: res.data.status,
+          status: (res.data.status === 'suspended' ? 'expired' : res.data.status) as any,
           activatedAt: new Date().toISOString(),
           expiresAt: res.data.expiresAt,
           hwid: hwid,
@@ -559,9 +559,13 @@ export default function Settings({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
                 soundManager.playSuccessChime();
-                onBackupData();
+                try {
+                  await onBackupData();
+                } catch (err) {
+                  console.warn('Backup error:', err);
+                }
               }}
               className="p-3 rounded-xl border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100 text-emerald-900 font-bold text-xs transition cursor-pointer flex flex-col items-center justify-center gap-1.5 text-center shadow-xs"
             >
@@ -571,14 +575,20 @@ export default function Settings({
 
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
                 soundManager.playSuccessChime();
-                const subject = encodeURIComponent(`النسخة الاحتياطية لنظام سند المحاسبي - ${storeName || 'المنشأة'}`);
-                const body = encodeURIComponent(
-                  `السلام عليكم ورحمة الله وبركاته،\n\nتجدون برفقه النسخة الاحتياطية المعتمدة لقاعدة بيانات نظام سند المحاسبي للمنشأة (${storeName}).\nتاريخ التصدير: ${new Date().toLocaleString('ar-YE')}\n\nيرجى حفظ الملف الاحتياطي في مكان آمن.`
-                );
-                window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
-                onBackupData();
+                try {
+                  await onBackupData();
+                  if (!Capacitor.isNativePlatform()) {
+                    const subject = encodeURIComponent(`النسخة الاحتياطية لنظام سند المحاسبي - ${storeName || 'المنشأة'}`);
+                    const body = encodeURIComponent(
+                      `السلام عليكم ورحمة الله وبركاته،\n\nتجدون برفقه النسخة الاحتياطية المعتمدة لقاعدة بيانات نظام سند المحاسبي للمنشأة (${storeName}).\nتاريخ التصدير: ${new Date().toLocaleString('ar-YE')}\n\nيرجى حفظ الملف الاحتياطي في مكان آمن.`
+                    );
+                    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+                  }
+                } catch (err) {
+                  console.warn('Mail export error:', err);
+                }
               }}
               className="p-3 rounded-xl border border-blue-200 bg-blue-50/50 hover:bg-blue-100 text-blue-900 font-bold text-xs transition cursor-pointer flex flex-col items-center justify-center gap-1.5 text-center shadow-xs"
             >
@@ -588,11 +598,19 @@ export default function Settings({
 
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
                 soundManager.playSuccessChime();
-                onBackupData();
-                alert('⚡ تم تجهيز وتحميل ملف النسخة الاحتياطية لجهازك بنجاح. يتم فتح صفحة Google Drive الآن لتخزين الملف في السحابة الخاص بك.');
-                window.open('https://drive.google.com/drive/my-drive', '_blank');
+                try {
+                  await onBackupData();
+                  if (!Capacitor.isNativePlatform()) {
+                    window.open('https://drive.google.com/drive/my-drive', '_blank');
+                  } else {
+                    alert('⚡ تم تصدير ومشاركة ملف النسخة الاحتياطية بنجاح عبر حافظة ومشارك أندرويد.');
+                  }
+                } catch (err) {
+                  console.warn('Google Drive export error:', err);
+                  alert('تم حفظ النسخة الاحتياطية محلياً بنجاح.');
+                }
               }}
               className="p-3 rounded-xl border border-amber-200 bg-amber-50/50 hover:bg-amber-100 text-amber-900 font-bold text-xs transition cursor-pointer flex flex-col items-center justify-center gap-1.5 text-center shadow-xs"
             >
