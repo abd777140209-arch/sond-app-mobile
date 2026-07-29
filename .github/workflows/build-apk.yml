@@ -8,19 +8,25 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install Dependencies
-        run: npm install
+        run: |
+          npm install -g @capacitor/cli
+          npm install
 
-      - name: Build Web Assets
-        run: npm run build
+      - name: Build Web Assets & Set www
+        run: |
+          npm run build
+          cp -r dist www
 
       - name: Setup Java JDK
         uses: actions/setup-java@v4
@@ -31,10 +37,8 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Add Android Platform & Sync
-        run: |
-          ./node_modules/.bin/cap add android || true
-          ./node_modules/.bin/cap sync android
+      - name: Sync Capacitor Android
+        run: cap sync android
 
       - name: Build APK via Gradle
         run: |
