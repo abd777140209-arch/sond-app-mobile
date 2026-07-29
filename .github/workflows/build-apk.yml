@@ -43,11 +43,10 @@ jobs:
           cap add android || true
           cap sync android
 
-      - name: Build APK via Capacitor Gradle
+      - name: Build APK via Direct Gradle
         run: |
           cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug
+          gradle assembleDebug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
