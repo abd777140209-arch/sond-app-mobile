@@ -41,10 +41,10 @@ jobs:
       - name: Sync Capacitor Android
         run: cap sync android
 
-      - name: Build APK via Gradle
+      - name: Build APK via Stable Gradle 8.2
         run: |
           cd android
-          gradle wrapper
+          gradle wrapper --gradle-version 8.2
           chmod +x gradlew
           ./gradlew assembleDebug
 
