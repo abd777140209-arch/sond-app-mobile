@@ -39,7 +39,8 @@ import {
   ToggleRight,
   UserCheck,
   CheckCircle2,
-  FolderTree
+  FolderTree,
+  Share2
 } from 'lucide-react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
@@ -346,6 +347,7 @@ export default function Settings({
               const compressedBase64 = canvas.toDataURL('image/png');
               setStoreLogoUrl(compressedBase64);
               localStorage.setItem('smart_accounting_company_logo', compressedBase64);
+              localStorage.setItem('sanad_store_logo', compressedBase64);
               soundManager.playSuccessChime();
             }
           };
@@ -400,6 +402,7 @@ export default function Settings({
           const compressedBase64 = canvas.toDataURL('image/png');
           setStoreLogoUrl(compressedBase64);
           localStorage.setItem('smart_accounting_company_logo', compressedBase64);
+          localStorage.setItem('sanad_store_logo', compressedBase64);
           soundManager.playSuccessChime();
         }
       };
@@ -416,8 +419,10 @@ export default function Settings({
     localStorage.setItem('SanadAccounting', backupFolderPath.trim() || 'Documents/SanadAccounting');
     if (storeLogoUrl) {
       localStorage.setItem('smart_accounting_company_logo', storeLogoUrl);
+      localStorage.setItem('sanad_store_logo', storeLogoUrl);
     } else {
       localStorage.removeItem('smart_accounting_company_logo');
+      localStorage.removeItem('sanad_store_logo');
     }
 
     onSaveSettings({
@@ -455,6 +460,11 @@ export default function Settings({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (!confirm('⚠️ تنبيه هام: استعادة النسخة الاحتياطية ستقوم باستبدال البيانات الحالية بالبيانات الموجودة بداخل الملف المختار. هل أنت متأكد من الاستمرار؟')) {
+      e.target.value = '';
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
@@ -476,7 +486,7 @@ export default function Settings({
           result.then(handleResult).catch((err) => {
             soundManager.playWarningBeep();
             console.error("Backup Restore Error: ", err);
-            alert('❌ عذراً، حدث خطأ أثناء رفع النسخة الاحتياطية للسحاب.');
+            alert('❌ عذراً، حدث خطأ أثناء تطبيق النسخة الاحتياطية.');
           });
         } else {
           handleResult(result);
@@ -484,7 +494,9 @@ export default function Settings({
 
       } catch (err) {
         soundManager.playWarningBeep();
-        alert('❌ صيغة الملف غير مدعومة أو تالفة.');
+        alert('❌ صيغة الملف غير مدعومة أو تالفة. يرجى اختيار ملف بصيغة JSON.');
+      } finally {
+        e.target.value = '';
       }
     };
     reader.readAsText(file);
@@ -806,7 +818,7 @@ export default function Settings({
           </div>
 
           {/* Action Buttons Bar */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-100">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-2 border-t border-slate-100">
             <button
               type="button"
               onClick={async () => {
@@ -820,7 +832,7 @@ export default function Settings({
                   console.warn('Backup error:', err);
                 }
               }}
-              className="py-3 px-4 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+              className="py-3 px-3 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer flex items-center justify-center gap-2 shadow-sm active:scale-95"
             >
               <RefreshCw className="w-4 h-4" />
               <span>إجراء نسخة احتياطية الآن</span>
@@ -828,8 +840,27 @@ export default function Settings({
 
             <button
               type="button"
+              onClick={async () => {
+                soundManager.playSuccessChime();
+                const nowIso = new Date().toISOString();
+                setLastLocalBackupDate(nowIso);
+                setLastDriveBackupDate(nowIso);
+                try {
+                  await onBackupData();
+                } catch (err) {
+                  console.warn('Share backup error:', err);
+                }
+              }}
+              className="py-3 px-3 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition cursor-pointer flex items-center justify-center gap-2 shadow-sm active:scale-95"
+            >
+              <Share2 className="w-4 h-4" />
+              <span>مشاركة نسخة البيانات</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="py-3 px-4 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition cursor-pointer flex items-center justify-center gap-2"
+              className="py-3 px-3 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition cursor-pointer flex items-center justify-center gap-2 active:scale-95"
             >
               <Upload className="w-4 h-4 text-blue-600" />
               <span>استعادة ملف بيانات سابق</span>
@@ -850,7 +881,7 @@ export default function Settings({
                   onResetDatabase();
                 }
               }}
-              className="py-3 px-4 rounded-xl text-xs font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition cursor-pointer flex items-center justify-center gap-1.5"
+              className="py-3 px-3 rounded-xl text-xs font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
             >
               <AlertTriangle className="w-4 h-4" />
               <span>تصفير وإعادة ضبط القاعدة</span>

@@ -77,7 +77,7 @@ export default function App() {
     parsed.address = "";
     parsed.phone = "";
 
-    const savedLogo = localStorage.getItem('smart_accounting_company_logo');
+    const savedLogo = localStorage.getItem('smart_accounting_company_logo') || localStorage.getItem('sanad_store_logo');
     if (savedLogo && !parsed.storeLogoUrl) {
       parsed.storeLogoUrl = savedLogo;
     }
@@ -725,7 +725,19 @@ export default function App() {
   };
 
   const handleBackupData = async () => {
-    const backupObj = { settings, products, customers, invoices, payments, transactions, exportedAt: new Date().toISOString() };
+    const backupObj = {
+      settings,
+      products,
+      customers,
+      invoices,
+      payments,
+      transactions,
+      maintenanceOrders,
+      employees,
+      payrollRecords,
+      users,
+      exportedAt: new Date().toISOString()
+    };
     const fileName = `sanad_backup_${new Date().toISOString().split('T')[0]}.json`;
     const jsonStr = JSON.stringify(backupObj, null, 2);
 
@@ -740,12 +752,47 @@ export default function App() {
 
   const handleRestoreData = async (restored: any) => {
     if (!restored || typeof restored !== 'object') return false;
-    setSettings(restored.settings || DEFAULT_SETTINGS);
-    setProducts(restored.products || []);
-    setCustomers(restored.customers || []);
-    setInvoices(restored.invoices || []);
-    setPayments(restored.payments || []);
-    setTransactions(restored.transactions || []);
+
+    if (restored.settings) {
+      setSettings(restored.settings);
+      localStorage.setItem('smart_accounting_settings', JSON.stringify(restored.settings));
+    }
+    if (Array.isArray(restored.products)) {
+      setProducts(restored.products);
+      localStorage.setItem('smart_accounting_products', JSON.stringify(restored.products));
+    }
+    if (Array.isArray(restored.customers)) {
+      setCustomers(restored.customers);
+      localStorage.setItem('smart_accounting_customers', JSON.stringify(restored.customers));
+    }
+    if (Array.isArray(restored.invoices)) {
+      setInvoices(restored.invoices);
+      localStorage.setItem('smart_accounting_invoices', JSON.stringify(restored.invoices));
+    }
+    if (Array.isArray(restored.payments)) {
+      setPayments(restored.payments);
+      localStorage.setItem('smart_accounting_payments', JSON.stringify(restored.payments));
+    }
+    if (Array.isArray(restored.transactions)) {
+      setTransactions(restored.transactions);
+      localStorage.setItem('smart_accounting_transactions', JSON.stringify(restored.transactions));
+    }
+    if (Array.isArray(restored.maintenanceOrders)) {
+      setMaintenanceOrders(restored.maintenanceOrders);
+      localStorage.setItem('smart_accounting_maintenance', JSON.stringify(restored.maintenanceOrders));
+    }
+    if (Array.isArray(restored.employees)) {
+      setEmployees(restored.employees);
+      localStorage.setItem('smart_accounting_employees', JSON.stringify(restored.employees));
+    }
+    if (Array.isArray(restored.payrollRecords)) {
+      setPayrollRecords(restored.payrollRecords);
+      localStorage.setItem('smart_accounting_payroll', JSON.stringify(restored.payrollRecords));
+    }
+    if (Array.isArray(restored.users)) {
+      setUsers(restored.users);
+      localStorage.setItem('smart_accounting_users', JSON.stringify(restored.users));
+    }
     return true;
   };
 

@@ -12,12 +12,33 @@ export interface SaveAndShareOptions {
 }
 
 /**
+ * Dynamically checks and requests storage permissions on native Android / iOS
+ */
+export async function ensureStoragePermissions(): Promise<boolean> {
+  if (!Capacitor.isNativePlatform() && !(window as any).Capacitor) {
+    return true;
+  }
+  try {
+    const status = await Filesystem.checkPermissions();
+    if (status.publicStorage !== 'granted') {
+      const request = await Filesystem.requestPermissions();
+      return request.publicStorage === 'granted';
+    }
+    return true;
+  } catch (err) {
+    console.warn('Filesystem permissions check/request warning:', err);
+    return true;
+  }
+}
+
+/**
  * Ensures a custom folder (e.g. 'SanadAccounting' or user specified path) exists inside Directory.Documents on Android/Native
  */
 export async function ensureCustomFolder(folderPath: string = 'SanadAccounting'): Promise<boolean> {
   if (!Capacitor.isNativePlatform() && !(window as any).Capacitor) {
     return false;
   }
+  await ensureStoragePermissions();
   const cleanFolder = (folderPath || 'SanadAccounting').trim().replace(/^\/+|\/+$/g, '');
   try {
     await Filesystem.mkdir({
@@ -97,69 +118,86 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
     data,
     isBase64 = false,
     mimeType = 'application/octet-stream',
-    title = 'مشاركة ملف من سند المحاسبي',
-    text = 'تقرير من تطبيق سند المحاسبي'
+    title = 'تصدير ملف',
+    text = 'ملف من النظام المحاسبي'
   } = options;
 
   const isNative = Capacitor.isNativePlatform() || !!(window as any).Capacitor;
 
   if (isNative) {
     try {
-      await ensureSanadFolder();
-      const filePath = `SanadAccounting/${fileName}`;
-      
+      // 1. التحقق من صلاحيات التخزين وطلبها من المستخدم
+      const hasPermission = await ensureStoragePermissions();
+      if (!hasPermission) {
+        alert('⚠️ يتطلب النظام صلاحيات الوصول للتخزين لحفظ الملفات والفواتير. يرجى الانتقال إلى (إعدادات الهاتف > التطبيقات > سند المحاسبي > الأذونات) وتفعيل إذن التخزين.');
+      }
+
+      const folderName = 'SanadAccounting'; // اسم المجلد بداخل Documents
+
+      // 2. إنشاء المجلد تلقائياً بذاكرة الهاتف مع خاصية recursive: true
+      try {
+        await Filesystem.mkdir({
+          path: folderName,
+          directory: Directory.Documents,
+          recursive: true
+        });
+      } catch (mkdirErr) {
+        console.log('المجلد موجود مسبقاً أو تعذر إنشاؤه في Documents:', mkdirErr);
+      }
+
+      const cleanData = isBase64 && data.includes(',') ? data.split(',')[1] : data;
+      const filePath = `${folderName}/${fileName}`;
+
+      // 3. كتابة وحفظ الملف داخل المجلد الذي تم إنشاؤه
       let writeResult;
       try {
         writeResult = await Filesystem.writeFile({
           path: filePath,
-          data: data,
+          data: cleanData,
           directory: Directory.Documents,
+          recursive: true,
           encoding: isBase64 ? undefined : Encoding.UTF8
         });
       } catch (docErr) {
-        console.warn('Failed to write in Documents/SanadAccounting, trying root Cache:', docErr);
+        console.warn('تعذر الحفظ في Documents/SanadAccounting، جاري المحاولة في المجلد المؤقت (Cache):', docErr);
         writeResult = await Filesystem.writeFile({
           path: fileName,
-          data: data,
+          data: cleanData,
           directory: Directory.Cache,
+          recursive: true,
           encoding: isBase64 ? undefined : Encoding.UTF8
         });
       }
 
-      const fileUri = writeResult.uri;
+      // 4. فتح شاشة المشاركة الرسمية للهاتف فور التصدير
+      if (writeResult && writeResult.uri) {
+        await Share.share({
+          title: title,
+          text: text,
+          url: writeResult.uri,
+          dialogTitle: title || 'مشاركة أو حفظ الملف'
+        });
+        return true;
+      } else {
+        throw new Error('لم يتم إرجاع مسار الملف المحفوظ.');
+      }
 
-      // Share using Capacitor Native Share Sheet
-      await Share.share({
-        title: title,
-        text: text,
-        url: fileUri,
-        dialogTitle: title,
-      });
-
-      return true;
-    } catch (err: any) {
-      console.warn('Native file save/share fallback:', err);
+    } catch (error: any) {
+      console.error('خطأ أثناء حفظ أو مشاركة الملف:', error);
+      alert('⚠️ تعذر حفظ أو مشاركة الملف. يرجى التأكد من إعطاء صلاحيات التخزين للتطبيق من إعدادات الهاتف (الإعدادات > التطبيقات > سند المحاسبي > الأذونات > التخزين).');
+      return false;
     }
   }
 
-  // Web Browser Fallback
+  // 5. التصدير المباشر للويب أو المتصفح العادي
   try {
-    let blob: Blob;
-    if (isBase64) {
-      const byteCharacters = atob(data.includes(',') ? data.split(',')[1] : data);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      blob = new Blob([byteArray], { type: mimeType });
-    } else {
-      blob = new Blob([data], { type: mimeType });
-    }
+    const cleanData = isBase64 && data.includes(',') ? data.split(',')[1] : data;
+    const blob = isBase64 
+      ? base64ToBlob(cleanData, mimeType)
+      : new Blob([data], { type: mimeType });
 
     const blobUrl = URL.createObjectURL(blob);
 
-    // Try Web Share API if available
     if (navigator.canShare && navigator.canShare({ files: [new File([blob], fileName, { type: mimeType })] })) {
       const fileToShare = new File([blob], fileName, { type: mimeType });
       await navigator.share({
@@ -171,7 +209,6 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
       return true;
     }
 
-    // Standard download link for Desktop Web
     const link = document.createElement('a');
     link.href = blobUrl;
     link.download = fileName;
@@ -181,7 +218,25 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
     setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     return true;
   } catch (webErr) {
-    console.error('Web download error:', webErr);
+    console.error('خطأ في التنزيل عبر المتصفح:', webErr);
+    alert('⚠️ حدث خطأ أثناء تنزيل الملف في المتصفح.');
     return false;
   }
+}
+
+// دالة تحويل Base64 إلى Blob للمتصفح
+export function base64ToBlob(base64Data: string, contentType: string = 'application/pdf'): Blob {
+  const cleanBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+  const byteCharacters = atob(cleanBase64);
+  const byteArrays = [];
+  for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+    const slice = byteCharacters.slice(offset, offset + 512);
+    const byteNumbers = new Array(slice.length);
+    for (let i = 0; i < slice.length; i++) {
+      byteNumbers[i] = slice.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    byteArrays.push(byteArray);
+  }
+  return new Blob(byteArrays, { type: contentType });
 }
