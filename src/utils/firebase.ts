@@ -696,17 +696,16 @@ export async function resetClientCloudData(licenseKey: string, hwid?: string): P
     ];
 
     if (db) {
-      const storeIdsToReset = [licenseKey];
-      if (hwid && hwid !== licenseKey) {
-        storeIdsToReset.push(hwid);
-      }
+      const storeIdsToReset = [licenseKey, hwid].map(s => String(s || '').trim()).filter(Boolean);
 
       for (const storeId of storeIdsToReset) {
+        if (!storeId) continue;
         for (const colName of collectionsToReset) {
           try {
             const subColRef = collection(db, 'stores', storeId, colName);
             const subSnap = await getDocs(subColRef);
             for (const docSnap of subSnap.docs) {
+              if (!docSnap.id) continue;
               await deleteDoc(doc(db, 'stores', storeId, colName, docSnap.id));
               count++;
             }
@@ -721,10 +720,10 @@ export async function resetClientCloudData(licenseKey: string, hwid?: string): P
           const colRef = collection(db, colName);
           const snap = await getDocs(colRef);
           for (const docSnap of snap.docs) {
+            if (!docSnap.id) continue;
             const data = docSnap.data();
             if (
-              data.licenseKey === licenseKey ||
-              data.storeId === licenseKey ||
+              (licenseKey && (data.licenseKey === licenseKey || data.storeId === licenseKey)) ||
               (hwid && (data.hwid === hwid || data.storeId === hwid))
             ) {
               await deleteDoc(doc(db, colName, docSnap.id));

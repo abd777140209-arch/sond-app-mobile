@@ -14,11 +14,17 @@ import { getFirestoreDb, handleFirestoreError, OperationType, withTimeout } from
 
 // Helper to save a single document in a subcollection under a store
 export async function saveStoreDocument(licenseKey: string, collectionName: string, docId: string, data: any): Promise<void> {
+  const cleanKey = String(licenseKey || '').trim();
+  const cleanCol = String(collectionName || '').trim();
+  const cleanDocId = String(docId || '').trim();
+  if (!cleanKey || !cleanCol || !cleanDocId) return;
+
   const db = getFirestoreDb();
   if (!db) return;
-  const path = `stores/${licenseKey}/${collectionName}/${docId}`;
+  const path = `stores/${cleanKey}/${cleanCol}/${cleanDocId}`;
   try {
-    await withTimeout(setDoc(doc(db, 'stores', licenseKey, collectionName, docId), data), 1500);
+    const docRef = doc(db, 'stores', cleanKey, cleanCol, cleanDocId);
+    await withTimeout(setDoc(docRef, data), 1500);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
@@ -26,11 +32,17 @@ export async function saveStoreDocument(licenseKey: string, collectionName: stri
 
 // Helper to delete a single document in a subcollection under a store
 export async function deleteStoreDocument(licenseKey: string, collectionName: string, docId: string): Promise<void> {
+  const cleanKey = String(licenseKey || '').trim();
+  const cleanCol = String(collectionName || '').trim();
+  const cleanDocId = String(docId || '').trim();
+  if (!cleanKey || !cleanCol || !cleanDocId) return;
+
   const db = getFirestoreDb();
   if (!db) return;
-  const path = `stores/${licenseKey}/${collectionName}/${docId}`;
+  const path = `stores/${cleanKey}/${cleanCol}/${cleanDocId}`;
   try {
-    await withTimeout(deleteDoc(doc(db, 'stores', licenseKey, collectionName, docId)), 1500);
+    const docRef = doc(db, 'stores', cleanKey, cleanCol, cleanDocId);
+    await withTimeout(deleteDoc(docRef), 1500);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
@@ -38,11 +50,15 @@ export async function deleteStoreDocument(licenseKey: string, collectionName: st
 
 // Helper to save store settings document
 export async function saveStoreSettings(licenseKey: string, settings: any): Promise<void> {
+  const cleanKey = String(licenseKey || '').trim();
+  if (!cleanKey || !settings) return;
+
   const db = getFirestoreDb();
   if (!db) return;
-  const path = `stores/${licenseKey}/config/settings`;
+  const path = `stores/${cleanKey}/config/settings`;
   try {
-    await withTimeout(setDoc(doc(db, 'stores', licenseKey, 'config', 'settings'), settings), 1500);
+    const docRef = doc(db, 'stores', cleanKey, 'config', 'settings');
+    await withTimeout(setDoc(docRef, settings), 1500);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
@@ -55,45 +71,64 @@ export function syncStoreCollection<T extends { id: string }>(
   onUpdate: (data: T[]) => void,
   defaultSeed: T[]
 ): () => void {
+  const cleanKey = String(licenseKey || '').trim();
+  const cleanCol = String(collectionName || '').trim();
+  if (!cleanKey || !cleanCol) {
+    return () => {};
+  }
+
   const db = getFirestoreDb();
   if (!db) {
     return () => {};
   }
 
-  const colRef = collection(db, 'stores', licenseKey, collectionName);
-  const path = `stores/${licenseKey}/${collectionName}`;
-  const seedFlagKey = `store_seeded_${licenseKey}_${collectionName}`;
+  try {
+    const colRef = collection(db, 'stores', cleanKey, cleanCol);
+    const path = `stores/${cleanKey}/${cleanCol}`;
+    const seedFlagKey = `store_seeded_${cleanKey}_${cleanCol}`;
 
-  // Set up real-time onSnapshot listener
-  const unsubscribe = onSnapshot(colRef, (snapshot) => {
-    if (snapshot.empty) {
-      const alreadySeeded = localStorage.getItem(seedFlagKey);
-      if (!alreadySeeded && defaultSeed.length > 0) {
-        console.log(`Initial seed for collection '${collectionName}' for store '${licenseKey}'...`);
-        localStorage.setItem(seedFlagKey, 'true');
-        defaultSeed.forEach((item) => {
-          setDoc(doc(colRef, item.id), item).catch((err) => {
-            console.error(`Failed to upload seed item for ${collectionName}:`, err);
+    // Set up real-time onSnapshot listener
+    const unsubscribe = onSnapshot(colRef, (snapshot) => {
+      if (snapshot.empty) {
+        const alreadySeeded = localStorage.getItem(seedFlagKey);
+        if (!alreadySeeded && defaultSeed && defaultSeed.length > 0) {
+          console.log(`Initial seed for collection '${cleanCol}' for store '${cleanKey}'...`);
+          localStorage.setItem(seedFlagKey, 'true');
+          defaultSeed.forEach((item) => {
+            if (!item || !item.id) return;
+            const itemId = String(item.id).trim();
+            if (!itemId) return;
+            try {
+              const itemDocRef = doc(db, 'stores', cleanKey, cleanCol, itemId);
+              setDoc(itemDocRef, item).catch((err) => {
+                console.error(`Failed to upload seed item for ${cleanCol}:`, err);
+              });
+            } catch (err) {
+              console.error(`Error creating seed doc ref for ${cleanCol}:`, err);
+            }
           });
-        });
-        onUpdate(defaultSeed);
+          onUpdate(defaultSeed);
+        } else {
+          // Reset or intentionally empty collection -> return empty list immediately!
+          onUpdate([]);
+        }
       } else {
-        // Reset or intentionally empty collection -> return empty list immediately!
-        onUpdate([]);
+        localStorage.setItem(seedFlagKey, 'true');
+        const items: T[] = [];
+        snapshot.forEach((docSnap) => {
+          items.push({ ...docSnap.data() } as T);
+        });
+        onUpdate(items);
       }
-    } else {
-      localStorage.setItem(seedFlagKey, 'true');
-      const items: T[] = [];
-      snapshot.forEach((docSnap) => {
-        items.push({ ...docSnap.data() } as T);
-      });
-      onUpdate(items);
-    }
-  }, (error) => {
-    handleFirestoreError(error, OperationType.GET, path);
-  });
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, path);
+    });
 
-  return unsubscribe;
+    return unsubscribe;
+  } catch (err) {
+    console.warn(`Failed to set up listener for store collection ${cleanCol}:`, err);
+    return () => {};
+  }
 }
 
 // Real-time synchronization helper for the single settings document
@@ -102,27 +137,37 @@ export function syncStoreSettings(
   onUpdate: (settings: any) => void,
   defaultSettings: any
 ): () => void {
+  const cleanKey = String(licenseKey || '').trim();
+  if (!cleanKey) {
+    return () => {};
+  }
+
   const db = getFirestoreDb();
   if (!db) {
     return () => {};
   }
 
-  const docRef = doc(db, 'stores', licenseKey, 'config', 'settings');
-  const path = `stores/${licenseKey}/config/settings`;
+  try {
+    const docRef = doc(db, 'stores', cleanKey, 'config', 'settings');
+    const path = `stores/${cleanKey}/config/settings`;
 
-  const unsubscribe = onSnapshot(docRef, (docSnap) => {
-    if (!docSnap.exists()) {
-      console.log(`Seeding settings document for store '${licenseKey}'...`);
-      setDoc(docRef, defaultSettings).catch((err) => {
-        console.error(`Failed to upload seed settings:`, err);
-      });
-      onUpdate(defaultSettings);
-    } else {
-      onUpdate(docSnap.data());
-    }
-  }, (error) => {
-    handleFirestoreError(error, OperationType.GET, path);
-  });
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (!docSnap.exists()) {
+        console.log(`Seeding settings document for store '${cleanKey}'...`);
+        setDoc(docRef, defaultSettings).catch((err) => {
+          console.error(`Failed to upload seed settings:`, err);
+        });
+        onUpdate(defaultSettings);
+      } else {
+        onUpdate(docSnap.data());
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, path);
+    });
 
-  return unsubscribe;
+    return unsubscribe;
+  } catch (err) {
+    console.warn(`Failed to set up listener for store settings:`, err);
+    return () => {};
+  }
 }
