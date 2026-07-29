@@ -17,7 +17,9 @@ jobs:
           node-version: '20'
 
       - name: Install Dependencies
-        run: npm install
+        run: |
+          npm install -g @capacitor/cli
+          npm install
 
       - name: Build Web Assets
         run: npm run build
@@ -33,8 +35,8 @@ jobs:
 
       - name: Add Android Platform
         run: |
-          npx cap add android || true
-          npx cap sync android
+          npx @capacitor/cli add android || true
+          npx @capacitor/cli sync android
 
       - name: Build APK via Gradle
         run: |
