@@ -15,10 +15,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install Dependencies
-        run: npm ci || npm install
+        run: |
+          npm install -g @capacitor/cli
+          npm ci || npm install
 
       - name: Build Web Assets
         run: npm run build
@@ -34,8 +36,8 @@ jobs:
 
       - name: Add Android Platform & Sync
         run: |
-          npx cap add android || true
-          npx cap sync android
+          npx @capacitor/cli add android || true
+          npx @capacitor/cli sync android
 
       - name: Build APK via Gradle
         run: |
