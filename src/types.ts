@@ -114,6 +114,8 @@ export interface CurrencyRate {
   isBase?: boolean;
 }
 
+export type BackupFrequency = 'off' | 'daily' | 'weekly' | 'monthly';
+
 export interface SystemSettings {
   storeName: string;
   currency: string;
@@ -133,6 +135,13 @@ export interface SystemSettings {
   cardShape?: CardShape;
   density?: DisplayDensity;
   deviceMode?: 'mobile' | 'desktop';
+  backupFolderPath?: string;
+  localBackupSchedule?: BackupFrequency;
+  autoBackupOnExit?: boolean;
+  driveBackupAccount?: string;
+  driveBackupSchedule?: BackupFrequency;
+  lastLocalBackupDate?: string;
+  lastDriveBackupDate?: string;
 }
 
 export interface Employee {

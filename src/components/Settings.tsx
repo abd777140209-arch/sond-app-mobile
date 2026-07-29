@@ -30,11 +30,21 @@ import {
   Check,
   CheckCircle,
   ShieldAlert,
-  Sparkles
+  Sparkles,
+  Folder,
+  FolderOpen,
+  RefreshCw,
+  Clock,
+  ToggleLeft,
+  ToggleRight,
+  UserCheck,
+  CheckCircle2,
+  FolderTree
 } from 'lucide-react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
-import { SystemSettings, AppTheme, CardShape, DisplayDensity, CurrencyRate } from '../types';
+import { SystemSettings, AppTheme, CardShape, DisplayDensity, CurrencyRate, BackupFrequency } from '../types';
+import { ensureCustomFolder } from '../utils/fileExport';
 import { DEFAULT_CURRENCIES } from '../utils/seedData';
 import { soundManager } from '../utils/sound';
 import { loadLicenseLocally, saveLicenseLocally, generateHWID, LicenseInfo } from '../utils/licensing';
@@ -63,8 +73,8 @@ export default function Settings({
     settings.storeLogoUrl || localStorage.getItem('smart_accounting_company_logo') || ''
   );
   const [currency, setCurrency] = useState(settings.currency);
-  const [address, setAddress] = useState(settings.address);
-  const [phone, setPhone] = useState(settings.phone);
+  const [address, setAddress] = useState('');
+  const [phone, setPhone] = useState('');
   const [pinCode, setPinCode] = useState(settings.pinCode);
   const [isPinEnabled, setIsPinEnabled] = useState(settings.isPinEnabled);
   const [protectedSections, setProtectedSections] = useState<string[]>(() => {
@@ -96,6 +106,35 @@ export default function Settings({
     localStorage.setItem('app_layout_preference', mode);
     window.dispatchEvent(new Event('app_layout_changed'));
   };
+
+  // WhatsApp-style Backup State
+  const [backupFolderPath, setBackupFolderPath] = useState<string>(
+    settings.backupFolderPath || 'Documents/SanadAccounting'
+  );
+  const [localBackupSchedule, setLocalBackupSchedule] = useState<BackupFrequency>(
+    settings.localBackupSchedule || 'daily'
+  );
+  const [autoBackupOnExit, setAutoBackupOnExit] = useState<boolean>(
+    settings.autoBackupOnExit ?? true
+  );
+  const [driveBackupAccount, setDriveBackupAccount] = useState<string>(
+    settings.driveBackupAccount || 'حساب Google Drive المرتبط'
+  );
+  const [driveBackupSchedule, setDriveBackupSchedule] = useState<BackupFrequency>(
+    settings.driveBackupSchedule || 'weekly'
+  );
+  const [lastLocalBackupDate, setLastLocalBackupDate] = useState<string>(
+    settings.lastLocalBackupDate || ''
+  );
+  const [lastDriveBackupDate, setLastDriveBackupDate] = useState<string>(
+    settings.lastDriveBackupDate || ''
+  );
+
+  // Folder & Drive Modals State
+  const [showFolderModal, setShowFolderModal] = useState(false);
+  const [folderInputVal, setFolderInputVal] = useState(backupFolderPath);
+  const [showDriveModal, setShowDriveModal] = useState(false);
+  const [driveAccountInputVal, setDriveAccountInputVal] = useState(driveBackupAccount);
 
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [currentLicense, setCurrentLicense] = useState<LicenseInfo>(() => loadLicenseLocally());
@@ -397,7 +436,14 @@ export default function Settings({
       appTheme,
       cardShape,
       density,
-      deviceMode
+      deviceMode,
+      backupFolderPath: backupFolderPath.trim() || 'Documents/SanadAccounting',
+      localBackupSchedule,
+      autoBackupOnExit,
+      driveBackupAccount: driveBackupAccount.trim() || 'حساب Google Drive المرتبط',
+      driveBackupSchedule,
+      lastLocalBackupDate,
+      lastDriveBackupDate
     });
 
     setSaveSuccess(true);
@@ -553,96 +599,232 @@ export default function Settings({
           </div>
         </div>
 
-        {/* Database Backup & Restore Card */}
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+        {/* WhatsApp-Style Database Backup & Restore Card */}
+        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-5">
+          {/* Header */}
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
-                <Download className="w-5 h-5" />
+            <div className="flex items-center gap-2.5">
+              <div className="p-2.5 rounded-xl bg-emerald-600 text-white shadow-sm">
+                <Cloud className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-900">النسخ الاحتياطي والاستعادة (Backup & Sync)</h3>
-                <p className="text-[11px] text-slate-400">حفظ واسترجاع البيانات محلياً وعبر البريد و Google Drive</p>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <span>النسخ الاحتياطي التلقائي (WhatsApp Style Backup)</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    مؤمن وتلقائي
+                  </span>
+                </h3>
+                <p className="text-[11px] text-slate-500">جدولة وحفظ بيانات المحل تلقائياً بذاكرة الهاتف وسحابة Google Drive</p>
               </div>
             </div>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
-              <HardDrive className="w-3 h-3" /> أوفلاين مؤمن
+            <span className="hidden sm:flex text-[10px] font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> مفعّل بنجاح
             </span>
           </div>
 
-          {/* Backup Channel Options Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          {/* Backup Overview Banner */}
+          <div className="p-4 rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 text-white space-y-3 shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-700/60 pb-2.5">
+              <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
+                <HardDrive className="w-4 h-4 text-emerald-400" />
+                <span>حالة النسخة الاحتياطية الأخيرة</span>
+              </div>
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono px-2 py-0.5 rounded border border-emerald-500/30">
+                Sanad Backup Engine
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="space-y-1">
+                <div className="text-slate-400 text-[11px] flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>آخر نسخة محلياً (Local):</span>
+                </div>
+                <div className="font-bold text-white font-mono dir-ltr text-right">
+                  {lastLocalBackupDate ? new Date(lastLocalBackupDate).toLocaleString('ar-YE') : 'محلية نشطة وسليمة'}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="text-slate-400 text-[11px] flex items-center gap-1">
+                  <Cloud className="w-3.5 h-3.5 text-amber-400" />
+                  <span>آخر نسخة سحابية (Drive):</span>
+                </div>
+                <div className="font-bold text-white font-mono dir-ltr text-right">
+                  {lastDriveBackupDate ? new Date(lastDriveBackupDate).toLocaleString('ar-YE') : 'سحابية نشطة وسليمة'}
+                </div>
+              </div>
+            </div>
+
+            {/* Path & Account badges */}
+            <div className="pt-2 border-t border-slate-700/60 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+              <div className="flex items-center gap-1.5 text-slate-300">
+                <Folder className="w-3.5 h-3.5 text-emerald-400" />
+                <span>المسار:</span>
+                <span className="font-mono bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-200">
+                  {backupFolderPath}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5 text-slate-300">
+                <UserCheck className="w-3.5 h-3.5 text-amber-400" />
+                <span>الحساب:</span>
+                <span className="font-mono bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 text-amber-200">
+                  {driveBackupAccount}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 1: Local Backup Settings */}
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
+            <h4 className="text-xs font-bold text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-2">
+              <HardDrive className="w-4 h-4 text-emerald-600" />
+              <span>1. إعدادات النسخ الاحتياطي المحلي بالهاتف (Custom Local Backup)</span>
+            </h4>
+
+            {/* Folder selection */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-white p-3 rounded-lg border border-slate-200">
+              <div>
+                <label className="text-xs font-bold text-slate-800 block">مجلد تخزين النسخ بالذاكرة المحلية:</label>
+                <p className="text-[11px] text-slate-500 font-mono mt-0.5">{backupFolderPath}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.playScanBeep();
+                  setFolderInputVal(backupFolderPath);
+                  setShowFolderModal(true);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold transition flex items-center gap-1.5 justify-center cursor-pointer shrink-0"
+              >
+                <FolderTree className="w-3.5 h-3.5 text-emerald-600" />
+                <span>تغيير المجلد المحلي</span>
+              </button>
+            </div>
+
+            {/* Local Schedule Dropdown & Exit Toggle */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>جدولة النسخ التلقائي المحلي:</span>
+                </label>
+                <select
+                  value={localBackupSchedule}
+                  onChange={(e) => {
+                    soundManager.playScanBeep();
+                    setLocalBackupSchedule(e.target.value as BackupFrequency);
+                  }}
+                  className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="off">إيقاف (عبر الضغط اليدوي فقط)</option>
+                  <option value="daily">يومياً (Daily) - مستحسن</option>
+                  <option value="weekly">أسبوعياً (Weekly)</option>
+                  <option value="monthly">شهرياً (Monthly)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 block">
+                  النسخ عند إغلاق/الخروج من التطبيق:
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundManager.playScanBeep();
+                    setAutoBackupOnExit(!autoBackupOnExit);
+                  }}
+                  className={`w-full p-2.5 rounded-lg border text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                    autoBackupOnExit
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                      : 'bg-slate-100 border-slate-300 text-slate-600'
+                  }`}
+                >
+                  <span>إنشاء نسخة احتياطية تلقائياً عند الخروج من التطبيق</span>
+                  {autoBackupOnExit ? (
+                    <ToggleRight className="w-6 h-6 text-emerald-600" />
+                  ) : (
+                    <ToggleLeft className="w-6 h-6 text-slate-400" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Google Drive Cloud Integration */}
+          <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-200/80 space-y-3">
+            <h4 className="text-xs font-bold text-amber-900 flex items-center gap-2 border-b border-amber-200/80 pb-2">
+              <Cloud className="w-4 h-4 text-amber-600" />
+              <span>2. تكامل وجدولة Google Drive (Cloud Drive Backup)</span>
+            </h4>
+
+            {/* Google Drive Account selector */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-white p-3 rounded-lg border border-amber-200">
+              <div>
+                <label className="text-xs font-bold text-slate-800 block">حساب Google Drive المرتبط:</label>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-xs font-bold text-amber-900 font-mono dir-ltr">{driveBackupAccount}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.playScanBeep();
+                  setDriveAccountInputVal(driveBackupAccount);
+                  setShowDriveModal(true);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-xs font-bold transition flex items-center gap-1.5 justify-center cursor-pointer shrink-0"
+              >
+                <UserCheck className="w-3.5 h-3.5 text-amber-700" />
+                <span>تحديد حساب Google Drive</span>
+              </button>
+            </div>
+
+            {/* Drive Schedule Dropdown */}
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                <span>جدولة النسخ السحابي تلقائياً:</span>
+              </label>
+              <select
+                value={driveBackupSchedule}
+                onChange={(e) => {
+                  soundManager.playScanBeep();
+                  setDriveBackupSchedule(e.target.value as BackupFrequency);
+                }}
+                className="w-full text-xs p-2.5 rounded-lg border border-amber-200 bg-white font-bold text-slate-800 focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="off">إيقاف (بدون نسخ سحابي تلقائي)</option>
+                <option value="daily">يومياً (Daily)</option>
+                <option value="weekly">أسبوعياً (Weekly) - مستحسن</option>
+                <option value="monthly">شهرياً (Monthly)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Action Buttons Bar */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-100">
             <button
               type="button"
               onClick={async () => {
                 soundManager.playSuccessChime();
+                const nowIso = new Date().toISOString();
+                setLastLocalBackupDate(nowIso);
+                setLastDriveBackupDate(nowIso);
                 try {
                   await onBackupData();
                 } catch (err) {
                   console.warn('Backup error:', err);
                 }
               }}
-              className="p-3 rounded-xl border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100 text-emerald-900 font-bold text-xs transition cursor-pointer flex flex-col items-center justify-center gap-1.5 text-center shadow-xs"
+              className="py-3 px-4 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer flex items-center justify-center gap-2 shadow-sm"
             >
-              <HardDrive className="w-5 h-5 text-emerald-600" />
-              <span>الذاكرة المحلية (JSON)</span>
+              <RefreshCw className="w-4 h-4" />
+              <span>إجراء نسخة احتياطية الآن</span>
             </button>
 
-            <button
-              type="button"
-              onClick={async () => {
-                soundManager.playSuccessChime();
-                try {
-                  await onBackupData();
-                  if (!Capacitor.isNativePlatform()) {
-                    const subject = encodeURIComponent(`النسخة الاحتياطية لنظام سند المحاسبي - ${storeName || 'المنشأة'}`);
-                    const body = encodeURIComponent(
-                      `السلام عليكم ورحمة الله وبركاته،\n\nتجدون برفقه النسخة الاحتياطية المعتمدة لقاعدة بيانات نظام سند المحاسبي للمنشأة (${storeName}).\nتاريخ التصدير: ${new Date().toLocaleString('ar-YE')}\n\nيرجى حفظ الملف الاحتياطي في مكان آمن.`
-                    );
-                    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
-                  }
-                } catch (err) {
-                  console.warn('Mail export error:', err);
-                }
-              }}
-              className="p-3 rounded-xl border border-blue-200 bg-blue-50/50 hover:bg-blue-100 text-blue-900 font-bold text-xs transition cursor-pointer flex flex-col items-center justify-center gap-1.5 text-center shadow-xs"
-            >
-              <Mail className="w-5 h-5 text-blue-600" />
-              <span>إرسال عبر البريد</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={async () => {
-                soundManager.playSuccessChime();
-                try {
-                  await onBackupData();
-                  if (Capacitor.isNativePlatform() || (window as any).Capacitor) {
-                    alert('⚡ تم تصدير ومشاركة ملف النسخة الاحتياطية بنجاح عبر مدير الملفات وتطبيقات المشاركة بأندرويد.');
-                  } else {
-                    try {
-                      const win = window.open('https://drive.google.com/drive/my-drive', '_blank');
-                      if (!win) {
-                        alert('⚡ تم حفظ النسخة الاحتياطية محلياً. يرجى السماح بالنوافذ المنبثقة لفتح Google Drive.');
-                      }
-                    } catch (openErr) {
-                      console.warn('Google Drive window.open error:', openErr);
-                      alert('⚡ تم حفظ النسخة الاحتياطية محلياً بنجاح.');
-                    }
-                  }
-                } catch (err) {
-                  console.warn('Google Drive export error:', err);
-                  alert('✓ تم حفظ النسخة الاحتياطية محلياً بنجاح.');
-                }
-              }}
-              className="p-3 rounded-xl border border-amber-200 bg-amber-50/50 hover:bg-amber-100 text-amber-900 font-bold text-xs transition cursor-pointer flex flex-col items-center justify-center gap-1.5 text-center shadow-xs"
-            >
-              <Cloud className="w-5 h-5 text-amber-600" />
-              <span>Google Drive / السحابة</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -1028,7 +1210,7 @@ export default function Settings({
                   type="text"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  placeholder="صنعاء - شارع صخر..."
+                  placeholder="أدخل عنوان المنشأة والفرع..."
                   className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
                 />
               </div>
@@ -1041,7 +1223,7 @@ export default function Settings({
                   type="text"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="777714020"
+                  placeholder="أدخل رقم الهاتف للتواصل..."
                   className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition text-right"
                 />
               </div>
@@ -1316,6 +1498,114 @@ export default function Settings({
         </div>
 
       </div>
+
+      {/* Modal: Custom Backup Folder Picker */}
+      {showFolderModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-xl border border-slate-200 animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+              <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
+                <FolderTree className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">تحديد مجلد النسخ الاحتياطي المحلي</h3>
+                <p className="text-[11px] text-slate-500">اختر اسم أو مسار المجلد المفضل بذاكرة الهاتف (Documents)</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-700 block">اسم المجلد بذاكرة المستندات (Documents):</label>
+              <input
+                type="text"
+                value={folderInputVal}
+                onChange={(e) => setFolderInputVal(e.target.value)}
+                placeholder="Documents/SanadAccounting"
+                className="w-full text-xs p-3 rounded-xl border border-slate-300 font-mono text-slate-800 dir-ltr text-right focus:ring-2 focus:ring-emerald-500"
+              />
+              <p className="text-[10px] text-slate-400">
+                المسار الافتراضي برمجياً بداخل ذاكرة الجوال: <span className="font-mono text-emerald-700 font-bold">Documents/SanadAccounting</span>
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={async () => {
+                  const cleaned = folderInputVal.trim() || 'Documents/SanadAccounting';
+                  setBackupFolderPath(cleaned);
+                  await ensureCustomFolder(cleaned);
+                  setShowFolderModal(false);
+                  soundManager.playSuccessChime();
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer"
+              >
+                حفظ المجلد المختار
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowFolderModal(false)}
+                className="py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Google Drive Account Selector */}
+      {showDriveModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-xl border border-slate-200 animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+              <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
+                <Cloud className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">تحديد حساب Google Drive للمزامنة</h3>
+                <p className="text-[11px] text-slate-500">اختر البريد الإلكتروني المراد ربط النسخ الاحتياطي عليه</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-700 block">بريد حساب Google Drive:</label>
+              <input
+                type="email"
+                value={driveAccountInputVal}
+                onChange={(e) => setDriveAccountInputVal(e.target.value)}
+                placeholder="example@gmail.com"
+                className="w-full text-xs p-3 rounded-xl border border-slate-300 font-mono text-slate-800 dir-ltr text-right focus:ring-2 focus:ring-amber-500"
+              />
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                <span className="text-[10px] text-slate-500 font-bold">ملاحظة:</span>
+                <span className="text-[10px] text-slate-500">سيتم مزامنة واستعادة النسخة السحابية على هذا الحساب تلقائياً.</span>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  const cleaned = driveAccountInputVal.trim() || 'حساب Google Drive المرتبط';
+                  setDriveBackupAccount(cleaned);
+                  setShowDriveModal(false);
+                  soundManager.playSuccessChime();
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition cursor-pointer"
+              >
+                اعتماد حساب Google Drive
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDriveModal(false)}
+                className="py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

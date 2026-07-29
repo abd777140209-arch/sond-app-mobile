@@ -14,6 +14,7 @@ import { Capacitor } from '@capacitor/core';
 import { Invoice, SystemSettings, Customer } from '../types';
 import { soundManager } from '../utils/sound';
 import { requestStoragePermissionOnDemand } from '../utils/androidPermissions';
+import { saveAndShareFile } from '../utils/fileExport';
 
 interface InvoiceModalProps {
   invoice: Invoice | null;
@@ -241,55 +242,16 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
 
       pdf.addImage(imgData, 'PNG', 0, 1, pdfWidth, pdfHeight);
       const fileName = `فاتورة_${invoice.invoiceNumber}.pdf`;
+      const base64Data = pdf.output('datauristring').split(',')[1];
 
-      if (Capacitor.isNativePlatform() || (window as any).Capacitor) {
-        try {
-          const base64Data = pdf.output('datauristring').split(',')[1];
-          let fileResult;
-          try {
-            fileResult = await Filesystem.writeFile({
-              path: fileName,
-              data: base64Data,
-              directory: Directory.Documents
-            });
-          } catch (docErr) {
-            fileResult = await Filesystem.writeFile({
-              path: fileName,
-              data: base64Data,
-              directory: Directory.Cache
-            });
-          }
-          await Share.share({
-            title: `فاتورة ${invoice.invoiceNumber}`,
-            text: `فاتورة مبيعات من ${settings.storeName} - رقم ${invoice.invoiceNumber}`,
-            url: fileResult.uri,
-            dialogTitle: 'تصدير ومشاركة الفاتورة PDF'
-          });
-          return;
-        } catch (nativeErr) {
-          console.warn('Native PDF export fallback:', nativeErr);
-        }
-      }
-
-      const pdfBlob = pdf.output('blob');
-      const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
-
-      // Check if direct sharing API is supported (e.g. mobile devices/modern browsers)
-      if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-        try {
-          await navigator.share({
-            title: `فاتورة ${invoice.invoiceNumber}`,
-            text: `فاتورة مبيعات من ${settings.storeName} - رقم ${invoice.invoiceNumber}`,
-            files: [pdfFile],
-          });
-        } catch (shareErr) {
-          if ((shareErr as Error)?.name !== 'AbortError') {
-            pdf.save(fileName);
-          }
-        }
-      } else {
-        pdf.save(fileName);
-      }
+      await saveAndShareFile({
+        fileName,
+        data: base64Data,
+        isBase64: true,
+        mimeType: 'application/pdf',
+        title: `فاتورة ${invoice.invoiceNumber}`,
+        text: `فاتورة مبيعات من ${settings.storeName} - رقم ${invoice.invoiceNumber}`
+      });
     } catch (error) {
       console.error('فشل تصدير الفاتورة كـ PDF:', error);
     } finally {
@@ -311,8 +273,8 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
     let text = `\uFEFF`;
     text += `-----------------------------------------\n`;
     text += `        ${settings.storeName.toUpperCase()}        \n`;
-    text += `        ${settings.address}        \n`;
-    text += `        هاتف: ${settings.phone}        \n`;
+    if (settings.address) text += `        ${settings.address}        \n`;
+    if (settings.phone) text += `        هاتف: ${settings.phone}        \n`;
     text += `-----------------------------------------\n`;
     text += `رقم الفاتورة: ${invoice.invoiceNumber}\n`;
     text += `التاريخ والوقت: ${new Date(invoice.date).toLocaleString('ar-YE')}\n`;
@@ -337,35 +299,13 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
 
     const fileName = `smart_invoice_${invoice.invoiceNumber}.txt`;
 
-    if (Capacitor.isNativePlatform()) {
-      try {
-        const fileResult = await Filesystem.writeFile({
-          path: fileName,
-          data: text,
-          directory: Directory.Cache,
-          encoding: 'utf8' as any
-        });
-        await Share.share({
-          title: `فاتورة ${invoice.invoiceNumber}`,
-          text: `ملف نصي للفاتورة رقم ${invoice.invoiceNumber}`,
-          url: fileResult.uri,
-          dialogTitle: 'تصدير ومشاركة الفاتورة النصية'
-        });
-        return;
-      } catch (nativeErr) {
-        console.warn('Native TXT export fallback:', nativeErr);
-      }
-    }
-
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    await saveAndShareFile({
+      fileName,
+      data: text,
+      mimeType: 'text/plain;charset=utf-8',
+      title: `فاتورة ${invoice.invoiceNumber}`,
+      text: `ملف نصي للفاتورة رقم ${invoice.invoiceNumber}`
+    });
   };
 
   const handleSendWhatsApp = () => {
@@ -530,8 +470,8 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
               {settings.storeName}
             </h2>
             <p className="text-[10px] text-gray-500 font-bold">للأجهزة الذكية والصيانة والبرمجة</p>
-            <p className="text-[9px] text-gray-400 font-mono">{settings.address}</p>
-            <p className="text-[9px] text-gray-400 font-mono">تلفون: {settings.phone}</p>
+            {settings.address && <p className="text-[9px] text-gray-400 font-mono">{settings.address}</p>}
+            {settings.phone && <p className="text-[9px] text-gray-400 font-mono">تلفون: {settings.phone}</p>}
           </div>
 
           <div className="my-3 border-t border-dashed border-gray-400"></div>
@@ -796,8 +736,8 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
             {settings.storeName}
           </h2>
           <p className="text-[10px] font-bold">للأجهزة الذكية والصيانة والبرمجة</p>
-          <p className="text-[9px]">{settings.address}</p>
-          <p className="text-[9px]">تلفون: {settings.phone}</p>
+          {settings.address && <p className="text-[9px]">{settings.address}</p>}
+          {settings.phone && <p className="text-[9px]">تلفون: {settings.phone}</p>}
         </div>
 
         <div className="my-2 border-t border-dashed border-black"></div>

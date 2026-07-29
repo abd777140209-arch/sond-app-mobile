@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { Product, Invoice } from '../types';
 import { soundManager } from '../utils/sound';
+import { saveAndShareFile } from '../utils/fileExport';
 
 interface ImportedAuditRow {
   productId?: string;
@@ -89,7 +90,7 @@ export default function StockAudit({
   }, [showZaraAuditModal, showImportPreviewModal]);
 
   // Export Stock Audit Sheet to CSV / Excel
-  const handleExportCSV = () => {
+  const handleExportCSV = async () => {
     soundManager.playSuccessChime();
     let csv = '\ufeff'; // UTF-8 BOM for Excel Arabic support
     csv += 'الباركود,اسم السلعة,التصنيف,كمية النظام,الكمية الفعلية الميدانية,سعر التكلفة,سعر البيع\n';
@@ -103,16 +104,16 @@ export default function StockAudit({
       csv += `${barcode},"${cleanName}","${cleanCategory}",${p.stock},${physical},${p.costPrice},${p.sellingPrice}\n`;
     });
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
     const todayStr = new Date().toISOString().split('T')[0];
-    link.setAttribute('download', `كشف_جرد_المستودع_${storeName}_${todayStr}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const fileName = `كشف_جرد_المستودع_${storeName}_${todayStr}.csv`;
+
+    await saveAndShareFile({
+      fileName,
+      data: csv,
+      mimeType: 'text/csv;charset=utf-8',
+      title: 'كشف جرد المستودع - سند',
+      text: `تقرير جرد المستودع والسلع من تطبيق سند المحاسبي بتاريخ ${todayStr}`
+    });
   };
 
   // Helper to parse CSV line handling quotes

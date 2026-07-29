@@ -36,6 +36,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import { MaintenanceOrder, DeviceChecklist, ChecklistStatus } from '../types';
 import { soundManager } from '../utils/sound';
+import { saveAndShareFile } from '../utils/fileExport';
 import MaintenanceStickerModal from './MaintenanceStickerModal';
 
 interface MaintenanceProps {
@@ -142,11 +143,19 @@ export default function Maintenance({
       }
 
       const todayStr = new Date().toISOString().split('T')[0];
-      pdf.save(`تقرير_الصيانة_الشهري_${todayStr}.pdf`);
+      const fileName = `تقرير_الصيانة_الشهري_${todayStr}.pdf`;
+      const base64Data = pdf.output('datauristring').split(',')[1];
+
+      await saveAndShareFile({
+        fileName,
+        data: base64Data,
+        isBase64: true,
+        mimeType: 'application/pdf',
+        title: 'تقرير الصيانة الشهري - سند',
+        text: `تقرير قسم الصيانة التقنية المصدّر من تطبيق سند المحاسبي بتاريخ ${todayStr}`
+      });
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert('حدث تنبيه عند توليد ملف الـ PDF. ستبدأ نافذة الطباعة كبديل.');
-      window.print();
     } finally {
       setIsExportingPDF(false);
     }

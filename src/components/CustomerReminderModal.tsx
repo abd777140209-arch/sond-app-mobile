@@ -8,6 +8,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Send, MessageSquare, Share2, Copy, Check, Sparkles, AlertCircle, Phone, Calendar } from 'lucide-react';
 import { Customer } from '../types';
 import { soundManager } from '../utils/sound';
+import { Share } from '@capacitor/share';
+import { Capacitor } from '@capacitor/core';
 
 interface CustomerReminderModalProps {
   isOpen: boolean;
@@ -70,6 +72,18 @@ export default function CustomerReminderModal({
   // Device native share sheet (الهاتف المحمول)
   const handleNativeShare = async () => {
     soundManager.playScanBeep();
+    if (Capacitor.isNativePlatform() || (window as any).Capacitor) {
+      try {
+        await Share.share({
+          title: `تذكير مديونية - ${customer.name}`,
+          text: compiledMessage,
+          dialogTitle: 'تذكير مديونية عبر التطبيقات'
+        });
+        return;
+      } catch (err) {
+        console.log('Native share error or cancelled', err);
+      }
+    }
     if (navigator.share) {
       try {
         await navigator.share({
@@ -81,7 +95,6 @@ export default function CustomerReminderModal({
       }
     } else {
       handleCopy();
-      alert('تم نسخ نص التذكير للحافظة بنجاح، يمكنك لصقه في أي تطبيق مشاركة!');
     }
   };
 

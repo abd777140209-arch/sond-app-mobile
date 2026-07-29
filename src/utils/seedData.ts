@@ -16,8 +16,8 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   currency: "ر.ي", // Yemeni Rial, matching Abdulmajeed's yemeni context / phone number 967
   currencies: DEFAULT_CURRENCIES,
   selectedCurrencySymbol: "ر.ي",
-  address: "صنعاء - شارع صخر - بجوار محطة الكهرباء",
-  phone: "+967777714020",
+  address: "",
+  phone: "",
   pinCode: "1234",
   isPinEnabled: true,
   protectedSections: ['reports', 'settings'],
@@ -31,7 +31,14 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   appTheme: 'financial-blue',
   cardShape: 'soft',
   density: 'comfortable',
-  deviceMode: 'mobile'
+  deviceMode: 'mobile',
+  backupFolderPath: 'Documents/SanadAccounting',
+  localBackupSchedule: 'daily',
+  autoBackupOnExit: true,
+  driveBackupAccount: '',
+  driveBackupSchedule: 'weekly',
+  lastLocalBackupDate: '',
+  lastDriveBackupDate: ''
 };
 
 export const SEED_PRODUCTS: Product[] = [

@@ -54,6 +54,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
+import { saveAndShareFile, saveSilentBackupFile } from './utils/fileExport';
 import { LicenseInfo, loadLicenseLocally, saveLicenseLocally, generateHWID } from './utils/licensing';
 import { 
   saveStoreDocument, 
@@ -66,7 +67,27 @@ import {
 export default function App() {
   const [settings, setSettings] = useState<SystemSettings>(() => {
     const data = localStorage.getItem('smart_accounting_settings');
-    return data ? JSON.parse(data) : DEFAULT_SETTINGS;
+    const parsed = data ? JSON.parse(data) : { ...DEFAULT_SETTINGS };
+
+    // Check and replace legacy address or phone strings immediately with empty string ""
+    if (!parsed.address || parsed.address.includes('صنعاء - شارع صخر') || parsed.address === 'صنعاء - شارع صخر...') {
+      parsed.address = "";
+    }
+    if (!parsed.phone || parsed.phone === '+967777714020' || parsed.phone.includes('+967777714020')) {
+      parsed.phone = "";
+    }
+
+    try {
+      localStorage.setItem('smart_accounting_settings', JSON.stringify(parsed));
+    } catch (e) {
+      console.warn('Failed to update localStorage settings:', e);
+    }
+
+    const savedLogo = localStorage.getItem('smart_accounting_company_logo');
+    if (savedLogo && !parsed.storeLogoUrl) {
+      parsed.storeLogoUrl = savedLogo;
+    }
+    return parsed;
   });
 
   const [products, setProducts] = useState<Product[]>(() => {
@@ -347,6 +368,89 @@ export default function App() {
     };
   }, [license.licenseKey, isActivated]);
 
+  // 🔄 WhatsApp-Style Automatic Backup Scheduler & Exit Backup
+  useEffect(() => {
+    if (!settings) return;
+
+    const runScheduledBackupCheck = async () => {
+      const now = Date.now();
+      const nowIso = new Date().toISOString();
+      let updateNeeded = false;
+      const updatedSettings = { ...settings };
+
+      // 1. Local Backup Schedule Check
+      const localSched = settings.localBackupSchedule || 'daily';
+      if (localSched !== 'off') {
+        const lastLocalMs = settings.lastLocalBackupDate ? new Date(settings.lastLocalBackupDate).getTime() : 0;
+        let intervalMs = 24 * 60 * 60 * 1000; // daily
+        if (localSched === 'weekly') intervalMs = 7 * 24 * 60 * 60 * 1000;
+        if (localSched === 'monthly') intervalMs = 30 * 24 * 60 * 60 * 1000;
+
+        if (now - lastLocalMs >= intervalMs) {
+          console.log(`[Scheduled Local Backup] Due for frequency (${localSched}). Creating silent local backup...`);
+          const backupObj = { settings, products, customers, invoices, payments, transactions, exportedAt: nowIso };
+          const jsonStr = JSON.stringify(backupObj, null, 2);
+          const fileName = `sanad_backup_auto_${nowIso.split('T')[0]}.json`;
+          const folder = settings.backupFolderPath || 'Documents/SanadAccounting';
+
+          await saveSilentBackupFile(fileName, jsonStr, folder);
+          updatedSettings.lastLocalBackupDate = nowIso;
+          updateNeeded = true;
+        }
+      }
+
+      // 2. Drive Backup Schedule Check
+      const driveSched = settings.driveBackupSchedule || 'weekly';
+      if (driveSched !== 'off') {
+        const lastDriveMs = settings.lastDriveBackupDate ? new Date(settings.lastDriveBackupDate).getTime() : 0;
+        let intervalMs = 7 * 24 * 60 * 60 * 1000; // weekly
+        if (driveSched === 'daily') intervalMs = 24 * 60 * 60 * 1000;
+        if (driveSched === 'monthly') intervalMs = 30 * 24 * 60 * 60 * 1000;
+
+        if (now - lastDriveMs >= intervalMs) {
+          console.log(`[Scheduled Drive Backup] Due for frequency (${driveSched}). Syncing cloud drive backup...`);
+          const backupObj = { settings, products, customers, invoices, payments, transactions, exportedAt: nowIso };
+          const jsonStr = JSON.stringify(backupObj, null, 2);
+          localStorage.setItem('sanad_drive_last_backup_data', jsonStr);
+
+          updatedSettings.lastDriveBackupDate = nowIso;
+          updateNeeded = true;
+        }
+      }
+
+      if (updateNeeded) {
+        setSettings(updatedSettings);
+        localStorage.setItem('smart_accounting_settings', JSON.stringify(updatedSettings));
+      }
+    };
+
+    const timer = setTimeout(() => {
+      runScheduledBackupCheck();
+    }, 4000);
+
+    return () => clearTimeout(timer);
+  }, [settings?.localBackupSchedule, settings?.driveBackupSchedule, settings?.lastLocalBackupDate, settings?.lastDriveBackupDate]);
+
+  // 🚪 Auto-backup on app exit / pagehide
+  useEffect(() => {
+    if (!settings || settings.autoBackupOnExit === false) return;
+
+    const handleExitBackup = () => {
+      const nowIso = new Date().toISOString();
+      const backupObj = { settings, products, customers, invoices, payments, transactions, exportedAt: nowIso };
+      const jsonStr = JSON.stringify(backupObj, null, 2);
+      const fileName = `sanad_backup_exit_${nowIso.split('T')[0]}.json`;
+      const folder = settings.backupFolderPath || 'Documents/SanadAccounting';
+
+      saveSilentBackupFile(fileName, jsonStr, folder);
+    };
+
+    window.addEventListener('pagehide', handleExitBackup);
+    return () => {
+      window.removeEventListener('pagehide', handleExitBackup);
+    };
+  }, [settings?.autoBackupOnExit, settings, products, customers, invoices, payments, transactions]);
+
   // 📱 التعامل مع زر الرجوع لإنهاء/إغلاق القوائم أو العودة للرئيسية في أندرويد
   useEffect(() => {
     const handleAndroidBack = async () => {
@@ -429,6 +533,9 @@ export default function App() {
 
   const handleSaveSettings = (newSettings: SystemSettings) => {
     localStorage.setItem('smart_accounting_settings', JSON.stringify(newSettings));
+    if (newSettings.storeLogoUrl) {
+      localStorage.setItem('smart_accounting_company_logo', newSettings.storeLogoUrl);
+    }
     setSettings(newSettings);
     if (license.licenseKey) saveStoreSettings(license.licenseKey, newSettings);
     addAuditLog('settings_updated', 'تحديث إعدادات النظام واسم النشاط التجارية');
@@ -625,38 +732,16 @@ export default function App() {
 
   const handleBackupData = async () => {
     const backupObj = { settings, products, customers, invoices, payments, transactions, exportedAt: new Date().toISOString() };
-    const fileName = `sanad_accounting_backup_${new Date().toISOString().split('T')[0]}.json`;
+    const fileName = `sanad_backup_${new Date().toISOString().split('T')[0]}.json`;
     const jsonStr = JSON.stringify(backupObj, null, 2);
 
-    if (Capacitor.isNativePlatform()) {
-      try {
-        const fileResult = await Filesystem.writeFile({
-          path: fileName,
-          data: jsonStr,
-          directory: Directory.Cache,
-          encoding: 'utf8' as any
-        });
-        await Share.share({
-          title: 'نسخة احتياطية - نظام سند المحاسبي',
-          text: `ملف النسخة الاحتياطية لقاعدة البيانات بتاريخ ${new Date().toLocaleDateString('ar-YE')}`,
-          url: fileResult.uri,
-          dialogTitle: 'حفظ وتصدير النسخة الاحتياطية'
-        });
-        return;
-      } catch (err) {
-        console.warn('Native backup export error:', err);
-      }
-    }
-
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    await saveAndShareFile({
+      fileName,
+      data: jsonStr,
+      mimeType: 'application/json',
+      title: 'نسخة احتياطية - نظام سند المحاسبي',
+      text: `ملف النسخة الاحتياطية لقاعدة البيانات بتاريخ ${new Date().toLocaleDateString('ar-YE')}`
+    });
   };
 
   const handleRestoreData = async (restored: any) => {

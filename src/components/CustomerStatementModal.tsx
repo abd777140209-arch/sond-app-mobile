@@ -3,10 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useRef } from 'react';
-import { X, Printer, Share2, Send, Download, FileText, Calendar, Award, User, Phone, Wallet, CheckCircle2 } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { X, Printer, Share2, Send, Download, FileText, Calendar, Award, User, Phone, Wallet, CheckCircle2, Loader2 } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
+import { Capacitor } from '@capacitor/core';
 import { Customer, Invoice, Payment } from '../types';
 import { soundManager } from '../utils/sound';
+import { saveAndShareFile } from '../utils/fileExport';
 
 interface CustomerStatementModalProps {
   isOpen: boolean;
@@ -76,9 +80,55 @@ export default function CustomerStatementModal({
     };
   });
 
-  const handlePrint = () => {
-    soundManager.playScanBeep();
-    window.print();
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState<boolean>(false);
+
+  const generatePDFAndShare = async () => {
+    if (isGeneratingPDF || !statementRef.current) return;
+    soundManager.playSuccessChime();
+    setIsGeneratingPDF(true);
+
+    try {
+      const element = statementRef.current;
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff'
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+
+      const fileName = `كشف_حساب_${customer.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+      const base64Data = pdf.output('datauristring').split(',')[1];
+
+      await saveAndShareFile({
+        fileName,
+        data: base64Data,
+        isBase64: true,
+        mimeType: 'application/pdf',
+        title: `كشف حساب - ${customer.name}`,
+        text: `كشف حساب العميل ${customer.name} - إجمالي المديونية: ${customer.totalDebt.toLocaleString()} ${currency}`
+      });
+    } catch (err) {
+      console.error('Customer statement PDF generation error:', err);
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  const handlePrint = async () => {
+    if (Capacitor.isNativePlatform() || (window as any).Capacitor) {
+      await generatePDFAndShare();
+    } else {
+      soundManager.playScanBeep();
+      window.print();
+    }
   };
 
   // Phone clean formatting
@@ -93,19 +143,7 @@ export default function CustomerStatementModal({
 
   const handleNativeShare = async () => {
     soundManager.playScanBeep();
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `كشف حساب العميل - ${customer.name}`,
-          text: summaryText
-        });
-      } catch (err) {
-        console.log('Share cancelled', err);
-      }
-    } else {
-      navigator.clipboard.writeText(summaryText);
-      alert('تم نسخ ملخص كشف الحساب للحافظة!');
-    }
+    await generatePDFAndShare();
   };
 
   return (

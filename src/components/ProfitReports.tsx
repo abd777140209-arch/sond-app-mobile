@@ -52,6 +52,7 @@ import {
   Cell 
 } from 'recharts';
 import { Invoice, Product, Transaction, Customer, SystemSettings, MaintenanceOrder } from '../types';
+import { saveAndShareFile } from '../utils/fileExport';
 
 interface ProfitReportsProps {
   invoices: Invoice[];
@@ -164,11 +165,19 @@ export default function ProfitReports({
       }
 
       const todayStr = new Date().toISOString().split('T')[0];
-      pdf.save(`تقرير_الصيانة_الشهري_${todayStr}.pdf`);
+      const fileName = `تقرير_الصيانة_الشهري_${todayStr}.pdf`;
+      const base64Data = pdf.output('datauristring').split(',')[1];
+
+      await saveAndShareFile({
+        fileName,
+        data: base64Data,
+        isBase64: true,
+        mimeType: 'application/pdf',
+        title: 'تقرير الصيانة - سند',
+        text: `تقرير الصيانة المصدّر من تطبيق سند المحاسبي بتاريخ ${todayStr}`
+      });
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert('حدث تنبيه عند توليد ملف الـ PDF. ستبدأ نافذة الطباعة كبديل متاح.');
-      window.print();
     } finally {
       setIsExportingPDF(false);
     }

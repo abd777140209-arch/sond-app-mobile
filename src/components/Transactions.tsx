@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { Transaction, Invoice } from '../types';
 import { soundManager } from '../utils/sound';
+import { saveAndShareFile } from '../utils/fileExport';
 
 interface TransactionsProps {
   transactions: Transaction[];
@@ -81,7 +82,7 @@ export default function Transactions({
   };
 
   // Export current transactions ledger as CSV text
-  const handleExportCSV = () => {
+  const handleExportCSV = async () => {
     soundManager.playSuccessChime();
     let csv = '\ufeff'; // UTF-8 BOM
     csv += 'المعرف,التاريخ والوقت,نوع القيد,البيان والوصف,المبلغ\n';
@@ -96,14 +97,14 @@ export default function Transactions({
       csv += `"${t.id}","${new Date(t.date).toLocaleString('ar-YE')}","${typeLabel}","${t.description.replace(/"/g, '""')}","${t.amount}"\n`;
     });
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `كشف_الحركات_المالية_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const fileName = `كشف_الحركات_المالية_${new Date().toISOString().split('T')[0]}.csv`;
+    await saveAndShareFile({
+      fileName,
+      data: csv,
+      mimeType: 'text/csv;charset=utf-8',
+      title: 'كشف الحركات المالية - سند',
+      text: 'تقرير كشف الحركات المالية المصدّر من تطبيق سند المحاسبي'
+    });
   };
 
   // Calculations
