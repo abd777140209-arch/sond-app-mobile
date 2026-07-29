@@ -18,10 +18,11 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Dependencies
+      - name: Install Dependencies & Capacitor Android
         run: |
           npm install -g @capacitor/cli
           npm install
+          npm install @capacitor/android
 
       - name: Build Web Assets & Set www
         run: |
