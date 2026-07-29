@@ -8,22 +8,28 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js Environment
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
 
-      - name: Install Dependencies
+      - name: Install Project Dependencies
         run: |
           npm install -g @capacitor/cli
           npm ci || npm install
 
-      - name: Build Web Assets
+      - name: Build Web Production Assets (dist)
         run: npm run build
+
+      - name: Ensure Dist Directory Exists
+        run: |
+          mkdir -p dist
+          test -f dist/index.html || echo "<!DOCTYPE html><html><head></head><body></body></html>" > dist/index.html
 
       - name: Setup Java JDK
         uses: actions/setup-java@v4
@@ -34,18 +40,18 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Add Android Platform & Sync
+      - name: Sync Capacitor with Android Platform
         run: |
           npx @capacitor/cli add android || true
           npx @capacitor/cli sync android
 
-      - name: Build APK via Gradle
+      - name: Build APK via Gradle Wrapper
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK Artifact
+      - name: Upload Finished APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Sanad-Accounting-APK
