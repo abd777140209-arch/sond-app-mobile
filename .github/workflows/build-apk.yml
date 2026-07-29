@@ -38,20 +38,16 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Sync Capacitor Android
-        run: cap sync android
+      - name: Add & Sync Capacitor Android
+        run: |
+          cap add android || true
+          cap sync android
 
-      - name: Generate Gradle Wrapper if Missing
+      - name: Build APK via Capacitor Gradle
         run: |
           cd android
-          gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-
-      - name: Build APK with Gradle Action
-        uses: gradle/gradle-build-action@v3
-        with:
-          build-root-directory: android
-          arguments: assembleDebug
+          ./gradlew assembleDebug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
