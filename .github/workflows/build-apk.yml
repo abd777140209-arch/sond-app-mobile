@@ -41,6 +41,12 @@ jobs:
       - name: Sync Capacitor Android
         run: cap sync android
 
+      - name: Generate Gradle Wrapper if Missing
+        run: |
+          cd android
+          gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+
       - name: Build APK with Gradle Action
         uses: gradle/gradle-build-action@v3
         with:
