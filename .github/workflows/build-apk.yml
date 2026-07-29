@@ -23,13 +23,10 @@ jobs:
           npm install -g @capacitor/cli
           npm ci || npm install
 
-      - name: Build Web Production Assets (dist)
-        run: npm run build
-
-      - name: Ensure Dist Directory Exists
+      - name: Build Web Assets (Generate dist & www)
         run: |
-          mkdir -p dist
-          test -f dist/index.html || echo "<!DOCTYPE html><html><head></head><body></body></html>" > dist/index.html
+          npm run build
+          cp -r dist www || mkdir -p www
 
       - name: Setup Java JDK
         uses: actions/setup-java@v4
@@ -40,12 +37,11 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Sync Capacitor with Android Platform
+      - name: Sync Capacitor Android
         run: |
-          npx @capacitor/cli add android || true
           npx @capacitor/cli sync android
 
-      - name: Build APK via Gradle Wrapper
+      - name: Build APK via Gradle
         run: |
           cd android
           chmod +x gradlew
