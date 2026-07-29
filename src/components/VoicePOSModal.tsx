@@ -40,13 +40,8 @@ export default function VoicePOSModal({
   const [simulatedInput, setSimulatedInput] = useState('');
 
   const recognitionRef = useRef<any>(null);
-  const lastProcessedTextRef = useRef<string>('');
-  const lastProcessedTimeRef = useRef<number>(0);
+  const lastProcessedRef = useRef<string>('');
 
-  // Flexible Gemini API Key configuration
-  const geminiApiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : '');
-
-  // Initialize SpeechRecognition if available
   useEffect(() => {
     if (!isOpen) {
       stopListening();
@@ -63,9 +58,9 @@ export default function VoicePOSModal({
       if (SpeechRecognition) {
         try {
           const recognition = new SpeechRecognition();
-          recognition.lang = 'ar-SA';
-          recognition.continuous = true;
-          recognition.interimResults = true;
+          recognition.lang = 'ar-YE'; // دعم اللهجة اليمنية/العربية المباشرة
+          recognition.continuous = false; // التوقف التلقائي بعد نهاية الجملة لمنع التكرار
+          recognition.interimResults = false;
 
           recognition.onresult = (event: any) => {
             let currentTranscript = '';
@@ -73,20 +68,15 @@ export default function VoicePOSModal({
               currentTranscript += event.results[i][0].transcript;
             }
             setTranscript(currentTranscript);
-
-            // Frequency throttling: check if text is identical or sent within 1800ms
-            const now = Date.now();
-            const trimmed = currentTranscript.trim().toLowerCase();
-            if (trimmed && (trimmed !== lastProcessedTextRef.current || now - lastProcessedTimeRef.current > 1800)) {
-              lastProcessedTextRef.current = trimmed;
-              lastProcessedTimeRef.current = now;
+            if (currentTranscript !== lastProcessedRef.current) {
+              lastProcessedRef.current = currentTranscript;
               processVoiceCommand(currentTranscript);
             }
           };
 
           recognition.onerror = (event: any) => {
             console.warn('Speech recognition error:', event.error);
-            setVoiceError('⚠️ تعذر تشغيل الصوت المباشر أو المايكروفون محظور. تم تفعيل وضع الكتابة والمحاكاة بالأزرار السريعة بالأسفل.');
+            setVoiceError('💡 المايكروفون غير متاح مباشر في هذه البيئة. يمكنك كتابة الأوامر أو الضغط على الأزرار بالأسفل.');
             setIsListening(false);
           };
 
@@ -97,14 +87,14 @@ export default function VoicePOSModal({
           recognitionRef.current = recognition;
         } catch (err) {
           console.warn('Failed to setup speech recognition:', err);
-          setVoiceError('💡 المايكروفون غير متاح في هذه البيئة. استخدم خيارات المحاكاة والكتابة النصية بالأسفل.');
+          setVoiceError('💡 المايكروفون غير متاح. استخدم خيارات المحاكاة بالأزرار السريعة.');
         }
       } else {
-        setVoiceError('💡 المايكروفون غير متاح كمتحدث مباشر. تتوفر المحاكاة بالأوامر النصية والأزرار السريعة بالأسفل.');
+        setVoiceError('💡 المايكروفون غير متاح بالمتصفح. استخدم الأوامر النصية بالأزرار السريعة بالأسفل.');
       }
     } catch (e) {
       console.warn('Speech Recognition init error:', e);
-      setVoiceError('💡 يمكنك استخدام المحاكاة بالأوامر النصية بالأزرار السريعة بالأسفل.');
+      setVoiceError('💡 يمكنك استخدام المحاكاة بالأوامر النصية بالأزرار بالأسفل.');
     }
 
     return () => {
@@ -118,30 +108,19 @@ export default function VoicePOSModal({
     setVoiceError('');
     setTranscript('');
     setParsedFeedback([]);
-
-    let micReady = false;
-    if (typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        micReady = true;
-      } catch (err: any) {
-        console.warn('Microphone permission error:', err);
-        setVoiceError('⚠️ تعذر إعطاء إذن المايكروفون في أندرويد. تم تفعيل وضع المحاكاة والكتابة بالأسفل مباشرة.');
-      }
-    }
+    lastProcessedRef.current = '';
 
     if (recognitionRef.current) {
       try {
         recognitionRef.current.start();
         setIsListening(true);
       } catch (err) {
-        console.warn('Could not start recognition:', err);
         setIsListening(false);
-        setVoiceError('⚠️ متعذر البدء بالمايكروفون المباشر. يمكنك الاستمرار باستخدام خانة كتابة الأوامر أو الضغط على الأزرار بالأسفل.');
+        setVoiceError('⚠️ متعذر البدء بالمايكروفون المباشر. استخدم خانة كتابة الأوامر بالأسفل.');
       }
     } else {
       setIsListening(false);
-      setVoiceError('💡 المايكروفون غير متاح. يرجى كتابة الأمر الصوتي أو اختياره من الأزرار السريعة بالأسفل.');
+      setVoiceError('💡 المايكروفون غير متاح. يرجى اختيار الأمر من الأزرار السريعة بالأسفل.');
     }
   };
 
@@ -154,7 +133,6 @@ export default function VoicePOSModal({
     setIsListening(false);
   };
 
-  // Parser function for Arabic Voice Commands
   const processVoiceCommand = (text: string) => {
     if (!text || text.trim().length === 0) return;
     const lowerText = text.trim().toLowerCase();
@@ -163,33 +141,35 @@ export default function VoicePOSModal({
 
     const feedbackList: string[] = [];
 
-    // 1. Check for complete sale command
-    if (lowerText.includes('إتمام الفاتورة') || lowerText.includes('حفظ الفاتورة') || lowerText.includes('اتمام') || lowerText.includes('إنهاء البيع')) {
+    // 1. إتمام الفاتورة
+    if (lowerText.includes('إتمام') || lowerText.includes('حفظ') || lowerText.includes('إنهاء')) {
       feedbackList.push('✅ أمر: إتمام الفاتورة وحفظ البيع');
       onCompleteSaleByVoice();
       soundManager.playSuccessChime();
+      setParsedFeedback(feedbackList);
       return;
     }
 
-    // 2. Check for clear cart
-    if (lowerText.includes('مسح السلة') || lowerText.includes('إلغاء الفاتورة') || lowerText.includes('تفريع السلة')) {
+    // 2. تفريغ السلة
+    if (lowerText.includes('مسح السلة') || lowerText.includes('إلغاء الفاتورة') || lowerText.includes('تفريغ')) {
       feedbackList.push('🗑️ أمر: تفريغ سلة المبيعات');
       onClearCartByVoice();
+      setParsedFeedback(feedbackList);
       return;
     }
 
-    // 3. Check for payment type
+    // 3. طريقة الدفع
     if (lowerText.includes('نقدا') || lowerText.includes('نقدي') || lowerText.includes('كاش')) {
       feedbackList.push('💵 تحديد طريقة الدفع: نقداً (كاش)');
       onSetPaymentTypeByVoice('cash');
-    } else if (lowerText.includes('آجل') || lowerText.includes('اجل') || lowerText.includes('دين') || lowerText.includes('على الحساب')) {
+    } else if (lowerText.includes('آجل') || lowerText.includes('اجل') || lowerText.includes('دين') || lowerText.includes('حساب')) {
       feedbackList.push('📑 تحديد طريقة الدفع: آجل (ذمم)');
       onSetPaymentTypeByVoice('debt');
     }
 
-    // 4. Check for discount command: e.g. "خصم 500"
+    // 4. الخصم
     const discountMatch = lowerText.match(/(?:خصم|تخفيض|خصمية)\s*(\d+)/);
-    if (discountMatch) {
+    if (discountMatch && discountMatch[1]) {
       const discVal = parseInt(discountMatch[1], 10);
       if (!isNaN(discVal) && discVal >= 0) {
         feedbackList.push(`🏷️ تطبيق خصم بقيمة: ${discVal}`);
@@ -197,7 +177,7 @@ export default function VoicePOSModal({
       }
     }
 
-    // 5. Check for customer name: e.g. "العميل أحمد" or "اختيار العميل علي"
+    // 5. العميل
     for (const cust of activeCustomers) {
       const nameParts = cust.name.toLowerCase().split(' ');
       const matchName = nameParts.some(part => part.length > 2 && lowerText.includes(part));
@@ -208,17 +188,15 @@ export default function VoicePOSModal({
       }
     }
 
-    // 6. Check for product add command: e.g. "اضف ايفون 15 كمية 2" or "ايفون"
+    // 6. إضافة منتج
     for (const prod of activeProducts) {
       const prodName = prod.name.toLowerCase();
-      // Check if text mentions product name or key parts
       const nameTokens = prodName.split(' ').filter(t => t.length > 2);
       const isMatch = nameTokens.length > 0 && nameTokens.some(token => lowerText.includes(token));
 
       if (isMatch) {
-        // Extract quantity if mentioned (e.g. "كمية 2" or "عدد 3" or "2 حبة")
         let qty = 1;
-        const qtyMatch = lowerText.match(/(?:كمية|عدد|حبات|حبة)?\s*(\d+)\s*(?:حبة|حبات|قطع)?/);
+        const qtyMatch = lowerText.match(/(?:كمية|عدد|حبات|حبة)?\s*(\d+)/);
         if (qtyMatch && qtyMatch[1]) {
           const parsedQty = parseInt(qtyMatch[1], 10);
           if (!isNaN(parsedQty) && parsedQty > 0) {
@@ -239,10 +217,6 @@ export default function VoicePOSModal({
     if (!simulatedInput.trim()) return;
     soundManager.playScanBeep();
     setTranscript(simulatedInput);
-    
-    lastProcessedTextRef.current = simulatedInput.trim().toLowerCase();
-    lastProcessedTimeRef.current = Date.now();
-    
     processVoiceCommand(simulatedInput);
     setSimulatedInput('');
   };
@@ -262,7 +236,6 @@ export default function VoicePOSModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-5 relative overflow-hidden">
         
-        {/* Header */}
         <div className="flex justify-between items-center border-b border-slate-100 pb-4">
           <div className="flex items-center gap-2.5">
             <div className="p-2.5 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100">
@@ -284,9 +257,7 @@ export default function VoicePOSModal({
           </button>
         </div>
 
-        {/* Listening Interactive Area */}
         <div className="text-center space-y-4 py-2">
-          
           <button
             onClick={isListening ? stopListening : startListening}
             className={`w-24 h-24 rounded-full mx-auto flex items-center justify-center transition-all cursor-pointer shadow-lg ${
@@ -306,26 +277,15 @@ export default function VoicePOSModal({
             <p className="text-xs font-bold text-slate-700">
               {isListening ? '🎙️ يستمع الآن... تحدث بصوت واضح (مثل: أضف آيفون 15)' : 'اضغط على المايكروفون للبدء بالتحدث'}
             </p>
-            {isListening && (
-              <div className="flex justify-center items-center gap-1 mt-2">
-                <span className="w-1.5 h-4 bg-blue-500 rounded-full animate-pulse" />
-                <span className="w-1.5 h-6 bg-blue-600 rounded-full animate-pulse delay-100" />
-                <span className="w-1.5 h-8 bg-blue-700 rounded-full animate-pulse delay-200" />
-                <span className="w-1.5 h-5 bg-blue-600 rounded-full animate-pulse delay-100" />
-                <span className="w-1.5 h-3 bg-blue-500 rounded-full animate-pulse" />
-              </div>
-            )}
           </div>
 
-          {/* Transcript Display Box */}
           {transcript && (
-            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-800 text-xs font-medium text-right dir-rtl max-h-24 overflow-y-auto">
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-800 text-xs font-medium text-right max-h-24 overflow-y-auto">
               <span className="font-bold text-slate-400 block text-[10px] mb-1">النص المسموع:</span>
               "{transcript}"
             </div>
           )}
 
-          {/* Parsed actions notification */}
           {parsedFeedback.length > 0 && (
             <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold text-right space-y-1">
               <span className="text-[10px] text-emerald-600 block">⚡ الأوامر المطبقة فورياً:</span>
@@ -338,17 +298,14 @@ export default function VoicePOSModal({
             </div>
           )}
 
-          {/* Voice error or browser notice */}
           {voiceError && (
             <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs text-right flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
               <span>{voiceError}</span>
             </div>
           )}
-
         </div>
 
-        {/* Quick Simulation / Manual Voice Typing */}
         <div className="border-t border-slate-100 pt-4 space-y-3">
           <label className="text-xs font-bold text-slate-700 block">اختبار سريع أو إدخال بالأوامر النصية:</label>
           
@@ -368,7 +325,6 @@ export default function VoicePOSModal({
             </button>
           </form>
 
-          {/* Preset Buttons for Instant Verification */}
           <div className="flex flex-wrap gap-1.5 pt-1">
             {presetVoiceCommands.map((preset, idx) => (
               <button
@@ -387,7 +343,6 @@ export default function VoicePOSModal({
           </div>
         </div>
 
-        {/* Footer actions */}
         <div className="flex justify-end pt-2">
           <button
             onClick={onClose}
