@@ -35,6 +35,11 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: Setup Gradle 8.7
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.7'
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
@@ -43,7 +48,7 @@ jobs:
           cap add android || true
           cap sync android
 
-      - name: Build APK via Direct Gradle
+      - name: Build APK via Gradle
         run: |
           cd android
           gradle assembleDebug
