@@ -65,23 +65,17 @@ import {
 } from './utils/firebaseSync';
 
 export default function App() {
+  useEffect(() => {
+    // Force clear old legacy settings from localStorage on startup as requested
+    localStorage.removeItem('smart_accounting_settings');
+  }, []);
+
   const [settings, setSettings] = useState<SystemSettings>(() => {
     const data = localStorage.getItem('smart_accounting_settings');
     const parsed = data ? JSON.parse(data) : { ...DEFAULT_SETTINGS };
 
-    // Check and replace legacy address or phone strings immediately with empty string ""
-    if (!parsed.address || parsed.address.includes('صنعاء - شارع صخر') || parsed.address === 'صنعاء - شارع صخر...') {
-      parsed.address = "";
-    }
-    if (!parsed.phone || parsed.phone === '+967777714020' || parsed.phone.includes('+967777714020')) {
-      parsed.phone = "";
-    }
-
-    try {
-      localStorage.setItem('smart_accounting_settings', JSON.stringify(parsed));
-    } catch (e) {
-      console.warn('Failed to update localStorage settings:', e);
-    }
+    parsed.address = "";
+    parsed.phone = "";
 
     const savedLogo = localStorage.getItem('smart_accounting_company_logo');
     if (savedLogo && !parsed.storeLogoUrl) {

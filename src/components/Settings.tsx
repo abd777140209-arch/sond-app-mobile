@@ -413,6 +413,7 @@ export default function Settings({
     soundManager.playSuccessChime();
     
     localStorage.setItem('sond_biometrics_enabled', isBiometricEnabled ? 'true' : 'false');
+    localStorage.setItem('SanadAccounting', backupFolderPath.trim() || 'Documents/SanadAccounting');
     if (storeLogoUrl) {
       localStorage.setItem('smart_accounting_company_logo', storeLogoUrl);
     } else {
