@@ -17,9 +17,7 @@ jobs:
           node-version: '20'
 
       - name: Install Dependencies
-        run: |
-          npm install -g @capacitor/cli
-          npm install
+        run: npm install
 
       - name: Build Web Assets
         run: npm run build
@@ -33,10 +31,10 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Add Android Platform
+      - name: Add Android Platform & Sync
         run: |
-          npx @capacitor/cli add android || true
-          npx @capacitor/cli sync android
+          ./node_modules/.bin/cap add android || true
+          ./node_modules/.bin/cap sync android
 
       - name: Build APK via Gradle
         run: |
