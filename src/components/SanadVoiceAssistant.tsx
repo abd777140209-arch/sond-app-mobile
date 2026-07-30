@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Mic, Send, Bot, User, Volume2, Loader2, CheckCircle2, AlertTriangle, X, Sparkles
 } from 'lucide-react';
+import { processVoiceAssistantQuery } from '../services/GoogleAIService';
 
 export interface SanadVoiceAssistantProps {
   apiBaseUrl?: string;
@@ -153,40 +154,32 @@ export const SanadVoiceAssistant: React.FC<SanadVoiceAssistantProps> = ({
       let botResponseText = '';
 
       if (apiBaseUrl) {
-        // 2. طلب API السيرفر (AI Chat Endpoint)
-        const response = await fetch(`${apiBaseUrl}/api/ai/chat`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            query: query,
-            session_id: 'sanad_mobile_session'
-          })
-        });
+        try {
+          // 2. طلب API السيرفر (AI Chat Endpoint)
+          const response = await fetch(`${apiBaseUrl}/api/ai/chat`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              query: query,
+              session_id: 'sanad_mobile_session'
+            })
+          });
 
-        const data = await response.json();
+          const data = await response.json();
 
-        if (response.ok && data.response) {
-          botResponseText = data.response;
-        } else {
-          throw new Error(data.error || 'حدث خطأ في الاتصال بالذكاء الاصطناعي');
+          if (response.ok && data.response) {
+            botResponseText = data.response;
+          } else {
+            botResponseText = await processVoiceAssistantQuery(query);
+          }
+        } catch (err) {
+          botResponseText = await processVoiceAssistantQuery(query);
         }
       } else {
-        // الرد التلقائي الذكي المحلي المحاكي لسند
-        const qLower = query.toLowerCase();
-        if (qLower.includes('مبيعات') || qLower.includes('تقرير')) {
-          botResponseText = '📊 التقرير المالي الحالي: إجمالي مبيعات اليوم تم تسجيلها بنجاح، ويمكنك استعراض تفاصيل الأرباح والصندوق من قسم التقارير المالية.';
-        } else if (qLower.includes('عميل') || qLower.includes('زبون')) {
-          botResponseText = '👤 يمكنك إضافة وتتبع حسابات العملاء وكشوفات الذمم والديون مباشرة من قسم "العملاء والديون". هل تريد فتح الشاشة الآن؟';
-        } else if (qLower.includes('صيانة') || qLower.includes('جهاز')) {
-          botResponseText = '🛠️ قسم الصيانة والأجهزة يتيح لك تسجيل كروت الاستلام، وطباعة ملصق الباربود، ومتابعة حالة الإصلاح أولاً بأول.';
-        } else if (qLower.includes('فاتورة') || qLower.includes('بيع')) {
-          botResponseText = '🧾 يمكنك إنشاء فاتورة مبيعات سريعة عبر واجهة البيع (POS) المباشرة وطباعتها حرارياً أو إرسالها عبر الواتساب.';
-        } else {
-          botResponseText = `تم استلام أمرك: "${query}". المساعد الذكي "سند" جاهز للربط التام بجميع قواعد البيانات والخدمات السحابية لتلبية طلباتك فوراً.`;
-        }
+        botResponseText = await processVoiceAssistantQuery(query);
       }
 
       const botMsg: MessageItem = {

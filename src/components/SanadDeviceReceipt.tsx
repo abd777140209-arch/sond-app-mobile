@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Smartphone, 
   Save, 
@@ -17,12 +17,22 @@ import {
   FileCheck2, 
   Sparkles, 
   Cpu, 
-  DollarSign, 
-  CreditCard,
+  Wifi,
+  WifiOff,
+  RefreshCw,
   Share2
 } from 'lucide-react';
 import { MaintenanceOrder, UserAccount, SystemSettings } from '../types';
 import { soundManager } from '../utils/sound';
+import { 
+  saveDeviceReceiptOffline, 
+  syncOfflineDataWithServer, 
+  getPendingOfflineRecords 
+} from '../services/SanadOfflineEngine';
+import { 
+  generateWhatsAppReceiptLink, 
+  printReceiptHTML 
+} from '../services/ReceiptPrinter';
 
 export interface SanadDeviceReceiptProps {
   apiBaseUrl?: string;
@@ -41,6 +51,10 @@ export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
   settings,
   onAddMaintenanceOrder
 }) => {
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+
   const [formData, setFormData] = useState({
     customerName: '',
     customerPhone: '',
@@ -55,7 +69,44 @@ export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
   const [savedOrder, setSavedOrder] = useState<any | null>(null);
   const [isSaved, setIsSaved] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // 🌐 Mointor online/offline state & Auto-Sync
+  useEffect(() => {
+    const handleOnline = async () => {
+      setIsOnline(true);
+      triggerSync();
+    };
+
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    setPendingCount(getPendingOfflineRecords().length);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [apiBaseUrl, token]);
+
+  const triggerSync = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const res = await syncOfflineDataWithServer(apiBaseUrl, token);
+      if (res.syncedCount > 0) {
+        soundManager.playSuccessChime();
+        alert(`⚡ تم رفع ومزامنة ${res.syncedCount} كارت استلام مخزن أوفلاين بنجاح!`);
+      }
+      setPendingCount(getPendingOfflineRecords().length);
+    } catch (err) {
+      console.warn('Sync error:', err);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     soundManager.playSuccessChime();
 
@@ -75,8 +126,47 @@ export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
       createdAt: new Date().toISOString()
     };
 
+    // Save to App State
     if (onAddMaintenanceOrder) {
       onAddMaintenanceOrder(newTicket);
+    }
+
+    // Save Offline / Sync
+    if (!isOnline || !apiBaseUrl) {
+      saveDeviceReceiptOffline({
+        customerName: formData.customerName,
+        customerPhone: formData.customerPhone,
+        deviceModel: formData.deviceModel,
+        imei: formData.imei,
+        serviceType: formData.serviceType,
+        problemDescription: formData.problemDescription,
+        estimatedCost: formData.estimatedCost,
+        advancePayment: formData.advancePayment
+      });
+      setPendingCount(getPendingOfflineRecords().length);
+    } else {
+      try {
+        await fetch(`${apiBaseUrl}/api/service/create-device`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token ? `Bearer ${token}` : ''
+          },
+          body: JSON.stringify(formData)
+        });
+      } catch (err) {
+        saveDeviceReceiptOffline({
+          customerName: formData.customerName,
+          customerPhone: formData.customerPhone,
+          deviceModel: formData.deviceModel,
+          imei: formData.imei,
+          serviceType: formData.serviceType,
+          problemDescription: formData.problemDescription,
+          estimatedCost: formData.estimatedCost,
+          advancePayment: formData.advancePayment
+        });
+        setPendingCount(getPendingOfflineRecords().length);
+      }
     }
 
     setSavedOrder(newTicket);
@@ -85,20 +175,40 @@ export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
 
   const handlePrint = () => {
     soundManager.playScanBeep();
-    window.print();
+    printReceiptHTML(
+      settings?.companyName || 'مركز سند لصيانة وبرمجة الهواتف',
+      {
+        ticketNumber: savedOrder?.ticketNumber,
+        customerName: savedOrder?.customerName || formData.customerName,
+        customerPhone: savedOrder?.customerPhone || formData.customerPhone,
+        deviceModel: savedOrder?.deviceModel || formData.deviceModel,
+        imei: savedOrder?.serialNumber || formData.imei,
+        serviceType: formData.serviceType,
+        problemDescription: savedOrder?.issueDescription || formData.problemDescription,
+        estimatedCost: savedOrder?.estimatedCost || formData.estimatedCost,
+        advancePayment: savedOrder?.depositAmount || formData.advancePayment
+      },
+      settings?.currency || 'ريال'
+    );
   };
 
   const handleWhatsAppShare = () => {
     if (!savedOrder) return;
-    const msg = `🧾 *سند استلام جهاز للصيانة/البرمجة*\n` +
-      `رقم الكارت: ${savedOrder.ticketNumber}\n` +
-      `العميل: ${savedOrder.customerName}\n` +
-      `الجهاز: ${savedOrder.deviceModel}\n` +
-      `التكلفة التقديرية: ${savedOrder.estimatedCost} ${settings?.currency || 'ريال'}\n` +
-      `العربون: ${savedOrder.depositAmount} ${settings?.currency || 'ريال'}\n` +
-      `شكراً لثقتكم بمركزنا!`;
-    
-    const url = `https://api.whatsapp.com/send?phone=${savedOrder.customerPhone}&text=${encodeURIComponent(msg)}`;
+    const url = generateWhatsAppReceiptLink(
+      settings?.companyName || 'مركز سند لصيانة وبرمجة الهواتف',
+      {
+        ticketNumber: savedOrder.ticketNumber,
+        customerName: savedOrder.customerName,
+        customerPhone: savedOrder.customerPhone,
+        deviceModel: savedOrder.deviceModel,
+        imei: savedOrder.serialNumber,
+        serviceType: formData.serviceType,
+        problemDescription: savedOrder.issueDescription,
+        estimatedCost: savedOrder.estimatedCost,
+        advancePayment: savedOrder.depositAmount
+      },
+      settings?.currency || 'ريال'
+    );
     window.open(url, '_blank');
   };
 
@@ -127,6 +237,36 @@ export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
             <span>الصلاحية: {userRole === 'admin' ? 'مدير المحل' : userRole === 'technician' ? 'فني الصيانة' : 'موظف الاستقبال'}</span>
           </span>
         </div>
+      </div>
+
+      {/* 🔹 شريط حالة شبكة الأوفلاين والمزامنة */}
+      <div className={`p-3.5 rounded-2xl text-xs font-bold flex items-center justify-between shadow-sm border transition-all ${
+        isOnline 
+          ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800' 
+          : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 border-amber-200 dark:border-amber-800'
+      }`}>
+        <span className="flex items-center gap-2">
+          {isOnline ? <Wifi className="w-4 h-4 text-emerald-600 dark:text-emerald-400 animate-pulse" /> : <WifiOff className="w-4 h-4 text-amber-600 dark:text-amber-400" />}
+          <span>{isOnline ? 'الشبكة متصلة (أونلاين) - البيانات متزامنة مع السيرفر' : 'العمل بوضع أوفلاين (بدون إنترنت) - الكروت تُحفظ بذاكرة التلفون محلياً'}</span>
+        </span>
+
+        {pendingCount > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="bg-amber-500 text-white px-2.5 py-1 rounded-full text-[11px] font-mono shadow-sm">
+              {pendingCount} كارت بانتظار المزامنة
+            </span>
+            {isOnline && (
+              <button
+                onClick={triggerSync}
+                disabled={syncing}
+                className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shadow"
+              >
+                <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
+                <span>مزامنة الآن</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

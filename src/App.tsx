@@ -51,6 +51,7 @@ import SanadVoiceAssistant from './components/SanadVoiceAssistant';
 import SanadDiagnosticScreen from './components/SanadDiagnosticScreen';
 import SanadPhoneLedger from './components/SanadPhoneLedger';
 import SanadDeviceReceipt from './components/SanadDeviceReceipt';
+import SanadEnterpriseDashboard from './components/SanadEnterpriseDashboard';
 import PinCheckModal from './components/PinCheckModal';
 import DeveloperPortalModal from './components/DeveloperPortalModal';
 
@@ -1144,6 +1145,12 @@ export default function App() {
                 onDeleteUser={handleDeleteUser}
                 auditLogs={auditLogs}
                 onClearAuditLogs={handleClearAuditLogs}
+              />
+            )}
+
+            {(activeTab === 'enterprise_dashboard' || activeTab === 'alerts') && (
+              <SanadEnterpriseDashboard
+                inventoryItems={products}
               />
             )}
 

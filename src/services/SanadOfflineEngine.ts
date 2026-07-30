@@ -1,0 +1,131 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
+ * 💾 Sanad Offline & Sync Engine
+ * محرك التخزين المحلي والمزامنة التلقائية عند انقطاع الإنترنت لورشة صيانة الهواتف
+ */
+
+export interface OfflineDeviceRecord {
+  local_id: string;
+  customerName: string;
+  customerPhone: string;
+  deviceModel: string;
+  imei?: string;
+  serviceType: 'hardware' | 'software' | 'both';
+  problemDescription: string;
+  estimatedCost: number | string;
+  advancePayment: number | string;
+  created_at: string;
+  synced: boolean;
+}
+
+const STORAGE_KEY_PENDING_DEVICES = 'sanad_pending_devices_offline';
+
+/**
+ * 1. حفظ كارت استلام جهاز محلياً عند عدم توفر اتصال بالشبكة
+ */
+export const saveDeviceReceiptOffline = (deviceData: Omit<OfflineDeviceRecord, 'local_id' | 'created_at' | 'synced'>) => {
+  try {
+    const existingStr = localStorage.getItem(STORAGE_KEY_PENDING_DEVICES);
+    const existing: OfflineDeviceRecord[] = existingStr ? JSON.parse(existingStr) : [];
+
+    const offlineRecord: OfflineDeviceRecord = {
+      ...deviceData,
+      local_id: `OFFLINE-${Date.now()}`,
+      created_at: new Date().toISOString(),
+      synced: false
+    };
+
+    existing.push(offlineRecord);
+    localStorage.setItem(STORAGE_KEY_PENDING_DEVICES, JSON.stringify(existing));
+
+    return {
+      success: true,
+      ticket_id: offlineRecord.local_id,
+      isOffline: true,
+      record: offlineRecord,
+      message: 'تم الحفظ محلياً (أوفلاين) وسيتم المزامنة تلقائياً عند عودة الإنترنت'
+    };
+  } catch (error) {
+    console.error('Error saving offline:', error);
+    return { 
+      success: false, 
+      ticket_id: `OFFLINE-${Date.now()}`,
+      message: 'فشل الحفظ المحلي في ذاكرة الهاتف' 
+    };
+  }
+};
+
+/**
+ * 2. جلب كافة الكروت والأوامر المعلقة غير المزامنة
+ */
+export const getPendingOfflineRecords = (): OfflineDeviceRecord[] => {
+  try {
+    const existingStr = localStorage.getItem(STORAGE_KEY_PENDING_DEVICES);
+    return existingStr ? JSON.parse(existingStr) : [];
+  } catch (err) {
+    console.error('Error getting pending records:', err);
+    return [];
+  }
+};
+
+/**
+ * 3. مزامنة البيانات المخزنة أوفلاين مع السيرفر تلقائياً عند عودة الإنترنت
+ */
+export const syncOfflineDataWithServer = async (
+  apiBaseUrl: string, 
+  token: string
+): Promise<{ syncedCount: number; remainingCount: number }> => {
+  const pendingRecords = getPendingOfflineRecords();
+
+  if (!pendingRecords || pendingRecords.length === 0) {
+    return { syncedCount: 0, remainingCount: 0 };
+  }
+
+  if (!apiBaseUrl) {
+    console.log('ملاحظة: السيرفر غير معرف، البيانات محفوظة محلياً بنجاح.');
+    return { syncedCount: 0, remainingCount: pendingRecords.length };
+  }
+
+  console.log(`🔄 جاري مزامنة ${pendingRecords.length} كارت صيانة مخزن أوفلاين مع السيرفر...`);
+
+  let syncedCount = 0;
+  const remainingRecords: OfflineDeviceRecord[] = [];
+
+  for (const record of pendingRecords) {
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/service/create-device`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        },
+        body: JSON.stringify(record)
+      });
+
+      if (response.ok) {
+        syncedCount++;
+      } else {
+        remainingRecords.push(record);
+      }
+    } catch (error) {
+      console.warn('فشلت المزامنة للكارت:', record.local_id, error);
+      remainingRecords.push(record);
+    }
+  }
+
+  // تحديث السجل بالأوامر المتبقية
+  localStorage.setItem(STORAGE_KEY_PENDING_DEVICES, JSON.stringify(remainingRecords));
+
+  return { syncedCount, remainingCount: remainingRecords.length };
+};
+
+/**
+ * 4. مسح السجلات المعلقة يدوياً (إن لزم الأمر)
+ */
+export const clearPendingRecords = (): void => {
+  localStorage.removeItem(STORAGE_KEY_PENDING_DEVICES);
+};

@@ -15,7 +15,7 @@ export interface SaveAndShareOptions {
  * Dynamically checks and requests storage permissions on native Android / iOS
  */
 export async function ensureStoragePermissions(): Promise<boolean> {
-  if (!Capacitor.isNativePlatform() && !(window as any).Capacitor) {
+  if (!Capacitor.isNativePlatform()) {
     return true;
   }
   try {
@@ -35,7 +35,7 @@ export async function ensureStoragePermissions(): Promise<boolean> {
  * Ensures a custom folder (e.g. 'SanadAccounting' or user specified path) exists inside Directory.Documents on Android/Native
  */
 export async function ensureCustomFolder(folderPath: string = 'SanadAccounting'): Promise<boolean> {
-  if (!Capacitor.isNativePlatform() && !(window as any).Capacitor) {
+  if (!Capacitor.isNativePlatform()) {
     return false;
   }
   await ensureStoragePermissions();
@@ -69,7 +69,7 @@ export async function saveSilentBackupFile(
   jsonString: string,
   folderPath: string = 'SanadAccounting'
 ): Promise<string | null> {
-  const isNative = Capacitor.isNativePlatform() || !!(window as any).Capacitor;
+  const isNative = Capacitor.isNativePlatform();
   const cleanFolder = (folderPath || 'SanadAccounting').trim().replace(/^\/+|\/+$/g, '');
 
   if (isNative) {
@@ -110,7 +110,7 @@ export async function saveSilentBackupFile(
 }
 
 /**
- * Saves a file to Documents/SanadAccounting and opens the Android Native Share Sheet
+ * Saves a file and offers sharing / download options safely across Capacitor Native, WebViews, and Web Browsers.
  */
 export async function saveAndShareFile(options: SaveAndShareOptions): Promise<boolean> {
   const {
@@ -122,19 +122,15 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
     text = 'ملف من النظام المحاسبي'
   } = options;
 
-  const isNative = Capacitor.isNativePlatform() || !!(window as any).Capacitor;
+  const isNative = Capacitor.isNativePlatform();
+  const cleanData = isBase64 && data.includes(',') ? data.split(',')[1] : data;
 
+  // 1. Native Capacitor Attempt
   if (isNative) {
     try {
-      // 1. التحقق من صلاحيات التخزين وطلبها من المستخدم
-      const hasPermission = await ensureStoragePermissions();
-      if (!hasPermission) {
-        alert('⚠️ يتطلب النظام صلاحيات الوصول للتخزين لحفظ الملفات والفواتير. يرجى الانتقال إلى (إعدادات الهاتف > التطبيقات > سند المحاسبي > الأذونات) وتفعيل إذن التخزين.');
-      }
+      await ensureStoragePermissions();
+      const folderName = 'SanadAccounting';
 
-      const folderName = 'SanadAccounting'; // اسم المجلد بداخل Documents
-
-      // 2. إنشاء المجلد تلقائياً بذاكرة الهاتف مع خاصية recursive: true
       try {
         await Filesystem.mkdir({
           path: folderName,
@@ -142,14 +138,12 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
           recursive: true
         });
       } catch (mkdirErr) {
-        console.log('المجلد موجود مسبقاً أو تعذر إنشاؤه في Documents:', mkdirErr);
+        // Folder exists or cannot be created in Documents
       }
 
-      const cleanData = isBase64 && data.includes(',') ? data.split(',')[1] : data;
       const filePath = `${folderName}/${fileName}`;
-
-      // 3. كتابة وحفظ الملف داخل المجلد الذي تم إنشاؤه
       let writeResult;
+
       try {
         writeResult = await Filesystem.writeFile({
           path: filePath,
@@ -159,7 +153,7 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
           encoding: isBase64 ? undefined : Encoding.UTF8
         });
       } catch (docErr) {
-        console.warn('تعذر الحفظ في Documents/SanadAccounting، جاري المحاولة في المجلد المؤقت (Cache):', docErr);
+        console.warn('Filesystem write to Documents failed, attempting Directory.Cache:', docErr);
         writeResult = await Filesystem.writeFile({
           path: fileName,
           data: cleanData,
@@ -169,57 +163,82 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
         });
       }
 
-      // 4. فتح شاشة المشاركة الرسمية للهاتف فور التصدير
       if (writeResult && writeResult.uri) {
-        await Share.share({
-          title: title,
-          text: text,
-          url: writeResult.uri,
-          dialogTitle: title || 'مشاركة أو حفظ الملف'
-        });
-        return true;
-      } else {
-        throw new Error('لم يتم إرجاع مسار الملف المحفوظ.');
+        try {
+          await Share.share({
+            title: title,
+            text: text,
+            url: writeResult.uri,
+            dialogTitle: title || 'مشاركة أو حفظ الملف'
+          });
+          return true;
+        } catch (shareErr: any) {
+          const errStr = String(shareErr || '').toLowerCase();
+          if (errStr.includes('cancel') || errStr.includes('dismiss') || errStr.includes('abort') || errStr.includes('closed')) {
+            // User intentionally canceled share dialog - consider it handled without error
+            return true;
+          }
+          console.warn('Native Share dialog failed or was closed:', shareErr);
+          // Fall through to web download if share failed
+        }
       }
-
-    } catch (error: any) {
-      console.error('خطأ أثناء حفظ أو مشاركة الملف:', error);
-      alert('⚠️ تعذر حفظ أو مشاركة الملف. يرجى التأكد من إعطاء صلاحيات التخزين للتطبيق من إعدادات الهاتف (الإعدادات > التطبيقات > سند المحاسبي > الأذونات > التخزين).');
-      return false;
+    } catch (nativeErr) {
+      console.warn('Native Capacitor file write/share failed, falling back to Web Blob download:', nativeErr);
     }
   }
 
-  // 5. التصدير المباشر للويب أو المتصفح العادي
+  // 2. Web / Webview Fallback (Blob + Navigator Share / Download Link)
   try {
-    const cleanData = isBase64 && data.includes(',') ? data.split(',')[1] : data;
     const blob = isBase64 
       ? base64ToBlob(cleanData, mimeType)
       : new Blob([data], { type: mimeType });
 
     const blobUrl = URL.createObjectURL(blob);
 
-    if (navigator.canShare && navigator.canShare({ files: [new File([blob], fileName, { type: mimeType })] })) {
-      const fileToShare = new File([blob], fileName, { type: mimeType });
-      await navigator.share({
-        title: title,
-        text: text,
-        files: [fileToShare]
-      });
-      URL.revokeObjectURL(blobUrl);
-      return true;
+    // Try Web Share API if supported
+    if (typeof navigator !== 'undefined' && navigator.canShare) {
+      try {
+        const fileToShare = new File([blob], fileName, { type: mimeType });
+        if (navigator.canShare({ files: [fileToShare] })) {
+          await navigator.share({
+            title: title,
+            text: text,
+            files: [fileToShare]
+          });
+          URL.revokeObjectURL(blobUrl);
+          return true;
+        }
+      } catch (webShareErr: any) {
+        const errStr = String(webShareErr || '').toLowerCase();
+        if (errStr.includes('cancel') || errStr.includes('abort') || errStr.includes('dismiss')) {
+          // User canceled share
+          URL.revokeObjectURL(blobUrl);
+          return true;
+        }
+        console.warn('Web share failed, proceeding to direct download link:', webShareErr);
+      }
     }
 
+    // Direct Browser Download via <a> tag
     const link = document.createElement('a');
     link.href = blobUrl;
     link.download = fileName;
+    link.style.display = 'none';
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    
+    setTimeout(() => {
+      if (document.body.contains(link)) {
+        document.body.removeChild(link);
+      }
+      URL.revokeObjectURL(blobUrl);
+    }, 2000);
+
     return true;
+
   } catch (webErr) {
-    console.error('خطأ في التنزيل عبر المتصفح:', webErr);
-    alert('⚠️ حدث خطأ أثناء تنزيل الملف في المتصفح.');
+    console.error('All file export and download attempts failed:', webErr);
+    alert('⚠️ تعذر إكمال تنزيل الملف بشكل تلقائي. يرجى إعادة المحاولة.');
     return false;
   }
 }
