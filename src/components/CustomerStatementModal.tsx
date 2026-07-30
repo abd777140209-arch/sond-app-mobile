@@ -11,6 +11,7 @@ import { Capacitor } from '@capacitor/core';
 import { Customer, Invoice, Payment } from '../types';
 import { soundManager } from '../utils/sound';
 import { saveAndShareFile } from '../utils/fileExport';
+import { getSafeHtml2CanvasOptions } from '../utils/pdfHelper';
 
 interface CustomerStatementModalProps {
   isOpen: boolean;
@@ -89,12 +90,7 @@ export default function CustomerStatementModal({
 
     try {
       const element = statementRef.current;
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff'
-      });
+      const canvas = await html2canvas(element, getSafeHtml2CanvasOptions());
 
       const imgData = canvas.toDataURL('image/png');
       const imgWidth = 210; // A4 width in mm

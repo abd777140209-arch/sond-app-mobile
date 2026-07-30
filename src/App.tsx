@@ -47,6 +47,10 @@ import UsersComponent from './components/Users';
 import SaaSActivator from './components/SaaSActivator';
 import BiometricLockModal from './components/BiometricLockModal';
 import FloatingCalculator from './components/FloatingCalculator';
+import SanadVoiceAssistant from './components/SanadVoiceAssistant';
+import SanadDiagnosticScreen from './components/SanadDiagnosticScreen';
+import SanadPhoneLedger from './components/SanadPhoneLedger';
+import SanadDeviceReceipt from './components/SanadDeviceReceipt';
 import PinCheckModal from './components/PinCheckModal';
 import DeveloperPortalModal from './components/DeveloperPortalModal';
 
@@ -252,6 +256,7 @@ export default function App() {
     return localStorage.getItem('smart_accounting_privacy_mode') === 'true';
   });
   const [showPrivacyPinModal, setShowPrivacyPinModal] = useState<boolean>(false);
+  const [showSanadAssistant, setShowSanadAssistant] = useState<boolean>(false);
 
   const [isCashierMode, setIsCashierMode] = useState<boolean>(() => {
     return localStorage.getItem('smart_accounting_cashier_mode') === 'true';
@@ -1078,6 +1083,42 @@ export default function App() {
               />
             )}
 
+            {activeTab === 'diagnostic' && (
+              <SanadDiagnosticScreen
+                products={products}
+                currency={settings.currency}
+                onNavigateToPOSWithItems={(items) => {
+                  setActiveTab('pos');
+                  soundManager.playSuccessChime();
+                }}
+                onNavigateToMaintenanceWithProblem={(problem, notes) => {
+                  setActiveTab('maintenance');
+                  soundManager.playSuccessChime();
+                }}
+              />
+            )}
+
+            {activeTab === 'phone_ledger' && (
+              <SanadPhoneLedger
+                customers={customers}
+                transactions={transactions}
+                settings={settings}
+                onSelectCustomerStatement={(customer) => {
+                  setActiveTab('customers');
+                  soundManager.playSuccessChime();
+                }}
+              />
+            )}
+
+            {activeTab === 'device_receipt' && (
+              <SanadDeviceReceipt
+                userRole={currentUser?.role || 'admin'}
+                currentUser={currentUser}
+                settings={settings}
+                onAddMaintenanceOrder={handleAddMaintenanceOrder}
+              />
+            )}
+
             {activeTab === 'employees' && (
               <Employees
                 employees={employees}
@@ -1163,6 +1204,39 @@ export default function App() {
       )}
 
       <FloatingCalculator />
+
+      {/* 🎙️ Sanad AI Voice Assistant Floating Button */}
+      <div className="fixed bottom-24 left-6 z-50 no-print">
+        <button
+          onClick={() => {
+            soundManager.playScanBeep();
+            setShowSanadAssistant(!showSanadAssistant);
+          }}
+          className={`p-3.5 rounded-full shadow-2xl transition-all duration-300 flex items-center justify-center cursor-pointer border-2 border-white dark:border-slate-800 ${
+            showSanadAssistant
+              ? 'bg-rose-600 hover:bg-rose-700 text-white scale-110'
+              : 'bg-gradient-to-r from-emerald-500 to-teal-700 hover:from-emerald-600 hover:to-teal-800 text-slate-950 shadow-emerald-500/30 hover:scale-105 font-black'
+          }`}
+          title="مساعد سند الذكي (صوتي ونصي)"
+        >
+          <span className="relative flex items-center justify-center">
+            <span className="text-sm font-black flex items-center gap-1 text-white">
+              🎙️ <span className="hidden sm:inline text-xs font-bold">سند الذكي</span>
+            </span>
+          </span>
+        </button>
+      </div>
+
+      {/* 🎙️ Sanad AI Voice Assistant Modal */}
+      {showSanadAssistant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-3 sm:p-6 animate-fadeIn no-print">
+          <div className="w-full max-w-lg h-[80vh] bg-white rounded-2xl shadow-2xl overflow-hidden relative border border-slate-200">
+            <SanadVoiceAssistant 
+              onClose={() => setShowSanadAssistant(false)}
+            />
+          </div>
+        </div>
+      )}
 
       <PinCheckModal
         isOpen={showPinCheckModal}

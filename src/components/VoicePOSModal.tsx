@@ -75,9 +75,17 @@ export default function VoicePOSModal({
           };
 
           recognition.onerror = (event: any) => {
-            console.warn('Speech recognition error:', event.error);
-            setVoiceError('💡 المايكروفون غير متاح مباشر في هذه البيئة. يمكنك كتابة الأوامر أو الضغط على الأزرار بالأسفل.');
             setIsListening(false);
+            if (event.error === 'aborted' || event.error === 'no-speech') {
+              // Ignore silent aborts or timeouts
+              return;
+            }
+            console.warn('Speech recognition error:', event.error);
+            if (event.error === 'not-allowed') {
+              setVoiceError('⚠️ تم رفض إذن المايكروفون. يرجى السماح بالوصول إلى المايكروفون من إعدادات المتصفح أو التطبيق، أو كتابة الأمر نصياً بالأسفل.');
+            } else {
+              setVoiceError('💡 المايكروفون غير متاح مباشر في هذه البيئة. يمكنك كتابة الأوامر أو الضغط على الأزرار بالأسفل.');
+            }
           };
 
           recognition.onend = () => {
@@ -109,6 +117,15 @@ export default function VoicePOSModal({
     setTranscript('');
     setParsedFeedback([]);
     lastProcessedRef.current = '';
+
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+      } catch (err) {
+        console.warn('Microphone permission request failed:', err);
+      }
+    }
 
     if (recognitionRef.current) {
       try {

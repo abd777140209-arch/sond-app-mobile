@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { getSafeHtml2CanvasOptions } from '../utils/pdfHelper';
 import { motion } from 'motion/react';
 import { 
   Smartphone, 
@@ -107,13 +108,7 @@ export default function Maintenance({
 
       reportElement.style.display = 'block';
 
-      const canvas = await html2canvas(reportElement, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#FFFFFF',
-        windowWidth: 850
-      });
+      const canvas = await html2canvas(reportElement, getSafeHtml2CanvasOptions({ windowWidth: 850 }));
 
       reportElement.style.display = 'none';
 

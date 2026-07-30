@@ -15,6 +15,7 @@ import { Invoice, SystemSettings, Customer } from '../types';
 import { soundManager } from '../utils/sound';
 import { requestStoragePermissionOnDemand } from '../utils/androidPermissions';
 import { saveAndShareFile } from '../utils/fileExport';
+import { getSafeHtml2CanvasOptions } from '../utils/pdfHelper';
 
 interface InvoiceModalProps {
   invoice: Invoice | null;
@@ -66,33 +67,8 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
 
   if (!invoice) return null;
 
-  const getHtml2CanvasOptions = () => ({
-    scale: 2,
-    useCORS: true,
-    backgroundColor: '#ffffff',
-    logging: false,
+  const getHtml2CanvasOptions = () => getSafeHtml2CanvasOptions({
     onclone: (clonedDoc: Document) => {
-      const styleElements = clonedDoc.querySelectorAll('style');
-      styleElements.forEach((styleEl) => {
-        if (styleEl.textContent && styleEl.textContent.includes('oklch')) {
-          styleEl.textContent = styleEl.textContent.replace(/oklch\([^)]+\)/g, 'rgb(30, 41, 59)');
-        }
-      });
-
-      const allClonedElements = clonedDoc.querySelectorAll('*');
-      allClonedElements.forEach((node) => {
-        const el = node as HTMLElement;
-        if (el.style) {
-          for (let i = 0; i < el.style.length; i++) {
-            const propName = el.style[i];
-            const propVal = el.style.getPropertyValue(propName);
-            if (propVal && propVal.includes('oklch')) {
-              el.style.setProperty(propName, 'rgb(30, 41, 59)');
-            }
-          }
-        }
-      });
-
       const origCard = document.getElementById('invoice-printable-card');
       const clonedCard = clonedDoc.getElementById('invoice-printable-card');
       if (origCard && clonedCard) {
@@ -109,12 +85,18 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
             const computed = window.getComputedStyle(origEl);
             if (computed.color && !computed.color.includes('oklch')) {
               clonedEl.style.color = computed.color;
+            } else if (computed.color && computed.color.includes('oklch')) {
+              clonedEl.style.color = '#1e293b';
             }
             if (computed.backgroundColor && !computed.backgroundColor.includes('oklch') && computed.backgroundColor !== 'rgba(0, 0, 0, 0)') {
               clonedEl.style.backgroundColor = computed.backgroundColor;
+            } else if (computed.backgroundColor && computed.backgroundColor.includes('oklch')) {
+              clonedEl.style.backgroundColor = '#ffffff';
             }
             if (computed.borderColor && !computed.borderColor.includes('oklch')) {
               clonedEl.style.borderColor = computed.borderColor;
+            } else if (computed.borderColor && computed.borderColor.includes('oklch')) {
+              clonedEl.style.borderColor = '#e2e8f0';
             }
           }
         });

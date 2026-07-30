@@ -24,7 +24,11 @@ import {
   Eye, 
   EyeOff, 
   AlertCircle,
-  Shield
+  Shield,
+  Sparkles,
+  Coins,
+  Smartphone,
+  Bot
 } from 'lucide-react';
 import { SystemSettings, MaintenanceOrder, Product, UserAccount } from '../types';
 import { soundManager } from '../utils/sound';
@@ -87,6 +91,37 @@ export default function Navigation({
 
   // Secondary options in "More" Drawer for Mobile Mode
   const secondaryTabs = [
+    {
+      id: 'assistant',
+      label: 'المساعد الصوتي والذكي (Sanad AI)',
+      sublabel: 'التحكم الصوتي، استعلامات الصيانة وتفليش الهواتف',
+      icon: Bot,
+      color: 'blue',
+      badge: 'صوتي 🎙️'
+    },
+    {
+      id: 'device_receipt',
+      label: 'كارت استلام هاتف للصيانة',
+      sublabel: 'توثيق أجهزة الصيانة، البرمجة والتفليش',
+      icon: Smartphone,
+      color: 'blue'
+    },
+    {
+      id: 'diagnostic',
+      label: 'التشخيص والمخزون الذكي',
+      sublabel: 'فحص الأعطال الميكانيكية وربط قطع الغيار',
+      icon: Sparkles,
+      color: 'indigo',
+      badge: 'الذكي ✨'
+    },
+    {
+      id: 'phone_ledger',
+      label: 'كشوف الحسابات وتعدد العملات',
+      sublabel: 'ديون العملاء ومقبوضات العملات اللحظية',
+      icon: Coins,
+      color: 'emerald',
+      badge: 'تعدد العملات 💰'
+    },
     {
       id: 'users',
       label: 'المستخدمين والصلاحيات (Audit)',
@@ -371,6 +406,103 @@ export default function Navigation({
                 {activeMaintenanceCount}
               </span>
             )}
+          </button>
+
+          {/* Sanad AI Voice Assistant */}
+          <button
+            id="tab_trigger_assistant"
+            onClick={() => handleTabSelect('assistant')}
+            className={`group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs transition-all cursor-pointer w-full text-right ${
+              activeTab === 'assistant'
+                ? 'bg-blue-50/90 text-blue-950 font-bold border-r-4 border-blue-600 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                activeTab === 'assistant'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white'
+              }`}>
+                <Bot className="w-4 h-4" />
+              </div>
+              <span>المساعد الذكي سند (AI)</span>
+            </div>
+            <span className="px-2 py-0.5 text-[9px] font-bold bg-blue-600 text-white rounded-full">
+              صوتي 🎙️
+            </span>
+          </button>
+
+          {/* Diagnostic & Inventory */}
+          <button
+            id="tab_trigger_diagnostic"
+            onClick={() => handleTabSelect('diagnostic')}
+            className={`group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs transition-all cursor-pointer w-full text-right ${
+              activeTab === 'diagnostic'
+                ? 'bg-indigo-50/90 text-indigo-950 font-bold border-r-4 border-indigo-600 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                activeTab === 'diagnostic'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white'
+              }`}>
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <span>التشخيص والمخزون الذكي</span>
+            </div>
+            <span className="px-2 py-0.5 text-[9px] font-bold bg-indigo-600 text-white rounded-full">
+              الذكي ✨
+            </span>
+          </button>
+
+          {/* Fast Ledger & Multi-Currency */}
+          <button
+            id="tab_trigger_phone_ledger"
+            onClick={() => handleTabSelect('phone_ledger')}
+            className={`group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs transition-all cursor-pointer w-full text-right ${
+              activeTab === 'phone_ledger'
+                ? 'bg-emerald-50/90 text-emerald-950 font-bold border-r-4 border-emerald-600 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                activeTab === 'phone_ledger'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white'
+              }`}>
+                <Coins className="w-4 h-4" />
+              </div>
+              <span>كشوف الحسابات والعملات</span>
+            </div>
+            <span className="px-2 py-0.5 text-[9px] font-bold bg-emerald-600 text-white rounded-full">
+              تعدد العملات 💰
+            </span>
+          </button>
+
+          {/* Device Receipt Card */}
+          <button
+            id="tab_trigger_device_receipt"
+            onClick={() => handleTabSelect('device_receipt')}
+            className={`group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs transition-all cursor-pointer w-full text-right ${
+              activeTab === 'device_receipt'
+                ? 'bg-blue-50/90 text-blue-950 font-bold border-r-4 border-blue-600 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                activeTab === 'device_receipt'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white'
+              }`}>
+                <Smartphone className="w-4 h-4" />
+              </div>
+              <span>كارت استلام هاتف صيانة</span>
+            </div>
           </button>
 
           {/* Users & Roles (Audit Log) */}
