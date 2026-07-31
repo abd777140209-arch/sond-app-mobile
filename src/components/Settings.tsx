@@ -313,7 +313,10 @@ export default function Settings({
           quality: 90,
           allowEditing: false,
           resultType: CameraResultType.Base64,
-          source: CameraSource.Photos
+          source: CameraSource.Prompt,
+          promptLabelHeader: 'اختيار شعار المنشأة',
+          promptLabelPhoto: 'اختيار من معرض الصور',
+          promptLabelPicture: 'التقاط بواسطة الكاميرا'
         });
 
         if (image && image.base64String) {
@@ -859,7 +862,13 @@ export default function Settings({
 
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => {
+                soundManager.playScanBeep();
+                if (fileInputRef.current) {
+                  fileInputRef.current.value = '';
+                  fileInputRef.current.click();
+                }
+              }}
               className="py-3 px-3 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition cursor-pointer flex items-center justify-center gap-2 active:scale-95"
             >
               <Upload className="w-4 h-4 text-blue-600" />
@@ -869,7 +878,7 @@ export default function Settings({
               type="file"
               ref={fileInputRef}
               onChange={handleFileUpload}
-              accept=".json"
+              accept=".json,application/json,text/plain,text/json,*/*"
               className="hidden"
             />
 
@@ -977,7 +986,7 @@ export default function Settings({
                   <input 
                     type="file" 
                     ref={logoInputRef}
-                    accept="image/png, image/jpeg, image/svg+xml" 
+                    accept="image/*" 
                     onChange={handleLogoFileChange} 
                     className="hidden" 
                   />

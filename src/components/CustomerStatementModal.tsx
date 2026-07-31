@@ -119,12 +119,8 @@ export default function CustomerStatementModal({
   };
 
   const handlePrint = async () => {
-    if (Capacitor.isNativePlatform() || (window as any).Capacitor) {
-      await generatePDFAndShare();
-    } else {
-      soundManager.playScanBeep();
-      window.print();
-    }
+    soundManager.playScanBeep();
+    await generatePDFAndShare();
   };
 
   // Phone clean formatting

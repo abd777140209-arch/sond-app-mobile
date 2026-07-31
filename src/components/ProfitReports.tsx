@@ -54,6 +54,7 @@ import {
 } from 'recharts';
 import { Invoice, Product, Transaction, Customer, SystemSettings, MaintenanceOrder } from '../types';
 import { saveAndShareFile } from '../utils/fileExport';
+import { soundManager } from '../utils/sound';
 
 interface ProfitReportsProps {
   invoices: Invoice[];
@@ -173,6 +174,64 @@ export default function ProfitReports({
       });
     } catch (error) {
       console.error('Error generating PDF:', error);
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
+  const handleExportSummaryPDF = async () => {
+    try {
+      setIsExportingPDF(true);
+      soundManager.playSuccessChime();
+      const reportElement = document.getElementById('profit_reports_view');
+      if (!reportElement) {
+        alert('عذراً، لم يتم العثور على عنصر التقرير.');
+        setIsExportingPDF(false);
+        return;
+      }
+
+      const canvas = await html2canvas(reportElement, getSafeHtml2CanvasOptions({ windowWidth: 1000 }));
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft >= 1) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      const fileName = `تقرير_الأرباح_والمبيعات_${todayStr}.pdf`;
+      const base64Data = pdf.output('datauristring').split(',')[1];
+
+      await saveAndShareFile({
+        fileName,
+        data: base64Data,
+        isBase64: true,
+        mimeType: 'application/pdf',
+        title: 'تقرير الأرباح والمبيعات - سند',
+        text: `تقرير الأرباح والمبيعات المصدّر من تطبيق سند المحاسبي بتاريخ ${todayStr}`
+      });
+    } catch (error) {
+      console.error('Error generating Summary PDF:', error);
+      alert('⚠️ تعذر تصدير تقرير PDF، يرجى إعادة المحاولة.');
     } finally {
       setIsExportingPDF(false);
     }
@@ -544,6 +603,15 @@ export default function ProfitReports({
             >
               {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-blue-600" />}
               <span>{copied ? 'تم نسخ التقرير' : 'نسخ الملخص'}</span>
+            </button>
+
+            <button
+              onClick={handleExportSummaryPDF}
+              disabled={isExportingPDF}
+              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md no-print disabled:opacity-50"
+            >
+              {isExportingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              <span>{isExportingPDF ? 'جاري التصدير...' : 'تصدير PDF للملخص'}</span>
             </button>
 
             {reportSubTab === 'maintenance' && (

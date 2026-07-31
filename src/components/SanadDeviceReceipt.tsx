@@ -20,8 +20,12 @@ import {
   Wifi,
   WifiOff,
   RefreshCw,
-  Share2
+  Share2,
+  FileDown,
+  Loader2
 } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import { MaintenanceOrder, UserAccount, SystemSettings } from '../types';
 import { soundManager } from '../utils/sound';
 import { 
@@ -33,6 +37,8 @@ import {
   generateWhatsAppReceiptLink, 
   printReceiptHTML 
 } from '../services/ReceiptPrinter';
+import { saveAndShareFile } from '../utils/fileExport';
+import { getSafeHtml2CanvasOptions } from '../utils/pdfHelper';
 
 export interface SanadDeviceReceiptProps {
   apiBaseUrl?: string;
@@ -68,6 +74,7 @@ export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
 
   const [savedOrder, setSavedOrder] = useState<any | null>(null);
   const [isSaved, setIsSaved] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
 
   // 🌐 Mointor online/offline state & Auto-Sync
   useEffect(() => {
@@ -210,6 +217,65 @@ export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
       settings?.currency || 'ريال'
     );
     window.open(url, '_blank');
+  };
+
+  const handleExportPDF = async () => {
+    if (!savedOrder || isExportingPDF) return;
+    soundManager.playSuccessChime();
+    setIsExportingPDF(true);
+
+    try {
+      const element = document.getElementById('receipt-printable-card');
+      if (!element) {
+        alert('⚠️ تعذر العثور على بطاقة الاستلام للتصدير.');
+        return;
+      }
+
+      const canvas = await html2canvas(element, getSafeHtml2CanvasOptions({
+        onclone: (clonedDoc: Document) => {
+          const origCard = document.getElementById('receipt-printable-card');
+          const clonedCard = clonedDoc.getElementById('receipt-printable-card');
+          if (origCard && clonedCard) {
+            clonedCard.style.color = '#1e293b';
+            clonedCard.style.backgroundColor = '#ffffff';
+            clonedCard.style.padding = '16px';
+            clonedCard.style.borderRadius = '12px';
+            clonedCard.style.border = '1px solid #cbd5e1';
+          }
+        }
+      }));
+
+      const imgData = canvas.toDataURL('image/png');
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+
+      const pdfWidth = 80;
+      const pdfHeight = (imgHeight * pdfWidth) / imgWidth;
+
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [pdfWidth, pdfHeight + 2],
+      });
+
+      pdf.addImage(imgData, 'PNG', 0, 1, pdfWidth, pdfHeight);
+      const fileName = `كارت_استلام_${savedOrder.ticketNumber}.pdf`;
+      const base64Data = pdf.output('datauristring').split(',')[1];
+
+      await saveAndShareFile({
+        fileName,
+        data: base64Data,
+        isBase64: true,
+        mimeType: 'application/pdf',
+        title: `كارت استلام ${savedOrder.ticketNumber}`,
+        text: `كارت استلام جهاز صيانة ${savedOrder.deviceModel} للعميل ${savedOrder.customerName}`
+      });
+    } catch (err) {
+      console.error('فشل تصدير كارت الاستلام كـ PDF:', err);
+      alert('❌ حدث خطأ أثناء تصدير ملف PDF، يرجى المحاولة مرة أخرى.');
+    } finally {
+      setIsExportingPDF(false);
+    }
   };
 
   return (
@@ -444,7 +510,7 @@ export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
             </div>
 
             {savedOrder ? (
-              <div className="bg-amber-50/50 dark:bg-slate-900 p-4 rounded-xl border border-amber-200 dark:border-slate-700 space-y-3 font-mono text-xs">
+              <div id="receipt-printable-card" className="bg-amber-50/50 dark:bg-slate-900 p-4 rounded-xl border border-amber-200 dark:border-slate-700 space-y-3 font-mono text-xs">
                 <div className="text-center border-b border-dashed border-amber-300 dark:border-slate-700 pb-2">
                   <h4 className="font-black text-slate-900 dark:text-white text-sm">{settings?.companyName || 'مركز سند لصيانة وبرمجة الهواتف'}</h4>
                   <p className="text-[10px] text-slate-500">رقم السند: {savedOrder.ticketNumber}</p>
@@ -478,16 +544,32 @@ export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
           {savedOrder && (
             <div className="space-y-2 pt-2">
               <button
+                type="button"
                 onClick={handlePrint}
-                className="w-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold py-2.5 rounded-xl flex items-center justify-center gap-2 shadow cursor-pointer transition"
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold py-2.5 rounded-xl flex items-center justify-center gap-2 shadow cursor-pointer transition active:scale-98"
               >
                 <Printer className="w-4 h-4" />
                 <span>طباعة الكارت الحراري</span>
               </button>
 
               <button
+                type="button"
+                onClick={handleExportPDF}
+                disabled={isExportingPDF}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 rounded-xl flex items-center justify-center gap-2 shadow cursor-pointer transition active:scale-98"
+              >
+                {isExportingPDF ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <FileDown className="w-4 h-4" />
+                )}
+                <span>تصدير كارت الاستلام PDF (حفظ للتلفون)</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleWhatsAppShare}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 rounded-xl flex items-center justify-center gap-2 shadow cursor-pointer transition"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 rounded-xl flex items-center justify-center gap-2 shadow cursor-pointer transition active:scale-98"
               >
                 <Share2 className="w-4 h-4" />
                 <span>إرسال السند عبر الواتساب</span>
