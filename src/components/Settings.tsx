@@ -44,6 +44,7 @@ import {
 } from 'lucide-react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
+import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { SystemSettings, AppTheme, CardShape, DisplayDensity, CurrencyRate, BackupFrequency } from '../types';
 import { ensureCustomFolder } from '../utils/fileExport';
 import { DEFAULT_CURRENCIES } from '../utils/seedData';
@@ -305,9 +306,82 @@ export default function Settings({
     });
   };
 
-  // 🎯 دالة رفع ومعالجة الشعار الحقيقية عبر الكاميرا/المعرض المباشر في أندرويد والمتصفح
+  // 🎯 دالة معالجة وضغط صورة الشعار
+  const processAndSetLogo = (base64Data: string) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const maxDim = 320;
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        }
+      } else {
+        if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressedBase64 = canvas.toDataURL('image/png');
+        setStoreLogoUrl(compressedBase64);
+        localStorage.setItem('smart_accounting_company_logo', compressedBase64);
+        localStorage.setItem('sanad_store_logo', compressedBase64);
+        soundManager.playSuccessChime();
+      }
+    };
+    img.src = base64Data;
+  };
+
+  // 🎯 دالة رفع ومعالجة الشعار الحقيقية عبر منتقي الصور/الكاميرا بداخل الهواتف أندرويد والمتصفح
   const handleLogoClick = async () => {
-    if (Capacitor.isNativePlatform() || (window as any).Capacitor?.isNativePlatform?.()) {
+    soundManager.playScanBeep();
+
+    if (Capacitor.isNativePlatform() || (window as any).Capacitor) {
+      // 1. محاولة فتح منتقي صور الهاتف المباشر بـ FilePicker (أندرويد)
+      try {
+        const result = await FilePicker.pickFiles({
+          types: ['image/*'],
+          readData: true,
+        });
+
+        if (result.files && result.files.length > 0) {
+          const pickedFile = result.files[0];
+          let base64Data = '';
+
+          if (pickedFile.data) {
+            base64Data = pickedFile.data.startsWith('data:')
+              ? pickedFile.data
+              : `data:${pickedFile.mimeType || 'image/png'};base64,${pickedFile.data}`;
+          } else if (pickedFile.path) {
+            const res = await fetch(pickedFile.path);
+            const blob = await res.blob();
+            base64Data = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onload = (ev) => resolve((ev.target?.result as string) || '');
+              reader.readAsDataURL(blob);
+            });
+          }
+
+          if (base64Data) {
+            processAndSetLogo(base64Data);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('FilePicker image pick error/cancel:', err);
+      }
+
+      // 2. محاولة استخدام كاميرا/معرض الكاباسيتور
       try {
         const image = await Camera.getPhoto({
           quality: 90,
@@ -322,47 +396,17 @@ export default function Settings({
         if (image && image.base64String) {
           const format = image.format || 'png';
           const base64Data = `data:image/${format};base64,${image.base64String}`;
-          
-          const img = new Image();
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const maxDim = 320;
-            let width = img.width;
-            let height = img.height;
-
-            if (width > height) {
-              if (width > maxDim) {
-                height = Math.round((height * maxDim) / width);
-                width = maxDim;
-              }
-            } else {
-              if (height > maxDim) {
-                width = Math.round((width * maxDim) / height);
-                height = maxDim;
-              }
-            }
-
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.drawImage(img, 0, 0, width, height);
-              const compressedBase64 = canvas.toDataURL('image/png');
-              setStoreLogoUrl(compressedBase64);
-              localStorage.setItem('smart_accounting_company_logo', compressedBase64);
-              localStorage.setItem('sanad_store_logo', compressedBase64);
-              soundManager.playSuccessChime();
-            }
-          };
-          img.src = base64Data;
+          processAndSetLogo(base64Data);
           return;
         }
       } catch (err) {
-        console.warn('تجاوز منتقي الصور بـ Capacitor أو خطأ، جاري الرجوع لمنتقي الملفات القياسي:', err);
+        console.warn('Camera getPhoto error/cancel:', err);
       }
     }
 
+    // 3. الرجوع لمنتقي الملفات القياسي للويب والمتصفح
     if (logoInputRef.current) {
+      logoInputRef.current.value = '';
       logoInputRef.current.click();
     }
   };
@@ -503,6 +547,70 @@ export default function Settings({
       }
     };
     reader.readAsText(file);
+  };
+
+  const handleRestoreWithFilePicker = async () => {
+    soundManager.playScanBeep();
+    if (Capacitor.isNativePlatform() || (window as any).Capacitor) {
+      try {
+        const result = await FilePicker.pickFiles({
+          types: ['application/json', 'text/plain', '*/*'],
+          readData: true,
+        });
+
+        if (result.files && result.files.length > 0) {
+          const pickedFile = result.files[0];
+          let jsonContent = '';
+
+          if (pickedFile.data) {
+            try {
+              jsonContent = atob(pickedFile.data);
+            } catch {
+              jsonContent = pickedFile.data;
+            }
+          } else if (pickedFile.path) {
+            const res = await fetch(pickedFile.path);
+            jsonContent = await res.text();
+          }
+
+          if (jsonContent) {
+            if (!confirm('⚠️ تنبيه هام: استعادة النسخة الاحتياطية ستقوم باستبدال البيانات الحالية بالبيانات الموجودة بداخل الملف المختار. هل أنت متأكد من الاستمرار؟')) {
+              return;
+            }
+            const json = JSON.parse(jsonContent);
+            const restoreRes = onRestoreData(json);
+            const handleResult = (ok: boolean) => {
+              if (ok) {
+                soundManager.playSuccessChime();
+                alert('✓ تم استعادة النسخة الاحتياطية وإعادة تشغيل النظام بنجاح تام!');
+                window.location.reload();
+              } else {
+                soundManager.playWarningBeep();
+                alert('❌ فشل استعادة البيانات: الملف المرفق لا يحتوي على بنية بيانات محاسبية صحيحة.');
+              }
+            };
+
+            if (restoreRes instanceof Promise) {
+              restoreRes.then(handleResult).catch((err) => {
+                soundManager.playWarningBeep();
+                console.error("Backup Restore Error: ", err);
+                alert('❌ عذراً، حدث خطأ أثناء تطبيق النسخة الاحتياطية.');
+              });
+            } else {
+              handleResult(restoreRes);
+            }
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Capacitor FilePicker failed or cancelled, falling back to standard input:', err);
+      }
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+      fileInputRef.current.click();
+    }
   };
 
   return (
@@ -862,13 +970,7 @@ export default function Settings({
 
             <button
               type="button"
-              onClick={() => {
-                soundManager.playScanBeep();
-                if (fileInputRef.current) {
-                  fileInputRef.current.value = '';
-                  fileInputRef.current.click();
-                }
-              }}
+              onClick={handleRestoreWithFilePicker}
               className="py-3 px-3 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition cursor-pointer flex items-center justify-center gap-2 active:scale-95"
             >
               <Upload className="w-4 h-4 text-blue-600" />
@@ -1543,32 +1645,117 @@ export default function Settings({
       {/* Modal: Custom Backup Folder Picker */}
       {showFolderModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-xl border border-slate-200 animate-in fade-in zoom-in-95">
-            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-              <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
-                <FolderTree className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">تحديد مجلد النسخ الاحتياطي المحلي</h3>
-                <p className="text-[11px] text-slate-500">اختر اسم أو مسار المجلد المفضل بذاكرة الهاتف (Documents)</p>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-xl border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">
+                  <FolderTree className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">تحديد مجلد الحفظ في الهاتف (اختياري)</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">اختر المجلد المفضل لحفظ النسخ الاحتياطية بذاكرة الجوال</p>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-700 block">اسم المجلد بذاكرة المستندات (Documents):</label>
-              <input
-                type="text"
-                value={folderInputVal}
-                onChange={(e) => setFolderInputVal(e.target.value)}
-                placeholder="Documents/SanadAccounting"
-                className="w-full text-xs p-3 rounded-xl border border-slate-300 font-mono text-slate-800 dir-ltr text-right focus:ring-2 focus:ring-emerald-500"
-              />
-              <p className="text-[10px] text-slate-400">
-                المسار الافتراضي برمجياً بداخل ذاكرة الجوال: <span className="font-mono text-emerald-700 font-bold">Documents/SanadAccounting</span>
-              </p>
+            <div className="space-y-3">
+              {/* Native Folder Picker Button */}
+              <button
+                type="button"
+                onClick={async () => {
+                  soundManager.playScanBeep();
+                  try {
+                    const result = await FilePicker.pickFiles({
+                      types: ['*/*'],
+                      readData: false,
+                    });
+                    if (result.files && result.files.length > 0) {
+                      const file = result.files[0];
+                      if (file.path) {
+                        const folderPath = file.path.substring(0, file.path.lastIndexOf('/'));
+                        if (folderPath) {
+                          setFolderInputVal(folderPath);
+                          soundManager.playSuccessChime();
+                          return;
+                        }
+                      }
+                      if (file.name) {
+                        setFolderInputVal(`Documents/${file.name.replace(/\.[^/.]+$/, '')}`);
+                      }
+                    }
+                  } catch (err) {
+                    console.warn('FilePicker folder selection note:', err);
+                  }
+                }}
+                className="w-full py-2.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-xs active:scale-98"
+              >
+                <FolderTree className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span>📂 استعراض واختيار مجلد من الهاتف (اختياري)</span>
+              </button>
+
+              {/* Quick Preset Buttons */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block">اختيار سريع لمجلدات شائعة:</label>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.playScanBeep();
+                      setFolderInputVal('Documents/SanadAccounting');
+                    }}
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
+                      folderInputVal === 'Documents/SanadAccounting'
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    مستندات التطبيق (المستحسن)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.playScanBeep();
+                      setFolderInputVal('Downloads/SanadAccounting');
+                    }}
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
+                      folderInputVal === 'Downloads/SanadAccounting'
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    مجلد التنزيلات (Downloads)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.playScanBeep();
+                      setFolderInputVal('SanadAccounting/Backups');
+                    }}
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
+                      folderInputVal === 'SanadAccounting/Backups'
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    الذاكرة الرئيسية (Backups)
+                  </button>
+                </div>
+              </div>
+
+              {/* Manual Input */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">أو تخصيص المسار يدوياً:</label>
+                <input
+                  type="text"
+                  value={folderInputVal}
+                  onChange={(e) => setFolderInputVal(e.target.value)}
+                  placeholder="Documents/SanadAccounting"
+                  className="w-full text-xs p-3 rounded-xl border border-slate-300 dark:border-slate-600 font-mono text-slate-800 dark:text-white bg-white dark:bg-slate-900 dir-ltr text-right focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
             </div>
 
-            <div className="flex gap-2 pt-2 border-t border-slate-100">
+            <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
               <button
                 type="button"
                 onClick={async () => {
@@ -1578,14 +1765,14 @@ export default function Settings({
                   setShowFolderModal(false);
                   soundManager.playSuccessChime();
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer active:scale-98"
               >
-                حفظ المجلد المختار
+                حفظ وتثبيت المجلد
               </button>
               <button
                 type="button"
                 onClick={() => setShowFolderModal(false)}
-                className="py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+                className="py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-bold transition cursor-pointer"
               >
                 إلغاء
               </button>
@@ -1597,33 +1784,55 @@ export default function Settings({
       {/* Modal: Google Drive Account Selector */}
       {showDriveModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-xl border border-slate-200 animate-in fade-in zoom-in-95">
-            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-              <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
-                <Cloud className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">تحديد حساب Google Drive للمزامنة</h3>
-                <p className="text-[11px] text-slate-500">اختر البريد الإلكتروني المراد ربط النسخ الاحتياطي عليه</p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-700 block">بريد حساب Google Drive:</label>
-              <input
-                type="email"
-                value={driveAccountInputVal}
-                onChange={(e) => setDriveAccountInputVal(e.target.value)}
-                placeholder="example@gmail.com"
-                className="w-full text-xs p-3 rounded-xl border border-slate-300 font-mono text-slate-800 dir-ltr text-right focus:ring-2 focus:ring-amber-500"
-              />
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                <span className="text-[10px] text-slate-500 font-bold">ملاحظة:</span>
-                <span className="text-[10px] text-slate-500">سيتم مزامنة واستعادة النسخة السحابية على هذا الحساب تلقائياً.</span>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-xl border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400">
+                  <Cloud className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">حساب Google Drive المرتبط (اختياري)</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">حدد أو اختر حساب Google المرتبط بهاتفك للنسخ السحابي</p>
+                </div>
               </div>
             </div>
 
-            <div className="flex gap-2 pt-2 border-t border-slate-100">
+            <div className="space-y-3">
+              {/* Account selection helper button */}
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.playScanBeep();
+                  const promptVal = prompt('أدخل البريد الإلكتروني لحساب Google المسجل في هاتفك (اختياري):', driveAccountInputVal !== 'حساب Google Drive المرتبط' ? driveAccountInputVal : '');
+                  if (promptVal !== null && promptVal.trim()) {
+                    setDriveAccountInputVal(promptVal.trim());
+                    soundManager.playSuccessChime();
+                  }
+                }}
+                className="w-full py-2.5 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800 text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-xs active:scale-98"
+              >
+                <UserCheck className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                <span>🔍 اختيار/تحديد حساب Google المسجل بالهاتف</span>
+              </button>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">بريد حساب Google Drive (Google Account):</label>
+                <input
+                  type="email"
+                  value={driveAccountInputVal}
+                  onChange={(e) => setDriveAccountInputVal(e.target.value)}
+                  placeholder="example@gmail.com"
+                  className="w-full text-xs p-3 rounded-xl border border-slate-300 dark:border-slate-600 font-mono text-slate-800 dark:text-white bg-white dark:bg-slate-900 dir-ltr text-right focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[10.5px] text-slate-500 dark:text-slate-400 space-y-1">
+                <p className="font-bold text-slate-700 dark:text-slate-300">💡 معلوومة هامة:</p>
+                <p>ربط حساب Google اختياري كلياً. عند تفعيله، يتم حفظ نسخة احتياطية مشفرة بداخل المجلد السحابي لحسابك تلقائياً لضمان عدم ضياع البيانات عند تغيير الجوال.</p>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
               <button
                 type="button"
                 onClick={() => {
@@ -1632,14 +1841,14 @@ export default function Settings({
                   setShowDriveModal(false);
                   soundManager.playSuccessChime();
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition cursor-pointer active:scale-98"
               >
-                اعتماد حساب Google Drive
+                اعتماد وتثبيت الحساب
               </button>
               <button
                 type="button"
                 onClick={() => setShowDriveModal(false)}
-                className="py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+                className="py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-bold transition cursor-pointer"
               >
                 إلغاء
               </button>
