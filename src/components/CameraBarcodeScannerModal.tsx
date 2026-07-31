@@ -77,17 +77,32 @@ export default function CameraBarcodeScannerModal({
   }, [isOpen]);
 
   const stopScanner = async () => {
-    if (scannerRef.current) {
-      try {
+    try {
+      if (scannerRef.current) {
         if (scannerRef.current.isScanning) {
           await scannerRef.current.stop();
         }
         await scannerRef.current.clear();
-      } catch (e) {
-        console.warn('Error clearing camera scanner:', e);
-      } finally {
-        scannerRef.current = null;
       }
+    } catch (e) {
+      console.warn('Error clearing camera scanner:', e);
+    } finally {
+      scannerRef.current = null;
+    }
+    // Extra safety track cleanup for WebView and mobile web
+    try {
+      const container = document.getElementById(containerId);
+      if (container) {
+        const videoEls = container.getElementsByTagName('video');
+        for (let i = 0; i < videoEls.length; i++) {
+          const stream = videoEls[i].srcObject as MediaStream | null;
+          if (stream && stream.getTracks) {
+            stream.getTracks().forEach((track) => track.stop());
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Track cleanup exception:', e);
     }
   };
 

@@ -84,7 +84,8 @@ export default function Transactions({
   // Export current transactions ledger as CSV text
   const handleExportCSV = async () => {
     soundManager.playSuccessChime();
-    let csv = '\ufeff'; // UTF-8 BOM
+    // Explicit UTF-8 BOM prefix (\ufeff) to prevent Arabic text encoding corruption in Mobile Excel
+    let csv = '\ufeff';
     csv += 'المعرف,التاريخ والوقت,نوع القيد,البيان والوصف,المبلغ\n';
 
     filteredTransactions.forEach(t => {

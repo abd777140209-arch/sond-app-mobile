@@ -33,7 +33,7 @@ export interface CloudLicense {
   status: 'active' | 'suspended';
 }
 
-// Check if Firebase configuration is provided with a valid API key
+// Check if Firebase configuration is provided with a valid API key (Multi-tenant stores & SaaS Cloud Sync)
 export function isFirebaseConfigured(): boolean {
   const env = (import.meta as any).env || {};
   // 🎯 تضمين المفتاح المباشر لضمان عدم وجود قيمة فارغة عند تجميع تطبيق الـ APK

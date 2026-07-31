@@ -5,6 +5,7 @@
 
 import { Product, Customer, Invoice, Payment, Transaction, SystemSettings, CurrencyRate } from '../types';
 
+// Default system currencies supported in multi-currency transactions and invoices
 export const DEFAULT_CURRENCIES: CurrencyRate[] = [
   { id: 'YER', code: 'YER', name: 'الريال اليمني', symbol: 'ر.ي', exchangeRate: 1, isBase: true },
   { id: 'SAR', code: 'SAR', name: 'الريال السعودي', symbol: 'ر.س', exchangeRate: 140, isBase: false },

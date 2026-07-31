@@ -101,7 +101,13 @@ export default function BarcodeLabelPrinterModal({
   // Direct Browser Print
   const handleBrowserPrint = () => {
     soundManager.playScanBeep();
-    window.print();
+    try {
+      if (typeof window !== 'undefined') {
+        window.print();
+      }
+    } catch (e) {
+      console.warn('Browser print exception:', e);
+    }
   };
 
   if (!isOpen) return null;

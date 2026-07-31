@@ -129,7 +129,11 @@ export default function CustomerStatementModal({
     ? '967' + cleanPhone
     : cleanPhone;
 
-  const summaryText = `*كشف حساب عميل - ${storeName}*\nالعميل: *${customer.name}*\nرصيد المديونية النهائي: *${customer.totalDebt.toLocaleString()} ${currency}*\nتاريخ استحقاق الدين: *${customer.debtDueDate ? new Date(customer.debtDueDate).toLocaleDateString('ar-YE') : 'غير محدد'}*\nنقاط الولاء: *${customer.loyaltyPoints || 0} نقطة*`;
+  const formattedDueDate = customer.debtDueDate && !isNaN(new Date(customer.debtDueDate).getTime())
+    ? new Date(customer.debtDueDate).toLocaleDateString('ar-YE')
+    : 'غير محدد';
+
+  const summaryText = `*كشف حساب عميل - ${storeName}*\nالعميل: *${customer.name}*\nرصيد المديونية النهائي: *${customer.totalDebt.toLocaleString()} ${currency}*\nتاريخ استحقاق الدين: *${formattedDueDate}*\nنقاط الولاء: *${customer.loyaltyPoints || 0} نقطة*`;
 
   const whatsappUrl = `https://api.whatsapp.com/send?phone=${finalWhatsAppPhone}&text=${encodeURIComponent(summaryText)}`;
 

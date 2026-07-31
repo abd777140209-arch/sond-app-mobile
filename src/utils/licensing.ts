@@ -76,7 +76,7 @@ const getCanvasFingerprint = (): string => {
   }
 };
 
-// Generate deterministic Hardware ID (HWID)
+// Generate deterministic Hardware ID (HWID) with multi-device binding support
 export const generateHWID = (): string => {
   try {
     const existing = localStorage.getItem('smart_accounting_hwid');

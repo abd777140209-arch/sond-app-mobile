@@ -164,6 +164,7 @@ export default function VoicePOSModal({
       onCompleteSaleByVoice();
       soundManager.playSuccessChime();
       setParsedFeedback(feedbackList);
+      stopListening();
       return;
     }
 
@@ -172,6 +173,7 @@ export default function VoicePOSModal({
       feedbackList.push('🗑️ أمر: تفريغ سلة المبيعات');
       onClearCartByVoice();
       setParsedFeedback(feedbackList);
+      stopListening();
       return;
     }
 

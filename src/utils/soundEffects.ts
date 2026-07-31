@@ -16,7 +16,9 @@ class SoundEffectsEngine {
       }
     }
     if (this.audioCtx && this.audioCtx.state === 'suspended') {
-      this.audioCtx.resume().catch(() => {});
+      this.audioCtx.resume().catch((err) => {
+        console.warn('AudioContext resume catch:', err);
+      });
     }
     return this.audioCtx;
   }

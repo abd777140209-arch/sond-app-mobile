@@ -74,7 +74,7 @@ export default function BiometricLockModal({
           }, 400);
         } else {
           setError('رمز PIN غير صحيح');
-          setTimeout(() => setPinInput(''), 600);
+          setPinInput('');
         }
       }
     }

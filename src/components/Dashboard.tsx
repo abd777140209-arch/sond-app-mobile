@@ -62,11 +62,19 @@ export default function Dashboard({
   useEffect(() => {
     const handleBack = () => {
       if (showZaraModal) {
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis) {
+          try { window.speechSynthesis.cancel(); } catch (e) {}
+        }
         setShowZaraModal(false);
       }
     };
     window.addEventListener('android-modal-close', handleBack);
-    return () => window.removeEventListener('android-modal-close', handleBack);
+    return () => {
+      window.removeEventListener('android-modal-close', handleBack);
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis) {
+        try { window.speechSynthesis.cancel(); } catch (e) {}
+      }
+    };
   }, [showZaraModal]);
 
   // Speech synthesis audio summary

@@ -67,7 +67,7 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
     e.preventDefault();
     setStatusMessage({ text: '', type: null });
     
-    const key = activationKeyInput.trim();
+    const key = activationKeyInput.trim().toUpperCase();
     const phone = phoneInput.trim();
     const storeName = customerNameInput.trim() || 'محل سند للخدمات المحاسبية';
 

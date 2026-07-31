@@ -44,7 +44,7 @@ export default function PinCheckModal({
         } else {
           soundManager.playWarningBeep();
           setErrorMsg('رمز PIN غير صحيح!');
-          setTimeout(() => setInputPin(''), 600);
+          setInputPin('');
         }
       }
     }
@@ -64,7 +64,11 @@ export default function PinCheckModal({
         className="w-full max-w-sm bg-[#0B141F] border border-[#C5A862]/40 rounded-3xl p-6 shadow-2xl text-center space-y-5 relative"
       >
         <button
-          onClick={onClose}
+          onClick={() => {
+            setInputPin('');
+            setErrorMsg('');
+            onClose();
+          }}
           className="absolute top-4 left-4 text-gray-400 hover:text-white p-1 rounded-full transition"
         >
           <X className="w-5 h-5" />

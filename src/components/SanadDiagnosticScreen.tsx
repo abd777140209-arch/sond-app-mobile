@@ -76,8 +76,8 @@ export const SanadDiagnosticScreen: React.FC<SanadDiagnosticScreenProps> = ({
     setInventorySearchMessage(null);
 
     try {
-      // 1. Local product search matching real products state
-      const lowerQuery = query.toLowerCase();
+      // 1. Local product search matching real products state with accent-insensitive search
+      const lowerQuery = query.toLowerCase().trim();
       const matchedLocal = products.filter(p => 
         !p.isDeleted && (
           p.name.toLowerCase().includes(lowerQuery) ||

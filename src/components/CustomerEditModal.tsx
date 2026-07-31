@@ -58,15 +58,18 @@ export default function CustomerEditModal({
 
     const currentDebt = Math.max(0, Number(totalDebt) || 0);
 
+    const validDate = debtDueDate && !isNaN(new Date(debtDueDate).getTime()) ? debtDueDate : undefined;
+    const validCreditLimit = (creditLimit === '' || isNaN(Number(creditLimit))) ? undefined : Math.max(0, Number(creditLimit));
+
     const updated: Customer = {
       ...customer,
       name: name.trim(),
       phone: phone.trim() || 'بدون هاتف',
       totalDebt: currentDebt,
       balance: currentDebt,
-      debtDueDate: debtDueDate || undefined,
-      creditLimit: creditLimit === '' ? undefined : Math.max(0, Number(creditLimit)),
-      loyaltyPoints: Math.max(0, loyaltyPoints),
+      debtDueDate: validDate,
+      creditLimit: validCreditLimit,
+      loyaltyPoints: Math.max(0, Number(loyaltyPoints) || 0),
       notes: notes.trim()
     };
 

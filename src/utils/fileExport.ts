@@ -105,7 +105,7 @@ export async function ensureCustomFolder(folderPath?: string): Promise<boolean> 
     });
     return true;
   } catch (err) {
-    // Attempt fallback in Directory.ExternalStorage or Directory.Data
+    // Attempt fallback in Directory.ExternalStorage or Directory.Data safely for Capacitor Filesystem
     try {
       await Filesystem.mkdir({
         path: cleanFolder,

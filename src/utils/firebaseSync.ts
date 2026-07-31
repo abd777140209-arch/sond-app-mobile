@@ -12,7 +12,7 @@ import {
 } from 'firebase/firestore';
 import { getFirestoreDb, handleFirestoreError, OperationType, withTimeout } from './firebase';
 
-// Helper to save a single document in a subcollection under a store
+// Helper to save a single document in a subcollection under a store (Multi-tenant Cloud Sync)
 export async function saveStoreDocument(licenseKey: string, collectionName: string, docId: string, data: any): Promise<void> {
   const cleanKey = String(licenseKey || '').trim();
   const cleanCol = String(collectionName || '').trim();

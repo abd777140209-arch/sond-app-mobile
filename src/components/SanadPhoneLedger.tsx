@@ -47,7 +47,7 @@ export const SanadPhoneLedger: React.FC<SanadPhoneLedgerProps> = ({
   const [customerSearch, setCustomerSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
-  // Exchange rates relative to ILS base
+  // Exchange rates relative to ILS base with safe dynamic rate conversion
   const rates: Record<string, { rate: number; symbol: string; name: string }> = {
     ILS: { rate: 1, symbol: '₪', name: 'شيقل' },
     USD: { rate: 0.27, symbol: '$', name: 'دولار أمريكي' },

@@ -7,7 +7,7 @@ import { Options } from 'html2canvas';
 
 /**
  * Returns html2canvas configuration with complete sanitization for Tailwind CSS v4 OKLCH color functions
- * and modern CSS features that cause html2canvas parsing errors.
+ * and modern CSS features that cause html2canvas parsing errors in mobile PDF rendering.
  */
 export function getSafeHtml2CanvasOptions(customOptions: Partial<Options> = {}): Partial<Options> {
   const defaultFallbackColor = '#1e293b';

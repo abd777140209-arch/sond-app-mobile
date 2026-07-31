@@ -5,18 +5,30 @@
 
 import { playBarcodeBeepSound, playSaleSuccessSound, playErrorWarningSound } from './soundEffects';
 
-// Native Web Audio API sound synthesizer for interactive desktop feedback
+// Native Web Audio API sound synthesizer for interactive web & mobile feedback
 class DesktopSoundManager {
   playScanBeep() {
-    playBarcodeBeepSound();
+    try {
+      playBarcodeBeepSound();
+    } catch (e) {
+      console.warn('Audio playScanBeep warning:', e);
+    }
   }
 
   playSuccessChime() {
-    playSaleSuccessSound();
+    try {
+      playSaleSuccessSound();
+    } catch (e) {
+      console.warn('Audio playSuccessChime warning:', e);
+    }
   }
 
   playWarningBeep() {
-    playErrorWarningSound();
+    try {
+      playErrorWarningSound();
+    } catch (e) {
+      console.warn('Audio playWarningBeep warning:', e);
+    }
   }
 }
 

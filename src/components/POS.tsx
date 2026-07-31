@@ -298,6 +298,12 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
   const convertedTotal = selectedCurrObj?.isBase ? cartTotal : (cartTotal / selectedRate);
 
   const executeSaleCompletion = () => {
+    if (paymentType === 'debt' && !selectedCustomerId) {
+      soundManager.playWarningBeep();
+      setPosError('⚠️ مبيعات الآجل (الذمم) تتطلب اختيار عميل مسجل من القائمة لتقييد الدين عليه!');
+      return;
+    }
+
     const selectedCustomer = activeCustomers.find(c => c.id === selectedCustomerId);
     const customerName = selectedCustomer ? selectedCustomer.name : 'عميل سفري / نقدي';
 
@@ -387,10 +393,17 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
           setPosError('⚠️ السلة فارغة! أضف أصنافاً أولاً للبيع السريع بـ F4.');
           return;
         }
+        if (paymentType === 'debt' && !selectedCustomerId) {
+          soundManager.playWarningBeep();
+          setPosError('⚠️ مبيعات الآجل (الذمم) تتطلب اختيار عميل مسجل من القائمة لتقييد الدين عليه!');
+          return;
+        }
         soundManager.playScanBeep();
-        setPaymentType('cash');
+        if (paymentType !== 'debt') {
+          setPaymentType('cash');
+        }
         setTimeout(() => {
-          executeSaleCompletion();
+          handleCheckout();
         }, 50);
       }
       // ESC: Close Modals or Clear Cart
@@ -427,7 +440,7 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
 
   return (
     /* 🎯 هنا أضفنا الهامش السفلي pb-36 لرفع أزرار الفاتورة الإجمالية فوق القائمة السفلية */
-    <div id="pos_tab_view" className="space-y-2.5 md:space-y-4 pb-6 dir-rtl" dir="rtl">
+    <div id="pos_tab_view" className="space-y-2.5 md:space-y-4 pb-36 dir-rtl" dir="rtl">
       
       {/* 0. SMART TOOLS ACTION HEADER BAR */}
       <div className="bg-white border border-slate-200 p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl shadow-sm space-y-2.5">
@@ -539,10 +552,17 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
                 setPosError('⚠️ السلة فارغة! أضف منتجات قبل إتمام البيع.');
                 return;
               }
+              if (paymentType === 'debt' && !selectedCustomerId) {
+                soundManager.playWarningBeep();
+                setPosError('⚠️ مبيعات الآجل (الذمم) تتطلب اختيار عميل مسجل من القائمة لتقييد الدين عليه!');
+                return;
+              }
               soundManager.playScanBeep();
-              setPaymentType('cash');
+              if (paymentType !== 'debt') {
+                setPaymentType('cash');
+              }
               setTimeout(() => {
-                executeSaleCompletion();
+                handleCheckout();
               }, 50);
             }}
             className="flex-1 py-2 px-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex flex-col items-center justify-center gap-0.5 active:scale-95 transition cursor-pointer shadow-sm relative border border-emerald-500/50"

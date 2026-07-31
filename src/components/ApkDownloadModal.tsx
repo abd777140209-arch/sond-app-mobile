@@ -20,6 +20,14 @@ export default function ApkDownloadModal({ isOpen, onClose, storeName = 'نظا�
 
   const handleSimulatedDownload = () => {
     soundManager.playScanBeep();
+    
+    // Safety check for embedded native app environment
+    const isNativeApp = typeof window !== 'undefined' && ((window as any).Capacitor || (window as any).Android);
+    if (isNativeApp) {
+      handleShareLink();
+      return;
+    }
+
     setDownloading(true);
     setDownloadProgress(0);
     setDownloadComplete(false);

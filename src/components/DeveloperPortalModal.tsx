@@ -186,15 +186,17 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
     if (!editingHwidLicense) return;
     setIsSavingHwid(true);
     try {
+      const hw1 = hwid1Input.trim();
+      const hw2 = hwid2Input.trim();
       const success = await updateLicenseHwidsOnCloud(
         editingHwidLicense.key,
-        hwid1Input.trim(),
-        hwid2Input.trim()
+        hw1,
+        hw2
       );
       if (success) {
         soundManager.playSuccessChime();
         setStatusMessage({
-          text: `✓ تم تحديث وحفظ معرفات الأجهزة (HWID 1 & HWID 2) بنجاح بالسحابة للعميل (${editingHwidLicense.customerName})!`,
+          text: `✓ تم تحديث وحفظ معرفات الأجهزة (HWID 1 & HWID 2) بنجاح بالسحابة للعميل (${editingHwidLicense.customerName || editingHwidLicense.key})!`,
           type: 'success'
         });
         await handleFetchCloudLicenses();

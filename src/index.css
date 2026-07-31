@@ -7,15 +7,15 @@
 }
 
 body, html, #root {
-  background-color: transparent !important;
   margin: 0;
   padding: 0;
   min-height: 100vh;
+  background-color: #f8fafc;
 }
 
 body {
   font-family: var(--font-sans);
-  color: #F1F5F9;
+  color: #0f172a;
   direction: rtl;
   overflow-x: hidden;
 }

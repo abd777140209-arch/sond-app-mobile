@@ -43,6 +43,7 @@ export async function requestCameraPermissionOnDemand(): Promise<boolean> {
 
 /**
  * Requests Android Storage/Media permissions ONLY on user action (e.g. exporting PDF, printing, uploading attachment)
+ * Prevents app crashes during logo upload or report export.
  */
 export async function requestStoragePermissionOnDemand(): Promise<boolean> {
   if (typeof window !== 'undefined' && (window as any).AndroidInterface?.requestPermissions === 'function') {

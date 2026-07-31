@@ -500,7 +500,7 @@ export default function Customers({
                               <Calendar className="w-3 h-3 text-slate-400" />
                               <span>تاريخ الاستحقاق:</span>
                             </span>
-                            {customer.debtDueDate ? (
+                            {customer.debtDueDate && !isNaN(new Date(customer.debtDueDate).getTime()) ? (
                               <span className={`font-bold px-1.5 py-0.5 rounded ${
                                 isOverdue ? 'bg-rose-600 text-white animate-pulse' : 'bg-slate-100 text-slate-700'
                               }`}>

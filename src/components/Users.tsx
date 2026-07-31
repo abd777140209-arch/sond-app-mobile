@@ -103,6 +103,15 @@ export default function Users({
   const [formPin, setFormPin] = useState('');
   const [formIsActive, setFormIsActive] = useState(true);
 
+  const closeModalAndReset = () => {
+    setShowAddModal(false);
+    setEditingUser(null);
+    setFormName('');
+    setFormUsername('');
+    setFormPhone('');
+    setFormPin('');
+  };
+
   const openAddModal = () => {
     setEditingUser(null);
     setFormName('');

@@ -49,9 +49,15 @@ export default function FloatingCalculator({ onCopyResult }: FloatingCalculatorP
         .replace(/×/g, '*')
         .replace(/÷/g, '/');
       
-      // Safe evaluation
-      // eslint-disable-next-line no-eval
-      const result = eval(fullEq);
+      const sanitized = fullEq.replace(/[^0-9\+\-\*\/\%\.\(\)\s]/g, '');
+      if (!sanitized.trim()) {
+        setDisplay('خطأ');
+        return;
+      }
+      
+      // Safe evaluation without eval()
+      // eslint-disable-next-line no-new-func
+      const result = new Function(`"use strict"; return (${sanitized})`)();
       if (isNaN(result) || !isFinite(result)) {
         setDisplay('خطأ');
       } else {

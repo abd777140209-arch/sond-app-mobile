@@ -336,8 +336,12 @@ export default function Settings({
         setStoreLogoUrl(compressedBase64);
         localStorage.setItem('smart_accounting_company_logo', compressedBase64);
         localStorage.setItem('sanad_store_logo', compressedBase64);
+        localStorage.setItem('sanad_app_logo_timestamp', String(Date.now()));
         soundManager.playSuccessChime();
       }
+    };
+    img.onerror = () => {
+      console.warn('Invalid image source for logo processing');
     };
     img.src = base64Data;
   };

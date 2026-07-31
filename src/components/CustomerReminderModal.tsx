@@ -49,7 +49,7 @@ export default function CustomerReminderModal({
     .replace(/\{name\}/g, customer.name)
     .replace(/\{balance\}/g, customer.totalDebt.toLocaleString())
     .replace(/\{currency\}/g, currency)
-    .replace(/\{dueDate\}/g, customer.debtDueDate ? new Date(customer.debtDueDate).toLocaleDateString('ar-YE') : 'غير محدد')
+    .replace(/\{dueDate\}/g, customer.debtDueDate && !isNaN(new Date(customer.debtDueDate).getTime()) ? new Date(customer.debtDueDate).toLocaleDateString('ar-YE') : 'غير محدد')
     .replace(/\{storeName\}/g, storeName);
 
   // Phone clean formatting

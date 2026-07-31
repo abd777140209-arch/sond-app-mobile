@@ -70,17 +70,9 @@ import {
 } from './utils/firebaseSync';
 
 export default function App() {
-  useEffect(() => {
-    // Force clear old legacy settings from localStorage on startup as requested
-    localStorage.removeItem('smart_accounting_settings');
-  }, []);
-
   const [settings, setSettings] = useState<SystemSettings>(() => {
     const data = localStorage.getItem('smart_accounting_settings');
     const parsed = data ? JSON.parse(data) : { ...DEFAULT_SETTINGS };
-
-    parsed.address = "";
-    parsed.phone = "";
 
     const savedLogo = localStorage.getItem('smart_accounting_company_logo') || localStorage.getItem('sanad_store_logo');
     if (savedLogo && !parsed.storeLogoUrl) {
@@ -336,7 +328,6 @@ export default function App() {
     };
     saveLicenseLocally(updated);
     setLicense(updated);
-    localStorage.clear();
     setActiveTab('dashboard');
   };
 

@@ -53,7 +53,7 @@ export const SanadEnterpriseDashboard: React.FC<SanadEnterpriseDashboardProps> =
     const backupRes = createAutoBackup();
     if (backupRes.success) {
       setBackupStatus(backupRes);
-      logOwnerAuditAction('AUTO_BACKUP_CREATED', 'تم إنشاء نسخة احتياطية تلقائية لبيانات ورشة الصيانة');
+      logOwnerAuditAction('AUTO_BACKUP_CREATED', 'تم إنشاء وتأمين نسخة احتياطية تلقائية لبيانات المحل والمستودع');
     }
 
     // 3. جلب سجل التدقيق

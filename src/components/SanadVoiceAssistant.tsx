@@ -53,7 +53,20 @@ export const SanadVoiceAssistant: React.FC<SanadVoiceAssistantProps> = ({
     scrollToBottom();
   }, [messages, loading]);
 
-  // 🎤 إعداد الاستماع الصوتي (Web Speech API / Capacitor Speech Recognition)
+  // 🔊 تشغيل التحدث الصوتي الآمن عند الإجابة (Text-to-Speech)
+  const speakText = (text: string) => {
+    try {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); // Stop prior audio
+        const utterance = new SpeechSynthesisUtterance(text.replace(/[#*`_~]/g, ''));
+        utterance.lang = 'ar-SA';
+        utterance.rate = 1.0;
+        window.speechSynthesis.speak(utterance);
+      }
+    } catch (e) {
+      console.warn('Text-to-speech error:', e);
+    }
+  };
   const handleVoiceInput = async () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
@@ -119,17 +132,6 @@ export const SanadVoiceAssistant: React.FC<SanadVoiceAssistantProps> = ({
     } catch (err) {
       console.warn('Speech recognition start failed:', err);
       setIsListening(false);
-    }
-  };
-
-  // 🔊 نطق الإجابة صوتاً (Text-to-Speech)
-  const speakText = (text: string) => {
-    if ('speechSynthesis' in window) {
-      // إزالة التنسيقات والرموز للحديث السلس
-      const cleanText = text.replace(/[*_#`~]/g, '');
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.lang = 'ar-SA';
-      window.speechSynthesis.speak(utterance);
     }
   };
 

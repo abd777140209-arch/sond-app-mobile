@@ -89,11 +89,11 @@ export default function StockAudit({
     return () => window.removeEventListener('android-modal-close', handleBack);
   }, [showZaraAuditModal, showImportPreviewModal]);
 
-  // Export Stock Audit Sheet to CSV / Excel
-  const handleExportCSV = async () => {
-    soundManager.playSuccessChime();
-    let csv = '\ufeff'; // UTF-8 BOM for Excel Arabic support
-    csv += 'الباركود,اسم السلعة,التصنيف,كمية النظام,الكمية الفعلية الميدانية,سعر التكلفة,سعر البيع\n';
+    // Export Stock Audit Sheet to CSV / Excel with guaranteed UTF-8 BOM
+    const handleExportCSV = async () => {
+      soundManager.playSuccessChime();
+      let csv = '\ufeff'; // UTF-8 BOM for Excel Arabic support
+      csv += 'الباركود,اسم السلعة,التصنيف,كمية النظام,الكمية الفعلية الميدانية,سعر التكلفة,سعر البيع\n';
 
     activeProducts.forEach(p => {
       const physical = physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : p.stock;
