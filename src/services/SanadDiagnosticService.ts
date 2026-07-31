@@ -5,7 +5,7 @@
 
 /**
  * 🛠️ Sanad Diagnostic & Inventory Service
- * خدمة التشخيص الميكانيكي وفحص القطع في المخزون الفعلي
+ * خدمة التشخيص الميكانيكي وفحص القطع في المخزون الفعلي وربط السلة
  */
 
 import { diagnosePhoneIssue } from './GoogleAIService';

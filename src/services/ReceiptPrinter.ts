@@ -5,7 +5,7 @@
 
 /**
  * 🖨️ Receipt & WhatsApp Utility
- * مشاركة سند استلام جهاز صيانة/تفليش عبر الواتساب أو الطباعة الحرارية (Thermal 80mm)
+ * مشاركة سند استلام جهاز صيانة/تفليش عبر الواتساب أو الطباعة الحرارية (Thermal 80mm/58mm)
  */
 
 export interface ReceiptPrintData {

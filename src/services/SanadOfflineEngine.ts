@@ -5,7 +5,7 @@
 
 /**
  * 💾 Sanad Offline & Sync Engine
- * محرك التخزين المحلي والمزامنة التلقائية عند انقطاع الإنترنت لورشة صيانة الهواتف
+ * محرك التخزين المحلي (LocalStorage / IndexedDB) والمزامنة التلقائية عند عودة الاتصال
  */
 
 export interface OfflineDeviceRecord {

@@ -5,7 +5,7 @@
 
 /**
  * 🛡️ Sanad Enterprise Core Services
- * نظام التنبيهات الذكية + النسخ الاحتياطي التلقائي + سجل التدقيق لحماية المالك
+ * نظام التنبيهات الذكية + النسخ الاحتياطي التلقائي وسجل تدقيق المالك (Audit Trail)
  */
 
 export interface EnterpriseAlert {

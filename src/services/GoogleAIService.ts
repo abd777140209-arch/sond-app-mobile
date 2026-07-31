@@ -7,7 +7,7 @@ import { GoogleGenAI } from '@google/genai';
 
 /**
  * 🤖 Google Gemini AI Service for Sanad Mobile Maintenance
- * خدمة الذكاء الاصطناعي من جوجل لتشخيص أعطال الهواتف والمساعد الصوتي
+ * خدمة الذكاء الاصطناعي من جوجل لتشخيص أعطال الهواتف والمساعد الصوتي مع دعم الاستجابة أوفلاين
  */
 
 // Initialize Gemini Client safely
