@@ -12,6 +12,11 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.getcapacitor.BridgeActivity
 
+/**
+ * MainActivity for Sanad Accounting (نظام سند الذكي المحاسبي)
+ * Extends Capacitor's BridgeActivity for full Capacitor plugin support (Filesystem, Share, etc.)
+ * while maintaining native AndroidInterface bridge capabilities.
+ */
 class MainActivity : BridgeActivity() {
 
     private val PERMISSIONS_REQUEST_CODE = 1001
@@ -35,6 +40,11 @@ class MainActivity : BridgeActivity() {
                 // ignore
             }
         }
+
+        @JavascriptInterface
+        fun requestPermissions(permissions: Array<String>) {
+            // Permission handler bridge
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,13 +52,16 @@ class MainActivity : BridgeActivity() {
         requestRequiredPermissions()
 
         try {
-            bridge?.webView?.addJavascriptInterface(WebAppInterface(this as Context), "AndroidInterface")
+            bridge?.webView?.addJavascriptInterface(WebAppInterface(this@MainActivity as Context), "AndroidInterface")
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
     private fun requestRequiredPermissions() {
+        val context: Context = this@MainActivity
+        val activity: android.app.Activity = this@MainActivity
+
         val permissions = mutableListOf(
             Manifest.permission.CAMERA,
             Manifest.permission.INTERNET,
@@ -66,13 +79,13 @@ class MainActivity : BridgeActivity() {
             permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
 
-        val activityContext: Context = this
         val missingPermissions = permissions.filter {
-            ContextCompat.checkSelfPermission(activityContext, it) != PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
         }
 
         if (missingPermissions.isNotEmpty()) {
-            ActivityCompat.requestPermissions(this, missingPermissions.toTypedArray(), PERMISSIONS_REQUEST_CODE)
+            ActivityCompat.requestPermissions(activity, missingPermissions.toTypedArray(), PERMISSIONS_REQUEST_CODE)
         }
     }
 }
+
