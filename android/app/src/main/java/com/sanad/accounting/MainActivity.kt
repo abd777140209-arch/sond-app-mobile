@@ -1,25 +1,41 @@
 package com.sanad.accounting
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.webkit.JavascriptInterface
+import android.webkit.PermissionRequest
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.getcapacitor.BridgeActivity
 
 /**
  * MainActivity for Sanad Accounting (نظام سند الذكي المحاسبي)
- * Extends Capacitor's BridgeActivity for full Capacitor plugin support (Filesystem, Share, etc.)
- * while maintaining native AndroidInterface bridge capabilities.
+ * Configures WebView to load local bundled offline assets directly from assets/public/index.html.
+ * Includes complete WebChromeClient.onShowFileChooser implementation for HTML file inputs.
  */
-class MainActivity : BridgeActivity() {
+class MainActivity : AppCompatActivity() {
 
+    private lateinit var webView: WebView
+    private val LOCAL_APP_URL = "file:///android_asset/public/index.html"
     private val PERMISSIONS_REQUEST_CODE = 1001
+    private val FILE_CHOOSER_REQUEST_CODE = 1002
+
+    private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
 
     class WebAppInterface(private val mContext: Context) {
         @JavascriptInterface
@@ -29,6 +45,15 @@ class MainActivity : BridgeActivity() {
                 if (androidId != null && androidId.trim().isNotEmpty()) androidId else ""
             } catch (e: Exception) {
                 ""
+            }
+        }
+
+        @JavascriptInterface
+        fun printReceipt(receiptText: String) {
+            try {
+                Toast.makeText(mContext, "جاري إرسال البيانات إلى الطابعة...", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
 
@@ -47,21 +72,103 @@ class MainActivity : BridgeActivity() {
         }
     }
 
+    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        requestRequiredPermissions()
+        
+        webView = WebView(this)
+        setContentView(webView)
 
-        try {
-            bridge?.webView?.addJavascriptInterface(WebAppInterface(this@MainActivity as Context), "AndroidInterface")
-        } catch (e: Exception) {
-            e.printStackTrace()
+        requestRequiredPermissions()
+        configureWebView()
+
+        webView.loadUrl(LOCAL_APP_URL)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun configureWebView() {
+        val settings = webView.settings
+        settings.javaScriptEnabled = true
+        settings.domStorageEnabled = true
+        settings.databaseEnabled = true
+        settings.allowFileAccess = true
+        settings.allowContentAccess = true
+        settings.allowFileAccessFromFileURLs = true
+        settings.allowUniversalAccessFromFileURLs = true
+        settings.mediaPlaybackRequiresUserGesture = false
+        settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        settings.setSupportZoom(true)
+        settings.builtInZoomControls = true
+        settings.displayZoomControls = false
+
+        webView.addJavascriptInterface(WebAppInterface(this), "AndroidInterface")
+
+        webView.webViewClient = object : WebViewClient() {
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?
+            ) {
+                super.onReceivedError(view, request, error)
+                if (request?.isForMainFrame == true) {
+                    view?.loadUrl(LOCAL_APP_URL)
+                }
+            }
+        }
+
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onPermissionRequest(request: PermissionRequest?) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    request?.grant(request.resources)
+                }
+            }
+
+            override fun onShowFileChooser(
+                webView: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                fileChooserParams: FileChooserParams?
+            ): Boolean {
+                fileUploadCallback?.onReceiveValue(null)
+                fileUploadCallback = filePathCallback
+
+                val intent = fileChooserParams?.createIntent() ?: Intent(Intent.ACTION_GET_CONTENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "*/*"
+                }
+
+                return try {
+                    startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE)
+                    true
+                } catch (e: Exception) {
+                    fileUploadCallback?.onReceiveValue(null)
+                    fileUploadCallback = null
+                    false
+                }
+            }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
+            if (fileUploadCallback == null) return
+
+            val results: Array<Uri>? = when {
+                resultCode == RESULT_OK && data?.data != null -> arrayOf(data.data!!)
+                resultCode == RESULT_OK && data?.clipData != null -> {
+                    val count = data.clipData!!.itemCount
+                    Array(count) { i -> data.clipData!!.getItemAt(i).uri }
+                }
+                else -> null
+            }
+
+            fileUploadCallback?.onReceiveValue(results)
+            fileUploadCallback = null
         }
     }
 
     private fun requestRequiredPermissions() {
-        val context: Context = this@MainActivity
-        val activity: android.app.Activity = this@MainActivity
-
         val permissions = mutableListOf(
             Manifest.permission.CAMERA,
             Manifest.permission.INTERNET,
@@ -80,11 +187,19 @@ class MainActivity : BridgeActivity() {
         }
 
         val missingPermissions = permissions.filter {
-            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
 
         if (missingPermissions.isNotEmpty()) {
-            ActivityCompat.requestPermissions(activity, missingPermissions.toTypedArray(), PERMISSIONS_REQUEST_CODE)
+            ActivityCompat.requestPermissions(this, missingPermissions.toTypedArray(), PERMISSIONS_REQUEST_CODE)
+        }
+    }
+
+    override fun onBackPressed() {
+        if (webView.canGoBack()) {
+            webView.goBack()
+        } else {
+            super.onBackPressed()
         }
     }
 }
