@@ -132,9 +132,31 @@ export default function Settings({
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   const handleUpgradeLicense = async () => {
-    if (!upgradeKey.trim()) {
+    const key = upgradeKey.trim();
+    if (!key) {
       soundManager.playWarningBeep();
       alert('⚠️ يرجى إدخال كود التفعيل أولاً!');
+      return;
+    }
+
+    // دعم الكود المجاني التجريبي محلياً وفورياً
+    if (key === 'MHTT-TRIAL-7DAY-FREE') {
+      soundManager.playSuccessChime();
+      const trialLicense: LicenseInfo = {
+        licenseKey: key,
+        status: 'active',
+        activatedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        hwid: currentLicense.hwid || generateHWID(),
+        subscriptionType: 'trial',
+        customerName: storeName || 'عميل سند',
+        phone: phone
+      };
+      saveLicenseLocally(trialLicense);
+      setCurrentLicense(trialLicense);
+      setUpgradeKey('');
+      alert('🎉 تم تفعيل النسخة التجريبية (7 أيام) بنجاح!');
+      window.location.reload();
       return;
     }
 
@@ -142,7 +164,7 @@ export default function Settings({
     try {
       const hwid = currentLicense.hwid || generateHWID();
       const res = await activateLicenseOnCloud(
-        upgradeKey.trim(), 
+        key, 
         hwid, 
         currentLicense.customerName || storeName, 
         phone
@@ -276,7 +298,7 @@ export default function Settings({
     });
   };
 
-  // 🎯 دالة رفع الشعار المباشرة والآمنة (بدون تعقيد أذونات الأندرويد)
+  // 🎯 دالة رفع الشعار المباشرة والمضمونة عبر المعرض
   const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -430,16 +452,16 @@ export default function Settings({
             </div>
           </div>
 
-          {/* نموذج ترقية الاشتراك */}
+          {/* نموذج ترقية الاشتراك والكود المجاني */}
           <div className="mt-4 pt-3 border-t border-slate-100 bg-blue-50/70 p-3.5 rounded-xl border border-blue-200 space-y-2">
             <h4 className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-amber-500" />
-              ترقية الاشتراك إلى ترخيص دائم / مدفوع
+              ترقية الاشتراك أو إدخال كود التفعيل
             </h4>
             <div className="flex gap-2">
               <input
                 type="text"
-                placeholder="أدخل كود التفعيل (مثل: MHTT-TRIAL-7DAY-FREE)"
+                placeholder="MHTT-TRIAL-7DAY-FREE أو كود خاص"
                 value={upgradeKey}
                 onChange={(e) => setUpgradeKey(e.target.value)}
                 className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white text-slate-800 font-mono text-center"
@@ -493,7 +515,12 @@ export default function Settings({
 
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => {
+                if (fileInputRef.current) {
+                  fileInputRef.current.value = '';
+                  fileInputRef.current.click();
+                }
+              }}
               className="py-3 px-3 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition cursor-pointer flex items-center justify-center gap-2"
             >
               <Upload className="w-4 h-4 text-blue-600" />
@@ -533,7 +560,7 @@ export default function Settings({
 
           <form onSubmit={handleSave} className="space-y-4">
             
-            {/* Custom Logo Upload Card (Simple & Stable File Input) */}
+            {/* Custom Logo Upload Card (Direct Trigger) */}
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
@@ -560,17 +587,28 @@ export default function Settings({
                 </div>
 
                 <div className="space-y-2 flex-1 w-full text-right">
+                  <input 
+                    type="file" 
+                    ref={logoInputRef}
+                    accept="image/*" 
+                    onChange={handleLogoFileChange} 
+                    className="hidden" 
+                  />
+
                   <div className="flex flex-wrap gap-2">
-                    <label className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (logoInputRef.current) {
+                          logoInputRef.current.value = '';
+                          logoInputRef.current.click();
+                        }
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95"
+                    >
                       <Upload className="w-4 h-4" />
-                      <span>{storeLogoUrl ? 'تغيير الشعار' : 'رفع شعار جديد'}</span>
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={handleLogoFileChange} 
-                        className="hidden" 
-                      />
-                    </label>
+                      <span>{storeLogoUrl ? 'تغيير الشعار' : 'رفع شعار جديد (من المعرض)'}</span>
+                    </button>
 
                     {storeLogoUrl && (
                       <button
@@ -578,8 +616,9 @@ export default function Settings({
                         onClick={() => {
                           setStoreLogoUrl('');
                           localStorage.removeItem('smart_accounting_company_logo');
+                          localStorage.removeItem('sanad_store_logo');
                         }}
-                        className="px-3.5 py-2 rounded-xl bg-rose-50 text-rose-600 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-rose-200"
+                        className="px-3.5 py-2.5 rounded-xl bg-rose-50 text-rose-600 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-rose-200"
                       >
                         <Trash2 className="w-4 h-4" />
                         <span>حذف الشعار</span>
