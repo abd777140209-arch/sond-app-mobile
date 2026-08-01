@@ -942,9 +942,25 @@ export default function Settings({
                 setLastLocalBackupDate(nowIso);
                 setLastDriveBackupDate(nowIso);
                 try {
+                  // استدعاء دالة النسخ الأساسية
                   await onBackupData();
+                  
+                  // توليد وتنزيل ملف JSON فعلياً على ذاكرة الجوال
+                  const rawData = localStorage.getItem('sanad_accounting_complete_db') || localStorage.getItem('SanadAccounting_data') || '{}';
+                  const blob = new Blob([rawData], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `Sanad_Backup_${new Date().toISOString().slice(0,10)}.json`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                  
+                  alert('✓ تم إنشاء وتنزيل النسخة الاحتياطية بنجاح في ذاكرة الهاتف!');
                 } catch (err) {
                   console.warn('Backup error:', err);
+                  alert('⚠️ تم تسجيل النسخة، يرجى استخدام زر مشاركة البيانات إذا تعذر التنزيل المباشر.');
                 }
               }}
               className="py-3 px-3 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer flex items-center justify-center gap-2 shadow-sm active:scale-95"
@@ -962,6 +978,23 @@ export default function Settings({
                 setLastDriveBackupDate(nowIso);
                 try {
                   await onBackupData();
+                  const rawData = localStorage.getItem('sanad_accounting_complete_db') || localStorage.getItem('SanadAccounting_data') || '{}';
+                  
+                  if (navigator.share) {
+                    const file = new File([rawData], `Sanad_Backup_${new Date().toISOString().slice(0,10)}.json`, { type: 'application/json' });
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                      await navigator.share({
+                        title: 'نسخة احتياطية - نظام سند المحاسبي',
+                        text: 'ملف النسخة الاحتياطية لقاعدة بيانات نظام سند',
+                        files: [file]
+                      });
+                      return;
+                    }
+                  }
+                  
+                  // بديل المشاركة العادية عبر الحافظة أو الرابط
+                  navigator.clipboard.writeText(rawData);
+                  alert('✓ تم نسخ محتوى قاعدة البيانات إلى الحافظة، يمكنك لصقه وإرساله عبر واتساب فوراً!');
                 } catch (err) {
                   console.warn('Share backup error:', err);
                 }
