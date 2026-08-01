@@ -450,10 +450,16 @@ export default function StockAudit({
   })
   .sort((a, b) => b.generatedProfit - a.generatedProfit || b.marginPercent - a.marginPercent);
 
-  // Print Stock Audit Sheet
-  const handlePrintAuditSheet = () => {
+  // Print & Export Stock Audit Sheet
+  const handlePrintAuditSheet = async () => {
     soundManager.playSuccessChime();
-    window.print();
+    try {
+      await handleExportCSV();
+    } catch (e) {
+      if (typeof window !== 'undefined') {
+        window.print();
+      }
+    }
   };
 
   return (

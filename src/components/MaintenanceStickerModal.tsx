@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { Barcode, Printer, Bluetooth, X, Check, Smartphone, User, Wrench, FileText } from 'lucide-react';
 import { MaintenanceOrder } from '../types';
 import { soundManager } from '../utils/sound';
+import { saveAndShareFile } from '../utils/fileExport';
 
 interface MaintenanceStickerModalProps {
   isOpen: boolean;
@@ -58,9 +59,31 @@ export default function MaintenanceStickerModal({
     }
   };
 
-  const handleBrowserPrint = () => {
+  const handleBrowserPrint = async () => {
     soundManager.playScanBeep();
-    window.print();
+    try {
+      const stickerText = `==============================\n      ${storeName}\n  ملصق صيانة جهاز - رقم #${order.orderNumber}\n==============================\nالعميل: ${order.customerName}\nالجوال: ${order.deviceName}\nالعطل: ${order.issueDescription}\nالتكلفة المقدرة: ${order.cost} ${currency}\nالتاريخ: ${new Date(order.dateReceived).toLocaleDateString('ar-YE')}\n==============================\n`;
+      const fileName = `ملصق_صيانة_${order.orderNumber}.txt`;
+
+      if (typeof window !== 'undefined' && (window as any).AndroidInterface?.printReceipt) {
+        (window as any).AndroidInterface.printReceipt(stickerText);
+        return;
+      }
+
+      await saveAndShareFile({
+        fileName,
+        data: stickerText,
+        mimeType: 'text/plain;charset=utf-8',
+        title: `ملصق صيانة - رقم ${order.orderNumber}`,
+        text: stickerText
+      });
+
+      if (typeof window !== 'undefined') {
+        window.print();
+      }
+    } catch (e) {
+      console.warn('Browser print exception:', e);
+    }
   };
 
   const orderBarcode = order.orderNumber || '0000';

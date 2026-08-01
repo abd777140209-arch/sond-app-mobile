@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { Barcode, Printer, Bluetooth, X, Check, Copy, Sparkles, RefreshCw, AlertCircle, FileText } from 'lucide-react';
 import { Product } from '../types';
 import { soundManager } from '../utils/sound';
+import { saveAndShareFile } from '../utils/fileExport';
 
 interface BarcodeLabelPrinterModalProps {
   isOpen: boolean;
@@ -98,10 +99,28 @@ export default function BarcodeLabelPrinterModal({
     }
   };
 
-  // Direct Browser Print
-  const handleBrowserPrint = () => {
+  // Direct Print & Export Label
+  const handleBrowserPrint = async () => {
     soundManager.playScanBeep();
     try {
+      const targetProd = activeProducts.find(p => p.id === selectedProductId) || activeProducts[0];
+      const prodName = targetProd ? targetProd.name : 'ملصق_باركود';
+      const labelData = `-----------------------------------------\n        ${storeName.toUpperCase()}\n-----------------------------------------\nالمنتج: ${prodName}\nالباركود: ${targetProd?.barcode || 'N/A'}\nالسعر: ${targetProd?.sellingPrice || 0} ${currency}\nالعدد المطلوب: ${printCopies} ملصق\n-----------------------------------------\n`;
+      const fileName = `ملصق_باركود_${(prodName).replace(/\s+/g, '_')}.txt`;
+
+      if (typeof window !== 'undefined' && (window as any).AndroidInterface?.printReceipt) {
+        (window as any).AndroidInterface.printReceipt(labelData);
+        return;
+      }
+
+      await saveAndShareFile({
+        fileName,
+        data: labelData,
+        mimeType: 'text/plain;charset=utf-8',
+        title: `ملصق باركود - ${prodName}`,
+        text: labelData
+      });
+
       if (typeof window !== 'undefined') {
         window.print();
       }

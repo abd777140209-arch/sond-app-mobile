@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { UserAccount, UserRole, AuditLog } from '../types';
 import { soundManager } from '../utils/sound';
+import { saveAndShareFile } from '../utils/fileExport';
 
 interface UsersProps {
   users: UserAccount[];
@@ -200,14 +201,22 @@ export default function Users({
     return matchesSearch && matchesRole;
   });
 
-  const exportAuditLogsJSON = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(auditLogs, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `sanad_audit_logs_${new Date().toISOString().split('T')[0]}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
+  const exportAuditLogsJSON = async () => {
+    soundManager.playSuccessChime();
+    const dataStr = JSON.stringify(auditLogs, null, 2);
+    const fileName = `sanad_audit_logs_${new Date().toISOString().split('T')[0]}.json`;
+    try {
+      await saveAndShareFile({
+        fileName,
+        data: dataStr,
+        mimeType: 'application/json',
+        title: 'سجل أنشطة نظام سند المحاسبي',
+        text: 'ملف سجل التدقيق والأنشطة الإدارية'
+      });
+    } catch (err) {
+      console.warn('Error exporting audit logs JSON:', err);
+      alert('⚠️ تعذر تصدير سجل الأنشطة.');
+    }
   };
 
   return (

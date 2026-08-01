@@ -626,11 +626,14 @@ export default function ProfitReports({
             )}
 
             <button
-              onClick={() => window.print()}
+              onClick={() => {
+                soundManager.playSuccessChime();
+                handleExportSummaryPDF();
+              }}
               className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-blue-500/20 no-print"
             >
               <Printer className="w-4 h-4" />
-              <span>طباعة التقرير</span>
+              <span>طباعة وتصدير التقرير</span>
             </button>
           </div>
         </div>

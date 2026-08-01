@@ -46,7 +46,7 @@ import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { SystemSettings, AppTheme, CardShape, DisplayDensity, CurrencyRate, BackupFrequency } from '../types';
-import { ensureCustomFolder } from '../utils/fileExport';
+import { ensureCustomFolder, saveAndShareFile } from '../utils/fileExport';
 import { DEFAULT_CURRENCIES } from '../utils/seedData';
 import { soundManager } from '../utils/sound';
 import { loadLicenseLocally, saveLicenseLocally, generateHWID, LicenseInfo } from '../utils/licensing';
@@ -942,25 +942,20 @@ export default function Settings({
                 setLastLocalBackupDate(nowIso);
                 setLastDriveBackupDate(nowIso);
                 try {
-                  // استدعاء دالة النسخ الأساسية
                   await onBackupData();
-                  
-                  // توليد وتنزيل ملف JSON فعلياً على ذاكرة الجوال
                   const rawData = localStorage.getItem('sanad_accounting_complete_db') || localStorage.getItem('SanadAccounting_data') || '{}';
-                  const blob = new Blob([rawData], { type: 'application/json' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `Sanad_Backup_${new Date().toISOString().slice(0,10)}.json`;
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  URL.revokeObjectURL(url);
+                  const fileName = `Sanad_Backup_${new Date().toISOString().slice(0,10)}.json`;
                   
-                  alert('✓ تم إنشاء وتنزيل النسخة الاحتياطية بنجاح في ذاكرة الهاتف!');
+                  await saveAndShareFile({
+                    fileName,
+                    data: rawData,
+                    mimeType: 'application/json',
+                    title: 'نظام سند المحاسبي - النسخة الاحتياطية',
+                    text: 'ملف قاعدة البيانات والنسخة الاحتياطية لنظام سند'
+                  });
                 } catch (err) {
                   console.warn('Backup error:', err);
-                  alert('⚠️ تم تسجيل النسخة، يرجى استخدام زر مشاركة البيانات إذا تعذر التنزيل المباشر.');
+                  alert('⚠️ حدث خطأ أثناء الحفظ أو التصدير.');
                 }
               }}
               className="py-3 px-3 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer flex items-center justify-center gap-2 shadow-sm active:scale-95"
@@ -979,24 +974,18 @@ export default function Settings({
                 try {
                   await onBackupData();
                   const rawData = localStorage.getItem('sanad_accounting_complete_db') || localStorage.getItem('SanadAccounting_data') || '{}';
+                  const fileName = `Sanad_Backup_${new Date().toISOString().slice(0,10)}.json`;
                   
-                  if (navigator.share) {
-                    const file = new File([rawData], `Sanad_Backup_${new Date().toISOString().slice(0,10)}.json`, { type: 'application/json' });
-                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                      await navigator.share({
-                        title: 'نسخة احتياطية - نظام سند المحاسبي',
-                        text: 'ملف النسخة الاحتياطية لقاعدة بيانات نظام سند',
-                        files: [file]
-                      });
-                      return;
-                    }
-                  }
-                  
-                  // بديل المشاركة العادية عبر الحافظة أو الرابط
-                  navigator.clipboard.writeText(rawData);
-                  alert('✓ تم نسخ محتوى قاعدة البيانات إلى الحافظة، يمكنك لصقه وإرساله عبر واتساب فوراً!');
+                  await saveAndShareFile({
+                    fileName,
+                    data: rawData,
+                    mimeType: 'application/json',
+                    title: 'مشاركة النسخة الاحتياطية - نظام سند المحاسبي',
+                    text: 'ملف قاعدة البيانات والنسخة الاحتياطية لنظام سند المحاسبي'
+                  });
                 } catch (err) {
                   console.warn('Share backup error:', err);
+                  alert('⚠️ حدث خطأ أثناء الحفظ أو المشاركة.');
                 }
               }}
               className="py-3 px-3 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition cursor-pointer flex items-center justify-center gap-2 shadow-sm active:scale-95"
