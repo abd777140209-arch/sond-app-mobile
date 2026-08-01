@@ -3,15 +3,12 @@ package com.sanad.accounting
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
-import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -23,18 +20,11 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
-/**
- * MainActivity for Sanad Accounting (نظام سند الذكي المحاسبي)
- * Configures WebView to load local bundled offline assets directly from assets/public/index.html.
- */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private val LOCAL_APP_URL = "file:///android_asset/public/index.html"
     private val PERMISSIONS_REQUEST_CODE = 1001
-
-    private var filePathCallback: ValueCallback<Array<Uri>>? = null
-    private val FILE_CHOOSER_REQUEST_CODE = 2001
 
     class WebAppInterface(private val mContext: Context) {
         @JavascriptInterface
@@ -110,42 +100,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // الجسر المضاف بعناية لفتح منتقي الملفات والصور والكاميرا مثل النسخة القديمة تماماً
         webView.webChromeClient = object : WebChromeClient() {
-            override fun onShowFileChooser(
-                webView: WebView?,
-                filePathCallback: ValueCallback<Array<Uri>>?,
-                fileChooserParams: FileChooserParams?
-            ): Boolean {
-                this@MainActivity.filePathCallback?.onReceiveValue(null)
-                this@MainActivity.filePathCallback = filePathCallback
-
-                val intent = fileChooserParams?.createIntent()
-                try {
-                    startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE)
-                } catch (e: Exception) {
-                    this@MainActivity.filePathCallback = null
-                    return false
-                }
-                return true
-            }
-
             override fun onPermissionRequest(request: PermissionRequest?) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     request?.grant(request.resources)
                 }
             }
-        }
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
-            if (filePathCallback == null) return
-            val results = WebChromeClient.FileChooserParams.parseResult(resultCode, data)
-            filePathCallback?.onReceiveValue(results)
-            filePathCallback = null
-        } else {
-            super.onActivityResult(requestCode, resultCode, data)
         }
     }
 
