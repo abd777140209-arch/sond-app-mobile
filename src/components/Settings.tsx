@@ -40,7 +40,11 @@ import {
   UserCheck,
   CheckCircle2,
   FolderTree,
-  Share2
+  Share2,
+  Moon,
+  Square,
+  Maximize2,
+  Layers
 } from 'lucide-react';
 import { SystemSettings, AppTheme, CardShape, DisplayDensity, CurrencyRate, BackupFrequency } from '../types';
 import { DEFAULT_CURRENCIES } from '../utils/seedData';
@@ -139,7 +143,6 @@ export default function Settings({
       return;
     }
 
-    // دعم الكود المجاني التجريبي محلياً وفورياً
     if (key === 'MHTT-TRIAL-7DAY-FREE') {
       soundManager.playSuccessChime();
       const trialLicense: LicenseInfo = {
@@ -163,12 +166,7 @@ export default function Settings({
     setIsUpgrading(true);
     try {
       const hwid = currentLicense.hwid || generateHWID();
-      const res = await activateLicenseOnCloud(
-        key, 
-        hwid, 
-        currentLicense.customerName || storeName, 
-        phone
-      );
+      const res = await activateLicenseOnCloud(key, hwid, currentLicense.customerName || storeName, phone);
 
       if (res.success && res.data) {
         soundManager.playSuccessChime();
@@ -298,7 +296,55 @@ export default function Settings({
     });
   };
 
-  // 🎯 دالة رفع الشعار المباشرة والمضمونة عبر المعرض
+  const updateCardShapeInstantly = (newShape: CardShape) => {
+    soundManager.playScanBeep();
+    setCardShape(newShape);
+    onSaveSettings({
+      ...settings,
+      storeName,
+      currency: selectedCurrencySymbol || currency,
+      currencies: currenciesList,
+      selectedCurrencySymbol: selectedCurrencySymbol || currency,
+      exchangeRates: getExchangeRatesMap(),
+      address,
+      phone,
+      pinCode,
+      isPinEnabled,
+      protectedSections,
+      privacyPinCode,
+      isPrivacyPinEnabled,
+      appTheme,
+      cardShape: newShape,
+      density,
+      deviceMode
+    });
+  };
+
+  const updateDensityInstantly = (newDensity: DisplayDensity) => {
+    soundManager.playScanBeep();
+    setDensity(newDensity);
+    onSaveSettings({
+      ...settings,
+      storeName,
+      currency: selectedCurrencySymbol || currency,
+      currencies: currenciesList,
+      selectedCurrencySymbol: selectedCurrencySymbol || currency,
+      exchangeRates: getExchangeRatesMap(),
+      address,
+      phone,
+      pinCode,
+      isPinEnabled,
+      protectedSections,
+      privacyPinCode,
+      isPrivacyPinEnabled,
+      appTheme,
+      cardShape,
+      density: newDensity,
+      deviceMode
+    });
+  };
+
+  // 🎯 الطريقة المستقرة 100% لرفع الشعار المباشر عبر المعرض
   const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -452,7 +498,6 @@ export default function Settings({
             </div>
           </div>
 
-          {/* نموذج ترقية الاشتراك والكود المجاني */}
           <div className="mt-4 pt-3 border-t border-slate-100 bg-blue-50/70 p-3.5 rounded-xl border border-blue-200 space-y-2">
             <h4 className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-amber-500" />
@@ -461,7 +506,7 @@ export default function Settings({
             <div className="flex gap-2">
               <input
                 type="text"
-                placeholder="MHTT-TRIAL-7DAY-FREE أو كود خاص"
+                placeholder="MHTT-TRIAL-7DAY-FREE"
                 value={upgradeKey}
                 onChange={(e) => setUpgradeKey(e.target.value)}
                 className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white text-slate-800 font-mono text-center"
@@ -538,7 +583,7 @@ export default function Settings({
 
       </div>
 
-      {/* RIGHT COLUMN: Store Profile Settings (7 cols) */}
+      {/* RIGHT COLUMN: Store Profile Settings & Security & Themes (7 cols) */}
       <div className="lg:col-span-7 space-y-6">
         
         <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
@@ -560,7 +605,7 @@ export default function Settings({
 
           <form onSubmit={handleSave} className="space-y-4">
             
-            {/* Custom Logo Upload Card (Direct Trigger) */}
+            {/* Custom Logo Upload Card (Direct Stable Trigger) */}
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
@@ -657,6 +702,93 @@ export default function Settings({
                   }}
                   className="w-full bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+              </div>
+            </div>
+
+            {/* Multi-currency Rates Manager */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+              <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                <div className="flex items-center gap-2">
+                  <Coins className="w-4 h-4 text-amber-600" />
+                  <h4 className="text-xs font-black text-slate-900">إدارة العملات وأسعار الصرف</h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAddCurrForm(!showAddCurrForm)}
+                  className="px-3 py-1.5 bg-amber-600 text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" /> إضافة عملة
+                </button>
+              </div>
+
+              {showAddCurrForm && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <input type="text" placeholder="اسم العملة" value={newCurrName} onChange={(e) => setNewCurrName(e.target.value)} className="p-1.5 bg-white border rounded text-xs" />
+                    <input type="text" placeholder="الرمز (ر.ي)" value={newCurrSymbol} onChange={(e) => setNewCurrSymbol(e.target.value)} className="p-1.5 bg-white border rounded text-xs font-bold" />
+                    <input type="text" placeholder="الكود (YER)" value={newCurrCode} onChange={(e) => setNewCurrCode(e.target.value)} className="p-1.5 bg-white border rounded text-xs uppercase" />
+                    <input type="number" step="any" placeholder="سعر الصرف" value={newCurrRate} onChange={(e) => setNewCurrRate(e.target.value)} className="p-1.5 bg-white border rounded text-xs font-mono" />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={() => setShowAddCurrForm(false)} className="px-2 py-1 bg-slate-200 text-xs rounded">إلغاء</button>
+                    <button type="button" onClick={handleAddCurrency} className="px-3 py-1 bg-amber-600 text-white text-xs rounded">حفظ</button>
+                  </div>
+                </div>
+              )}
+
+              <div className="divide-y divide-slate-100 text-xs">
+                {currenciesList.map(curr => (
+                  <div key={curr.id} className="py-2 flex justify-between items-center">
+                    <span className="font-bold text-slate-800">{curr.name} ({curr.symbol})</span>
+                    <div className="flex items-center gap-1">
+                      <input 
+                        type="number" 
+                        step="any"
+                        disabled={curr.isBase}
+                        value={curr.exchangeRate}
+                        onChange={(e) => handleUpdateCurrencyRate(curr.id, parseFloat(e.target.value) || 1)}
+                        className="w-20 p-1 text-center border rounded font-mono font-bold bg-white"
+                      />
+                      {!curr.isBase && (
+                        <button type="button" onClick={() => handleDeleteCurrency(curr.id)} className="text-rose-600 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Security Locks & PIN Protection */}
+            <div className="pt-4 border-t border-slate-100 space-y-3">
+              <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <Shield className="w-4 h-4 text-blue-600" /> الحماية وقفل الدخول الأمني
+              </h4>
+
+              <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-blue-950 text-xs">حماية الأقسام بررمز PIN</span>
+                  <input type="checkbox" checked={isPinEnabled} onChange={(e) => setIsPinEnabled(e.target.checked)} className="w-4 h-4 rounded text-blue-600 cursor-pointer" />
+                </div>
+
+                {isPinEnabled && (
+                  <div className="space-y-2 pt-2 border-t border-blue-200">
+                    <input type="password" maxLength={6} value={pinCode} onChange={(e) => setPinCode(e.target.value)} placeholder="رمز PIN (1234)" className="w-full p-2 bg-white border rounded text-xs font-mono text-center tracking-widest font-bold" />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Theme & Layout Customization */}
+            <div className="pt-4 border-t border-slate-100 space-y-3">
+              <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                <Palette className="w-4 h-4 text-purple-600" /> تخصيص الثيمات والمظهر
+              </h4>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                <button type="button" onClick={() => updateThemeInstantly('financial-blue')} className={`p-2.5 rounded-xl border text-center ${appTheme === 'financial-blue' ? 'bg-blue-50 border-blue-600 font-bold' : 'bg-slate-50'}`}>الأزرق المالي</button>
+                <button type="button" onClick={() => updateThemeInstantly('emerald-green')} className={`p-2.5 rounded-xl border text-center ${appTheme === 'emerald-green' ? 'bg-emerald-50 border-emerald-600 font-bold' : 'bg-slate-50'}`}>الأخضر الزمردي</button>
+                <button type="button" onClick={() => updateThemeInstantly('warm-amber')} className={`p-2.5 rounded-xl border text-center ${appTheme === 'warm-amber' ? 'bg-amber-50 border-amber-600 font-bold' : 'bg-slate-50'}`}>البني الدافئ</button>
+                <button type="button" onClick={() => updateThemeInstantly('dark-luxury')} className={`p-2.5 rounded-xl border text-center ${appTheme === 'dark-luxury' ? 'bg-slate-900 text-amber-400 border-amber-500 font-bold' : 'bg-slate-800 text-white'}`}>الداكن الفخم</button>
               </div>
             </div>
 
