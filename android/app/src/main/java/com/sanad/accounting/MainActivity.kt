@@ -23,10 +23,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
-/**
- * MainActivity for Sanad Accounting (نظام سند الذكي المحاسبي)
- * Configures WebView to load local bundled offline assets directly from assets/public/index.html.
- */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
@@ -47,10 +43,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        private fun String?.isNullOrBlank(): Boolean {
-            return this == null || this.trim().isEmpty()
-        }
-
         @JavascriptInterface
         fun showToast(message: String) {
             try {
@@ -58,11 +50,6 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 // ignore
             }
-        }
-
-        @JavascriptInterface
-        fun requestPermissions(permissions: Array<String>) {
-            // No-op or permission trigger
         }
     }
 
@@ -110,7 +97,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // 🎯 الجسر الحقيقي المفقود لفتح منتقي الملفات والصور والكاميرا في أندرويد
         webView.webChromeClient = object : WebChromeClient() {
             override fun onShowFileChooser(
                 webView: WebView?,
@@ -138,7 +124,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // التقاط النتيجة من نافذة اختيار الملفات أو الشعار وإعادتها للـ WebView
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
             if (filePathCallback == null) return
