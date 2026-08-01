@@ -1,9 +1,4 @@
 /**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-/**
  * Android & Web Runtime Permissions Manager for Sanad Accounting (نظام سند المحاسبي)
  * Handles Android APK / Webview / PWA runtime permissions without affecting Desktop/JVM builds.
  */
@@ -48,6 +43,7 @@ export async function requestCameraPermissionOnDemand(): Promise<boolean> {
 
 /**
  * Requests Android Storage/Media permissions ONLY on user action (e.g. exporting PDF, printing, uploading attachment)
+ * Prevents app crashes during logo upload or report export.
  */
 export async function requestStoragePermissionOnDemand(): Promise<boolean> {
   if (typeof window !== 'undefined' && (window as any).AndroidInterface?.requestPermissions === 'function') {
@@ -78,17 +74,4 @@ export async function requestAndroidStartupPermissions(): Promise<AndroidPermiss
     vibrateSupported,
     isAndroidDevice: isAndroid,
   };
-}
-
-// تووافقية مع أي استدعاءات قديمة
-export async function checkAndRequestAndroidPermissions(): Promise<boolean> {
-  return await requestStoragePermissionOnDemand();
-}
-
-export async function requestStoragePermission(): Promise<boolean> {
-  return await requestStoragePermissionOnDemand();
-}
-
-export async function requestCameraPermission(): Promise<boolean> {
-  return await requestCameraPermissionOnDemand();
 }
