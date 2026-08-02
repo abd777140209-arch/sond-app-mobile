@@ -20,10 +20,13 @@ import {
   Receipt, 
   FileText,
   Building2,
-  Coins
+  Coins,
+  Download,
+  Printer
 } from 'lucide-react';
 import { Customer, Transaction, SystemSettings } from '../types';
 import { soundManager } from '../utils/sound';
+import { saveAndShareFile } from '../utils/fileExport';
 
 export interface SanadPhoneLedgerProps {
   apiBaseUrl?: string;
@@ -86,153 +89,242 @@ export const SanadPhoneLedger: React.FC<SanadPhoneLedgerProps> = ({
     setSelectedCurrency(curr);
   };
 
+  // 🔹 دالة تصدير وتنزيل ملف الـ CSV لحركة الصندوق (تعمل بكفاءة على الأندرويد)
+  const handleExportCSV = async () => {
+    soundManager.playSuccessChime();
+    try {
+      let csvContent = "\uFEFFالرقم,نوع الحركة,البيان,المبلغ,التاريخ\n";
+      
+      transactions.forEach((tx, index) => {
+        const txType = tx.type === 'income' ? 'قبض / إيراد' : 'صرف / مصروف';
+        const desc = (tx.description || 'حركة صندوق').replace(/,/g, ' ');
+        csvContent += `${index + 1},"${txType}","${desc}",${tx.amount},"${tx.date}"\n`;
+      });
+
+      const fileName = `Cash_Ledger_${new Date().toISOString().split('T')[0]}.csv`;
+
+      await saveAndShareFile({
+        fileName,
+        data: csvContent,
+        isBase64: false,
+        mimeType: 'text/csv;charset=utf-8',
+        title: 'تصدير حركة الصندوق CSV',
+        text: 'ملف جدول بيانات الحركات المالية والصندوق'
+      });
+    } catch (err) {
+      console.error('CSV Export error:', err);
+      alert('⚠️ تعذر تصدير ملف CSV.');
+    }
+  };
+
+  // 🔹 دالة الطباعة المباشرة لدفتر الصندوق
+  const handlePrintLedger = () => {
+    soundManager.playSuccessChime();
+    try {
+      window.print();
+    } catch (err) {
+      console.error('Print ledger error:', err);
+      alert('⚠️ تعذر فتح شاشة الطباعة.');
+    }
+  };
+
   return (
     <div className="p-4 sm:p-6 bg-slate-50 dark:bg-slate-900 min-h-screen font-sans text-slate-800 dark:text-slate-100 space-y-6" style={{ direction: 'rtl' }}>
       
-      {/* 🔹 Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl p-5 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-indigo-500/20 backdrop-blur-md rounded-2xl border border-indigo-400/30 text-indigo-300">
-            <Coins className="w-7 h-7" />
-          </div>
-          <div>
-            <h1 className="text-lg sm:text-xl font-extrabold flex items-center gap-2">
-              <span>كشوف الحسابات وتعدد العملات (Sanad Fast Ledger)</span>
-            </h1>
-            <p className="text-xs text-slate-300 mt-0.5">
-              متابعة ديون العملاء، حركة قطع الغيار، وأجور صيانة وبرمجة الهواتف بتحويل العملات اللحظي
-            </p>
-          </div>
-        </div>
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden !important;
+          }
+          #sanad_phone_ledger_container, #sanad_phone_ledger_container * {
+            visibility: visible !important;
+          }
+          #sanad_phone_ledger_container {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            background: white !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+        }
+      `}</style>
 
-        {/* Currency Switcher */}
-        <div className="flex items-center gap-1.5 bg-slate-950/60 p-1.5 rounded-xl border border-slate-700">
-          {(['ILS', 'USD', 'JOD', 'YER'] as const).map((curr) => (
+      <div id="sanad_phone_ledger_container" className="space-y-6">
+
+        {/* 🔹 Header Banner */}
+        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl p-5 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-indigo-500/20 backdrop-blur-md rounded-2xl border border-indigo-400/30 text-indigo-300">
+              <Coins className="w-7 h-7" />
+            </div>
+            <div>
+              <h1 className="text-lg sm:text-xl font-extrabold flex items-center gap-2">
+                <span>كشوف الحسابات وتعدد العملات (Sanad Fast Ledger)</span>
+              </h1>
+              <p className="text-xs text-slate-300 mt-0.5">
+                متابعة ديون العملاء، حركة قطع الغيار، وأجور صيانة وبرمجة الهواتف بتحويل العملات اللحظي
+              </p>
+            </div>
+          </div>
+
+          {/* Action Buttons & Currency Switcher */}
+          <div className="flex flex-wrap items-center gap-2 no-print">
+            
+            {/* Export CSV Button */}
             <button
-              key={curr}
-              onClick={() => handleCurrencyChange(curr)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${
-                selectedCurrency === curr
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
+              onClick={handleExportCSV}
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow transition cursor-pointer"
+              title="تصدير بيانات الصندوق إلى ملف CSV"
             >
-              {rates[curr].name} ({rates[curr].symbol})
+              <Download className="w-4 h-4" />
+              <span>تصدير CSV</span>
             </button>
-          ))}
-        </div>
-      </div>
 
-      {/* 🔹 Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        
-        {/* Total Sales */}
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 border-r-4 border-r-emerald-500">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-bold mb-2">
-            <span>مبيعات وصيانة الهواتف</span>
-            <TrendingUp className="w-4 h-4 text-emerald-500" />
+            {/* Print Ledger Button */}
+            <button
+              onClick={handlePrintLedger}
+              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow transition cursor-pointer"
+              title="طباعة دفتر الصندوق"
+            >
+              <Printer className="w-4 h-4" />
+              <span>طباعة الصندوق</span>
+            </button>
+
+            {/* Currency Switcher */}
+            <div className="flex items-center gap-1.5 bg-slate-950/60 p-1.5 rounded-xl border border-slate-700">
+              {(['ILS', 'USD', 'JOD', 'YER'] as const).map((curr) => (
+                <button
+                  key={curr}
+                  onClick={() => handleCurrencyChange(curr)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${
+                    selectedCurrency === curr
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  {rates[curr].name} ({rates[curr].symbol})
+                </button>
+              ))}
+            </div>
+
           </div>
-          <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-            {totalSalesConverted.toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="text-sm font-bold text-emerald-600">{currentSymbol}</span>
-          </h3>
-          <p className="text-[11px] text-slate-400 mt-1">تشمل إيرادات الصيانة، السوفتوير وقطع الغيار</p>
         </div>
 
-        {/* Total Expenses */}
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 border-r-4 border-r-rose-500">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-bold mb-2">
-            <span>المصاريف وقطع الغيار</span>
-            <TrendingDown className="w-4 h-4 text-rose-500" />
+        {/* 🔹 Cards Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          
+          {/* Total Sales */}
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 border-r-4 border-r-emerald-500">
+            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-bold mb-2">
+              <span>مبيعات وصيانة الهواتف</span>
+              <TrendingUp className="w-4 h-4 text-emerald-500" />
+            </div>
+            <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+              {totalSalesConverted.toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="text-sm font-bold text-emerald-600">{currentSymbol}</span>
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-1">تشمل إيرادات الصيانة، السوفتوير وقطع الغيار</p>
           </div>
-          <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-            {totalExpensesConverted.toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="text-sm font-bold text-rose-600">{currentSymbol}</span>
-          </h3>
-          <p className="text-[11px] text-slate-400 mt-1">تضم مشتريات الشاشات والآيسيات والبوكسات</p>
-        </div>
 
-        {/* Net Profit */}
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 border-r-4 border-r-indigo-600">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-bold mb-2">
-            <span>صافي أرباح المحل</span>
-            <Wallet className="w-4 h-4 text-indigo-600" />
+          {/* Total Expenses */}
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 border-r-4 border-r-rose-500">
+            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-bold mb-2">
+              <span>المصاريف وقطع الغيار</span>
+              <TrendingDown className="w-4 h-4 text-rose-500" />
+            </div>
+            <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+              {totalExpensesConverted.toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="text-sm font-bold text-rose-600">{currentSymbol}</span>
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-1">تضم مشتريات الشاشات والآيسيات والبوكسات</p>
           </div>
-          <h3 className="text-xl sm:text-2xl font-black text-indigo-600 dark:text-indigo-400">
-            {netProfitConverted.toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="text-sm font-bold">{currentSymbol}</span>
-          </h3>
-          <p className="text-[11px] text-slate-400 mt-1">الأرباح الفعلية المحسوبة بالعملة المختارة</p>
-        </div>
 
-      </div>
-
-      {/* 🔹 Customer Debt & Statement Lookup */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-5 border border-slate-200 dark:border-slate-700 space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3">
-          <div className="flex items-center gap-2.5 text-slate-900 dark:text-white font-extrabold text-base">
-            <UserCheck className="w-5 h-5 text-indigo-600" />
-            <h2>كشف حساب زبون / ديون الصيانة والبرمجة</h2>
+          {/* Net Profit */}
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 border-r-4 border-r-indigo-600">
+            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-bold mb-2">
+              <span>صافي أرباح المحل</span>
+              <Wallet className="w-4 h-4 text-indigo-600" />
+            </div>
+            <h3 className="text-xl sm:text-2xl font-black text-indigo-600 dark:text-indigo-400">
+              {netProfitConverted.toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="text-sm font-bold">{currentSymbol}</span>
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-1">الأرباح الفعلية المحسوبة بالعملة المختارة</p>
           </div>
-          <span className="text-xs font-bold text-slate-400">
-            {customers.length} عميل مسجل
-          </span>
+
         </div>
 
-        {/* Search Input */}
-        <div className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
-          <input
-            type="text"
-            value={customerSearch}
-            onChange={(e) => setCustomerSearch(e.target.value)}
-            placeholder="ابحث باسم الزبون، أو رقم الهاتف للكشف عن حسابه..."
-            className="w-full pr-10 pl-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
+        {/* 🔹 Customer Debt & Statement Lookup */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-5 border border-slate-200 dark:border-slate-700 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3">
+            <div className="flex items-center gap-2.5 text-slate-900 dark:text-white font-extrabold text-base">
+              <UserCheck className="w-5 h-5 text-indigo-600" />
+              <h2>كشف حساب زبون / ديون الصيانة والبرمجة</h2>
+            </div>
+            <span className="text-xs font-bold text-slate-400">
+              {customers.length} عميل مسجل
+            </span>
+          </div>
 
-        {/* Customers List / Selected Details */}
-        {customerSearch.trim() !== '' && (
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {matchedCustomers.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-4">لم يتم العثور على زبون مطابق</p>
-            ) : (
-              matchedCustomers.map((cust) => {
-                const balanceConverted = cust.balance * currentRate;
-                return (
-                  <div 
-                    key={cust.id} 
-                    className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 hover:border-indigo-400 transition"
-                  >
-                    <div>
-                      <h4 className="text-xs font-black text-slate-900 dark:text-white">{cust.name}</h4>
-                      <p className="text-[11px] text-slate-400">{cust.phone}</p>
-                    </div>
+          {/* Search Input */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
+            <input
+              type="text"
+              value={customerSearch}
+              onChange={(e) => setCustomerSearch(e.target.value)}
+              placeholder="ابحث باسم الزبون، أو رقم الهاتف للكشف عن حسابه..."
+              className="w-full pr-10 pl-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
 
-                    <div className="flex items-center gap-3">
-                      <div className="text-left">
-                        <span className="text-[10px] font-bold text-slate-400 block">الرصيد المتبقي</span>
-                        <span className={`text-xs font-extrabold ${balanceConverted > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                          {balanceConverted.toLocaleString(undefined, { maximumFractionDigits: 2 })} {currentSymbol}
-                        </span>
+          {/* Customers List / Selected Details */}
+          {customerSearch.trim() !== '' && (
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {matchedCustomers.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-4">لم يتم العثور على زبون مطابق</p>
+              ) : (
+                matchedCustomers.map((cust) => {
+                  const balanceConverted = cust.balance * currentRate;
+                  return (
+                    <div 
+                      key={cust.id} 
+                      className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 hover:border-indigo-400 transition"
+                    >
+                      <div>
+                        <h4 className="text-xs font-black text-slate-900 dark:text-white">{cust.name}</h4>
+                        <p className="text-[11px] text-slate-400">{cust.phone}</p>
                       </div>
 
-                      {onSelectCustomerStatement && (
-                        <button
-                          onClick={() => {
-                            soundManager.playScanBeep();
-                            onSelectCustomerStatement(cust);
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1 shadow cursor-pointer transition"
-                        >
-                          <FileText className="w-3.5 h-3.5" />
-                          <span>كشف الحساب</span>
-                        </button>
-                      )}
+                      <div className="flex items-center gap-3">
+                        <div className="text-left">
+                          <span className="text-[10px] font-bold text-slate-400 block">الرصيد المتبقي</span>
+                          <span className={`text-xs font-extrabold ${balanceConverted > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                            {balanceConverted.toLocaleString(undefined, { maximumFractionDigits: 2 })} {currentSymbol}
+                          </span>
+                        </div>
+
+                        {onSelectCustomerStatement && (
+                          <button
+                            onClick={() => {
+                              soundManager.playScanBeep();
+                              onSelectCustomerStatement(cust);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1 shadow cursor-pointer transition"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>كشف الحساب</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
+                  );
+                })
+              )}
+            </div>
+          )}
+
+        </div>
 
       </div>
 
