@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { Capacitor } from '@capacitor/core';
 import { getSafeHtml2CanvasOptions } from '../utils/pdfHelper';
 import { motion } from 'motion/react';
 import { 
@@ -97,11 +98,16 @@ export default function Maintenance({
   const [deleteTargetOrder, setDeleteTargetOrder] = useState<MaintenanceOrder | null>(null);
 
   const handleExportMonthlyMaintenancePDF = async () => {
+    soundManager.playSuccessChime();
+    if (!Capacitor.isNativePlatform()) {
+      window.print();
+      return;
+    }
     try {
       setIsExportingPDF(true);
       const reportElement = document.getElementById('maintenance-tab-pdf-printable-report');
       if (!reportElement) {
-        alert('عذراً، لم يتم العثور على عنصر التقرير.');
+        window.print();
         setIsExportingPDF(false);
         return;
       }
@@ -151,9 +157,7 @@ export default function Maintenance({
       });
     } catch (error) {
       console.error('Error generating PDF:', error);
-      if (typeof window !== 'undefined') {
-        window.print();
-      }
+      window.print();
     } finally {
       setIsExportingPDF(false);
     }

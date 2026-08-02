@@ -25,10 +25,14 @@ import {
   Eye,
   EyeOff,
   Camera,
-  Settings
+  Settings,
+  Download,
+  Volume2,
+  FileSpreadsheet
 } from 'lucide-react';
 import { Product } from '../types';
 import { soundManager } from '../utils/sound';
+import { saveAndShareFile } from '../utils/fileExport';
 import BarcodeLabelPrinterModal from './BarcodeLabelPrinterModal';
 import CameraBarcodeScannerModal from './CameraBarcodeScannerModal';
 import ManageCategoriesModal from './ManageCategoriesModal';
@@ -234,6 +238,45 @@ export default function Inventory({
     return num.toLocaleString() + ' ' + currency;
   };
 
+  // 🎯 Export CSV / Excel Handler
+  const handleExportCSV = async () => {
+    soundManager.playSuccessChime();
+    let csv = `\uFEFFالاسم,الباركود,التصنيف,المخزون,الحد الأدنى,تلفة الشراء,سعر البيع\n`;
+    activeProductsList.forEach(p => {
+      csv += `"${(p.name || '').replace(/"/g, '""')}","${p.barcode}","${p.category || 'عام'}","${p.stock}","${p.minStock}","${p.costPrice}","${p.sellingPrice}"\n`;
+    });
+
+    const fileName = `جرد_المستودع_${new Date().toISOString().slice(0, 10)}.csv`;
+    await saveAndShareFile({
+      fileName,
+      data: csv,
+      mimeType: 'text/csv;charset=utf-8',
+      title: 'تصدير جرد المستودع - سند',
+      text: `تقرير جرد المستودع والسلع من نظام سند (${activeProductsList.length} صنف)`
+    });
+  };
+
+  // 🎯 Print Inventory Handler
+  const handlePrintInventory = () => {
+    soundManager.playSuccessChime();
+    window.print();
+  };
+
+  // 🎯 Voice Assistant Zara Speech Reading
+  const handleVoiceZara = () => {
+    soundManager.playScanBeep();
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const text = `المساعد الذكي زارا يقرأ لك جرد المستودع: إجمالي السلع المسجلة ${activeProductsList.length} صنف، بإجمالي ${totalStockCount} قطعة. قيمة رأس المال المباشر ${totalCostValue.toLocaleString()} ${currency}. والأرباح المتوقعة ${totalPotentialProfit.toLocaleString()} ${currency}. هناك ${lowStockItemsCount} صنف قارب على النفاد.`;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ar-SA';
+      utterance.rate = 1.0;
+      window.speechSynthesis.speak(utterance);
+    } else {
+      alert(`🤖 المساعد زارا: إجمالي الأصناف ${activeProductsList.length} صنف، بقيمة تكلفة ${totalCostValue.toLocaleString()} ${currency}`);
+    }
+  };
+
   // Calculate statistics
   const totalStockCount = activeProductsList.reduce((acc, p) => acc + p.stock, 0);
   const totalCostValue = activeProductsList.reduce((acc, p) => acc + (p.costPrice * p.stock), 0);
@@ -360,6 +403,33 @@ export default function Inventory({
             >
               <AlertTriangle className="w-3.5 h-3.5" />
               <span>المنتهية والمنخفضة فقط</span>
+            </button>
+
+            <button
+              onClick={handleExportCSV}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+              title="تصدير بيانات الجرد كملف اكسل/CSV"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>تصدير CSV / Excel</span>
+            </button>
+
+            <button
+              onClick={handlePrintInventory}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-900 text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+              title="طباعة جرد المستودع"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>طباعة الجرد</span>
+            </button>
+
+            <button
+              onClick={handleVoiceZara}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+              title="قراءة ملخص الجرد صوتياً عبر المساعد الذكي زارا"
+            >
+              <Volume2 className="w-3.5 h-3.5" />
+              <span>قراءة صوتية (زارا)</span>
             </button>
 
             <button

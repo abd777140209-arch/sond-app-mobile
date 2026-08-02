@@ -120,12 +120,14 @@ export default function CustomerStatementModal({
 
   const handlePrint = async () => {
     soundManager.playScanBeep();
+    if (!Capacitor.isNativePlatform()) {
+      window.print();
+      return;
+    }
     try {
       await generatePDFAndShare();
     } catch (e) {
-      if (typeof window !== 'undefined') {
-        window.print();
-      }
+      window.print();
     }
   };
 
@@ -145,7 +147,17 @@ export default function CustomerStatementModal({
 
   const handleNativeShare = async () => {
     soundManager.playScanBeep();
-    await generatePDFAndShare();
+    try {
+      await generatePDFAndShare();
+    } catch (e) {
+      await saveAndShareFile({
+        fileName: `كشف_حساب_${customer.name.replace(/\s+/g, '_')}.txt`,
+        data: summaryText,
+        mimeType: 'text/plain',
+        title: `كشف حساب - ${customer.name}`,
+        text: summaryText
+      });
+    }
   };
 
   return (

@@ -6,6 +6,7 @@
 import React, { useState, useMemo } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { Capacitor } from '@capacitor/core';
 import { getSafeHtml2CanvasOptions } from '../utils/pdfHelper';
 import { 
   TrendingUp, 
@@ -180,12 +181,16 @@ export default function ProfitReports({
   };
 
   const handleExportSummaryPDF = async () => {
+    soundManager.playSuccessChime();
+    if (!Capacitor.isNativePlatform()) {
+      window.print();
+      return;
+    }
     try {
       setIsExportingPDF(true);
-      soundManager.playSuccessChime();
       const reportElement = document.getElementById('profit_reports_view');
       if (!reportElement) {
-        alert('عذراً، لم يتم العثور على عنصر التقرير.');
+        window.print();
         setIsExportingPDF(false);
         return;
       }
@@ -231,9 +236,7 @@ export default function ProfitReports({
       });
     } catch (error) {
       console.error('Error generating Summary PDF:', error);
-      if (typeof window !== 'undefined') {
-        window.print();
-      }
+      window.print();
     } finally {
       setIsExportingPDF(false);
     }
@@ -630,7 +633,7 @@ export default function ProfitReports({
             <button
               onClick={() => {
                 soundManager.playSuccessChime();
-                handleExportSummaryPDF();
+                window.print();
               }}
               className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-blue-500/20 no-print"
             >

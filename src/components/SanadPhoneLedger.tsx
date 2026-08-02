@@ -20,10 +20,12 @@ import {
   Receipt, 
   FileText,
   Building2,
-  Coins
+  Coins,
+  Download
 } from 'lucide-react';
 import { Customer, Transaction, SystemSettings } from '../types';
 import { soundManager } from '../utils/sound';
+import { saveAndShareFile } from '../utils/fileExport';
 
 export interface SanadPhoneLedgerProps {
   apiBaseUrl?: string;
@@ -86,6 +88,25 @@ export const SanadPhoneLedger: React.FC<SanadPhoneLedgerProps> = ({
     setSelectedCurrency(curr);
   };
 
+  const handleExportCSV = async () => {
+    soundManager.playSuccessChime();
+    let csv = `\uFEFFالتاريخ,النوع,الوصف,المبلغ,العملة,المبلغ المحول (${selectedCurrency})\n`;
+    transactions.forEach(t => {
+      const converted = t.amount * currentRate;
+      const typeAr = t.type === 'income' || t.type === 'sale' ? 'إيراد / مبيعات' : 'مصروف / مشتريات';
+      csv += `"${t.date}","${typeAr}","${(t.description || '').replace(/"/g, '""')}","${t.amount}","${selectedCurrency}","${converted.toFixed(2)}"\n`;
+    });
+
+    const fileName = `حركة_الصندوق_${new Date().toISOString().slice(0, 10)}.csv`;
+    await saveAndShareFile({
+      fileName,
+      data: csv,
+      mimeType: 'text/csv;charset=utf-8',
+      title: 'تصدير حركة الصندوق - سند',
+      text: `تقرير حركة الصندوق بالعملة المختارة (${selectedCurrency})`
+    });
+  };
+
   return (
     <div className="p-4 sm:p-6 bg-slate-50 dark:bg-slate-900 min-h-screen font-sans text-slate-800 dark:text-slate-100 space-y-6" style={{ direction: 'rtl' }}>
       
@@ -105,21 +126,31 @@ export const SanadPhoneLedger: React.FC<SanadPhoneLedgerProps> = ({
           </div>
         </div>
 
-        {/* Currency Switcher */}
-        <div className="flex items-center gap-1.5 bg-slate-950/60 p-1.5 rounded-xl border border-slate-700">
-          {(['ILS', 'USD', 'JOD', 'YER'] as const).map((curr) => (
-            <button
-              key={curr}
-              onClick={() => handleCurrencyChange(curr)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${
-                selectedCurrency === curr
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              {rates[curr].name} ({rates[curr].symbol})
-            </button>
-          ))}
+        {/* Currency Switcher & CSV Export */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleExportCSV}
+            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            <span>تصدير CSV</span>
+          </button>
+
+          <div className="flex items-center gap-1.5 bg-slate-950/60 p-1.5 rounded-xl border border-slate-700">
+            {(['ILS', 'USD', 'JOD', 'YER'] as const).map((curr) => (
+              <button
+                key={curr}
+                onClick={() => handleCurrencyChange(curr)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${
+                  selectedCurrency === curr
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                {rates[curr].name} ({rates[curr].symbol})
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

@@ -106,6 +106,10 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
 
   const handlePrint = async () => {
     soundManager.playSuccessChime();
+    if (!Capacitor.isNativePlatform()) {
+      window.print();
+      return;
+    }
     try {
       const element = document.getElementById('invoice-printable-card');
       if (element) {
@@ -137,19 +141,13 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
             text: `طباعة فاتورة رقم ${invoice.invoiceNumber}`
           });
         } catch (canvasErr) {
-          console.warn('html2canvas print failed, falling back to window.print():', canvasErr);
-          if (typeof window !== 'undefined') {
-            window.print();
-          }
+          window.print();
         }
-      } else if (typeof window !== 'undefined') {
+      } else {
         window.print();
       }
     } catch (err) {
-      console.error('خطأ في الطباعة والتصدير:', err);
-      if (typeof window !== 'undefined') {
-        window.print();
-      }
+      window.print();
     }
   };
 
