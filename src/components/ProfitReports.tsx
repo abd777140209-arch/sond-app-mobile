@@ -4,9 +4,6 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
-import { getSafeHtml2CanvasOptions } from '../utils/pdfHelper';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -119,121 +116,93 @@ export default function ProfitReports({
   const [copied, setCopied] = useState(false);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
 
+  // 1. دالة تصدير تقرير الصيانة الفنية المباشر والسريع
   const handleExportMaintenancePDF = async () => {
     try {
       setIsExportingPDF(true);
-      const reportElement = document.getElementById('maintenance-pdf-printable-report');
-      if (!reportElement) {
-        alert('عذراً، لم يتم العثور على عنصر التقرير.');
-        setIsExportingPDF(false);
-        return;
-      }
+      soundManager.playSuccessChime();
 
-      reportElement.style.display = 'block';
+      let text = `🛠️ *تقرير الصيانة والورشة الفنية - ${settings?.storeName || 'سند المحاسبي'}*\n`;
+      text += `التاريخ: ${new Date().toLocaleDateString('ar-YE')}\n`;
+      text += `-----------------------------------------\n`;
+      text += `• الأجهزة المنجزة: ${maintenanceStats.completedOrdersCount} من أصل ${maintenanceStats.totalOrdersCount} جهاز\n`;
+      text += `• أجور اليد (صافي الربح): ${fmt(maintenanceStats.totalLaborFeeRevenue)}\n`;
+      text += `• تكلفة قطع الغيار: ${fmt(maintenanceStats.totalSparePartsCost)}\n`;
+      text += `• إجمالي الإيرادات: ${fmt(maintenanceStats.totalMaintenanceRevenue)}\n`;
+      text += `-----------------------------------------\n`;
+      text += `*أداء الفنيين والإنتاجية:*\n`;
 
-      const canvas = await html2canvas(reportElement, getSafeHtml2CanvasOptions({ windowWidth: 850 }));
-
-      reportElement.style.display = 'none';
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'p',
-        unit: 'mm',
-        format: 'a4'
+      maintenanceStats.techniciansList.forEach((tech, i) => {
+        text += `${i + 1}. الفني: ${tech.name} | أجهزة منجزة: ${tech.completedCount} | أجور اليد: ${fmt(tech.laborFee)}\n`;
       });
 
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      text += `-----------------------------------------\n`;
+      text += `برمجة وتطوير م. عبدالمجيد المحواشي\n`;
 
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
-
-      while (heightLeft >= 1) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pdfHeight;
-      }
-
-      const todayStr = new Date().toISOString().split('T')[0];
-      const fileName = `تقرير_الصيانة_الشهري_${todayStr}.pdf`;
-      const base64Data = pdf.output('datauristring').split(',')[1];
+      const fileName = `Maintenance_Report_${new Date().toISOString().split('T')[0]}.txt`;
 
       await saveAndShareFile({
         fileName,
-        data: base64Data,
-        isBase64: true,
-        mimeType: 'application/pdf',
-        title: 'تقرير الصيانة - سند',
-        text: `تقرير الصيانة المصدّر من تطبيق سند المحاسبي بتاريخ ${todayStr}`
+        data: text,
+        isBase64: false,
+        mimeType: 'text/plain',
+        title: 'تقرير الصيانة الفنية',
+        text: `تقرير أرباح وأداء قسم الصيانة`
       });
     } catch (error) {
-      console.error('Error generating PDF:', error);
+      console.error('Error generating Maintenance Report:', error);
+      alert('⚠️ تعذر تصدير تقرير الصيانة.');
     } finally {
       setIsExportingPDF(false);
     }
   };
 
+  // 2. دالة تصدير ملخص التقرير المالي العام
   const handleExportSummaryPDF = async () => {
     try {
       setIsExportingPDF(true);
       soundManager.playSuccessChime();
-      const reportElement = document.getElementById('profit_reports_view');
-      if (!reportElement) {
-        alert('عذراً، لم يتم العثور على عنصر التقرير.');
-        setIsExportingPDF(false);
-        return;
-      }
 
-      const canvas = await html2canvas(reportElement, getSafeHtml2CanvasOptions({ windowWidth: 1000 }));
+      let text = `📊 *تقرير الأرباح والمبيعات - ${settings?.storeName || 'سند المحاسبي'}*\n`;
+      text += `تاريخ التقرير: ${new Date().toLocaleDateString('ar-YE')}\n`;
+      text += `الفترة: ${period === 'today' ? 'اليوم' : period === 'month' ? 'الشهر الحالي' : 'المحدد'}\n`;
+      text += `-----------------------------------------\n`;
+      text += `• إجمالي المبيعات (الإيرادات): ${fmt(stats.totalRevenue)}\n`;
+      text += `• تكلفة البضاعة المباعة: ${fmt(stats.totalCostOfGoods)}\n`;
+      text += `• صافي الأرباح: ${fmt(stats.grossProfit)}\n`;
+      text += `• نسبة هامش الربح: %${stats.profitMargin.toFixed(1)}\n`;
+      text += `• عدد الفواتير: ${stats.invoiceCount}\n`;
+      text += `• مبيعات كاش: ${fmt(stats.totalCashRevenue)}\n`;
+      text += `• مبيعات آجل (ديون): ${fmt(stats.totalDebtRevenue)}\n`;
+      text += `-----------------------------------------\n`;
+      text += `برمجة وتطوير م. عبدالمجيد المحواشي\n`;
 
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'p',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
-
-      while (heightLeft >= 1) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pdfHeight;
-      }
-
-      const todayStr = new Date().toISOString().split('T')[0];
-      const fileName = `تقرير_الأرباح_والمبيعات_${todayStr}.pdf`;
-      const base64Data = pdf.output('datauristring').split(',')[1];
+      const fileName = `Financial_Report_${new Date().toISOString().split('T')[0]}.txt`;
 
       await saveAndShareFile({
         fileName,
-        data: base64Data,
-        isBase64: true,
-        mimeType: 'application/pdf',
-        title: 'تقرير الأرباح والمبيعات - سند',
-        text: `تقرير الأرباح والمبيعات المصدّر من تطبيق سند المحاسبي بتاريخ ${todayStr}`
+        data: text,
+        isBase64: false,
+        mimeType: 'text/plain',
+        title: 'تقرير الأرباح والمبيعات',
+        text: `ملخص تقرير الأرباح والمبيعات الصادر`
       });
     } catch (error) {
       console.error('Error generating Summary PDF:', error);
-      alert('⚠️ تعذر تصدير تقرير PDF، يرجى إعادة المحاولة.');
+      alert('⚠️ تعذر تصدير ملخص التقرير.');
     } finally {
       setIsExportingPDF(false);
+    }
+  };
+
+  // 3. دالة الطباعة المباشرة بأوامر نظام الهاتف الموثوقة
+  const handleDirectPrint = () => {
+    soundManager.playSuccessChime();
+    try {
+      window.print();
+    } catch (err) {
+      console.error("Print error:", err);
+      alert("⚠️ تعذر فتح شاشة الطباعة.");
     }
   };
 
@@ -547,10 +516,31 @@ export default function ProfitReports({
   };
 
   return (
-    <div id="profit_reports_view" className="space-y-6 pb-12">
+    <div id="profit_reports_view" className="space-y-6 pb-12 print:p-0 print:m-0">
       
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden !important;
+          }
+          #profit_reports_view, #profit_reports_view * {
+            visibility: visible !important;
+          }
+          #profit_reports_view {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            background: white !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+        }
+      `}</style>
+
       {/* 1. TOP HEADER & FILTER BAR */}
-      <div className="p-5 md:p-6 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-4">
+      <div className="p-5 md:p-6 rounded-2xl border border-slate-200 bg-white shadow-sm space-y-4 print:shadow-none print:border-none">
         
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -575,7 +565,7 @@ export default function ProfitReports({
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 self-end md:self-auto">
+          <div className="flex flex-wrap items-center gap-2 self-end md:self-auto no-print">
             {/* Multi-Currency Pills */}
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
               <span className="text-[10px] text-slate-500 font-bold px-1 flex items-center gap-0.5">
@@ -626,10 +616,7 @@ export default function ProfitReports({
             )}
 
             <button
-              onClick={() => {
-                soundManager.playSuccessChime();
-                handleExportSummaryPDF();
-              }}
+              onClick={handleDirectPrint}
               className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-blue-500/20 no-print"
             >
               <Printer className="w-4 h-4" />
@@ -639,7 +626,7 @@ export default function ProfitReports({
         </div>
 
         {/* Filter Controls Row */}
-        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 no-print">
           
           {/* Period Preset Pills */}
           <div className="flex flex-wrap items-center gap-1.5">
@@ -687,7 +674,7 @@ export default function ProfitReports({
         </div>
 
         {/* REPORT SECTION SWITCHER TABS */}
-        <div className="pt-3 border-t border-slate-100 flex items-center justify-start gap-2 overflow-x-auto pb-1">
+        <div className="pt-3 border-t border-slate-100 flex items-center justify-start gap-2 overflow-x-auto pb-1 no-print">
           <button
             onClick={() => setReportSubTab('sales')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
@@ -800,7 +787,7 @@ export default function ProfitReports({
           </div>
 
           {/* TIMELINE REVENUE & PROFIT CHART */}
-          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4 no-print">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-blue-600" />
               المخطط الزمني لحركة المبيعات والأرباح
@@ -873,7 +860,7 @@ export default function ProfitReports({
             </div>
 
             {/* Cash vs Debt Payment Breakdown */}
-            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4 no-print">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <PieIcon className="w-4 h-4 text-blue-600" />
                 توزيع المبيعات النقدية والآجلة
@@ -934,7 +921,7 @@ export default function ProfitReports({
                   className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20 no-print disabled:opacity-50"
                 >
                   {isExportingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                  <span>{isExportingPDF ? 'جاري التصدير...' : '📄 تصدير تقرير الصيانة (PDF)'}</span>
+                  <span>{isExportingPDF ? 'جاري التصدير...' : '📄 تصدير تقرير الصيانة'}</span>
                 </button>
 
                 <div className="p-3 rounded-xl bg-purple-800/50 border border-purple-700 text-left font-mono">
@@ -1178,153 +1165,6 @@ export default function ProfitReports({
 
         </div>
       )}
-
-      {/* HIDDEN PRINTABLE CONTAINER FOR HIGH-RES PDF EXPORT */}
-      <div
-        id="maintenance-pdf-printable-report"
-        className="bg-white text-slate-900 p-8 font-sans"
-        style={{ display: 'none', width: '820px', direction: 'rtl' }}
-      >
-        {/* Document Header */}
-        <div className="border-b-2 border-purple-900 pb-4 mb-6 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-black text-purple-950">
-              {settings?.storeName || 'مركز الصيانة والورشة الفنية المعتمدة'}
-            </h1>
-            <h2 className="text-base font-bold text-slate-700 mt-1">
-              تقرير أرباح الصيانة ومؤشر كفاءة فنيي الورشة
-            </h2>
-            <p className="text-xs text-slate-500 mt-1">
-              تاريخ التقرير: {new Date().toLocaleDateString('ar-EG')} - {new Date().toLocaleTimeString('ar-EG')}
-            </p>
-          </div>
-          <div className="text-left font-mono bg-purple-50 p-3 rounded-xl border border-purple-200">
-            <span className="text-xs text-purple-800 font-sans font-bold block">الفترة المحددة:</span>
-            <span className="text-sm font-black text-purple-950">
-              {period === 'today' ? 'اليوم' : period === 'week' ? 'الأسبوع الحالي' : period === 'month' ? 'الشهر الحالي' : period === '30days' ? 'آخر 30 يوماً' : 'الكلي'}
-            </span>
-          </div>
-        </div>
-
-        {/* Financial Overview Cards */}
-        <div className="grid grid-cols-4 gap-3 mb-6 font-mono text-center">
-          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-            <span className="text-xs font-sans font-bold text-slate-500 block">الأجهزة المنجزة</span>
-            <span className="text-lg font-black text-blue-600">{maintenanceStats.completedOrdersCount} جهاز</span>
-          </div>
-          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-            <span className="text-xs font-sans font-bold text-slate-500 block">إجمالي الإيرادات</span>
-            <span className="text-lg font-black text-slate-900">{maintenanceStats.totalMaintenanceRevenue.toLocaleString()} {currency}</span>
-          </div>
-          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-            <span className="text-xs font-sans font-bold text-slate-500 block">تكلفة قطع الغيار</span>
-            <span className="text-lg font-black text-rose-600">{maintenanceStats.totalSparePartsCost.toLocaleString()} {currency}</span>
-          </div>
-          <div className="p-3 bg-purple-50 rounded-xl border border-purple-300">
-            <span className="text-xs font-sans font-bold text-purple-800 block">صافي أجور اليد (الربح)</span>
-            <span className="text-lg font-black text-emerald-600">{maintenanceStats.totalLaborFeeRevenue.toLocaleString()} {currency}</span>
-          </div>
-        </div>
-
-        {/* Technician Efficiency Leaderboard Table */}
-        <div className="mb-6">
-          <h3 className="text-sm font-bold text-purple-950 mb-2 border-r-4 border-purple-700 pr-2">
-            🏆 تقرير أداء وكفاءة فنيي الصيانة بالورشة:
-          </h3>
-          <table className="w-full text-xs text-right border-collapse border border-slate-300">
-            <thead>
-              <tr className="bg-purple-900 text-white font-bold">
-                <th className="p-2 border border-purple-800">#</th>
-                <th className="p-2 border border-purple-800">اسم الفني</th>
-                <th className="p-2 border border-purple-800 text-center">الأجهزة المنجزة</th>
-                <th className="p-2 border border-purple-800 text-center">قطع الغيار</th>
-                <th className="p-2 border border-purple-800 text-center">أجور اليد</th>
-                <th className="p-2 border border-purple-800 text-center">إجمالي المبيعات</th>
-              </tr>
-            </thead>
-            <tbody>
-              {maintenanceStats.techniciansList.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="p-4 text-center text-slate-400">لا توجد سجلات فنيين.</td>
-                </tr>
-              ) : (
-                maintenanceStats.techniciansList.map((tech, i) => (
-                  <tr key={tech.name} className={i % 2 === 0 ? 'bg-slate-50' : 'bg-white'}>
-                    <td className="p-2 border border-slate-300 font-bold">{i + 1}</td>
-                    <td className="p-2 border border-slate-300 font-bold">{tech.name}</td>
-                    <td className="p-2 border border-slate-300 text-center font-mono font-bold">{tech.completedCount}</td>
-                    <td className="p-2 border border-slate-300 text-center font-mono">{tech.spareParts.toLocaleString()} {currency}</td>
-                    <td className="p-2 border border-slate-300 text-center font-mono font-bold text-emerald-700">{tech.laborFee.toLocaleString()} {currency}</td>
-                    <td className="p-2 border border-slate-300 text-center font-mono font-bold">{tech.revenue.toLocaleString()} {currency}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Breakdown Table of Completed Repair Orders */}
-        <div className="mb-6">
-          <h3 className="text-sm font-bold text-purple-950 mb-2 border-r-4 border-purple-700 pr-2">
-            📋 سجل كروت الصيانة المنجزة تفصيلياً:
-          </h3>
-          <table className="w-full text-[11px] text-right border-collapse border border-slate-300">
-            <thead>
-              <tr className="bg-slate-800 text-white font-bold">
-                <th className="p-2 border border-slate-700">رقم الكرت</th>
-                <th className="p-2 border border-slate-700">العميل والهاتف</th>
-                <th className="p-2 border border-slate-700">الجهاز والمشكلة</th>
-                <th className="p-2 border border-slate-700">الفني المسؤول</th>
-                <th className="p-2 border border-slate-700 text-center">التكلفة</th>
-                <th className="p-2 border border-slate-700 text-center">قطع الغيار</th>
-                <th className="p-2 border border-slate-700 text-center">أجور اليد</th>
-              </tr>
-            </thead>
-            <tbody>
-              {maintenanceOrders.filter(o => o.status === 'completed' || o.status === 'delivered').length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="p-4 text-center text-slate-400">لا توجد كروت صيانة منجزة.</td>
-                </tr>
-              ) : (
-                maintenanceOrders
-                  .filter(o => o.status === 'completed' || o.status === 'delivered')
-                  .slice(0, 40)
-                  .map((order, idx) => {
-                    const spare = order.sparePartsCost || 0;
-                    const labor = order.laborFee ?? Math.max(0, order.cost - spare);
-                    return (
-                      <tr key={order.id} className={idx % 2 === 0 ? 'bg-slate-50' : 'bg-white'}>
-                        <td className="p-2 border border-slate-300 font-mono font-bold">#{order.orderNumber}</td>
-                        <td className="p-2 border border-slate-300">
-                          <div className="font-bold">{order.customerName}</div>
-                          <div className="text-[9px] text-slate-500 font-mono">{order.customerPhone}</div>
-                        </td>
-                        <td className="p-2 border border-slate-300">
-                          <div className="font-bold">{order.deviceName}</div>
-                          <div className="text-[9px] text-slate-500">{order.issueDescription}</div>
-                        </td>
-                        <td className="p-2 border border-slate-300 font-bold">{order.technicianName || 'الورشة'}</td>
-                        <td className="p-2 border border-slate-300 text-center font-mono font-bold">{order.cost.toLocaleString()} {currency}</td>
-                        <td className="p-2 border border-slate-300 text-center font-mono text-slate-600">{spare.toLocaleString()} {currency}</td>
-                        <td className="p-2 border border-slate-300 text-center font-mono font-bold text-emerald-700">{labor.toLocaleString()} {currency}</td>
-                      </tr>
-                    );
-                  })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Official Footer / Stamp */}
-        <div className="pt-6 border-t-2 border-slate-300 flex justify-between items-center text-xs text-slate-600 font-bold">
-          <div>
-            <span>ختم وتوقيع مسكّن الصيانة / المدير المسؤول: ______________________</span>
-          </div>
-          <div className="text-left font-mono">
-            <span>تم استخراج التقرير آلياً عبر نظام سند المحاسبي</span>
-          </div>
-        </div>
-      </div>
 
     </div>
   );
