@@ -272,7 +272,9 @@ export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
       });
     } catch (err) {
       console.error('فشل تصدير كارت الاستلام كـ PDF:', err);
-      alert('❌ حدث خطأ أثناء تصدير ملف PDF، يرجى المحاولة مرة أخرى.');
+      if (typeof window !== 'undefined') {
+        window.print();
+      }
     } finally {
       setIsExportingPDF(false);
     }

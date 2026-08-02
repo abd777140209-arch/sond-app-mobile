@@ -4,6 +4,9 @@
  */
 
 import React, { useState } from 'react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import { getSafeHtml2CanvasOptions } from '../utils/pdfHelper';
 import { motion } from 'motion/react';
 import { 
   Smartphone, 
@@ -93,54 +96,66 @@ export default function Maintenance({
   // Delete confirmation modal state
   const [deleteTargetOrder, setDeleteTargetOrder] = useState<MaintenanceOrder | null>(null);
 
-  // 🔹 دالة تصدير تقرير الصيانة الشهري المباشر والسريع (بدون أخطاء الـ WebView)
   const handleExportMonthlyMaintenancePDF = async () => {
     try {
       setIsExportingPDF(true);
-      soundManager.playSuccessChime();
+      const reportElement = document.getElementById('maintenance-tab-pdf-printable-report');
+      if (!reportElement) {
+        alert('عذراً، لم يتم العثور على عنصر التقرير.');
+        setIsExportingPDF(false);
+        return;
+      }
 
-      let text = `🛠️ *تقرير صيانة الأجهزة والورشة الفنية - ${storeName}*\n`;
-      text += `تاريخ التقرير: ${new Date().toLocaleDateString('ar-YE')}\n`;
-      text += `-----------------------------------------\n`;
-      text += `• إجمالي كروت الصيانة: ${orders.length} جهاز\n`;
-      text += `• الأجهزة المنجزة: ${completedOrders.length} جهاز\n`;
-      text += `• تكلفة قطع الغيار: ${totalSpareParts.toLocaleString()} ${currency}\n`;
-      text += `• صافي ربح أجور اليد: ${totalLaborFees.toLocaleString()} ${currency}\n`;
-      text += `-----------------------------------------\n`;
-      text += `*سجل أحدث كروت الصيانة:*\n`;
+      reportElement.style.display = 'block';
 
-      orders.slice(-20).forEach((o, i) => {
-        text += `${i + 1}. كرت #${o.orderNumber} | العميل: ${o.customerName} | الجهاز: ${o.deviceName} | التكلفة: ${o.cost} ${currency}\n`;
+      const canvas = await html2canvas(reportElement, getSafeHtml2CanvasOptions({ windowWidth: 850 }));
+
+      reportElement.style.display = 'none';
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'mm',
+        format: 'a4'
       });
 
-      text += `-----------------------------------------\n`;
-      text += `برمجة وتطوير م. عبدالمجيد المحواشي\n`;
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
-      const fileName = `Maintenance_Report_${new Date().toISOString().split('T')[0]}.txt`;
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft >= 1) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      const fileName = `تقرير_الصيانة_الشهري_${todayStr}.pdf`;
+      const base64Data = pdf.output('datauristring').split(',')[1];
 
       await saveAndShareFile({
         fileName,
-        data: text,
-        isBase64: false,
-        mimeType: 'text/plain',
-        title: 'تقرير الصيانة الشهري',
-        text: `تقرير قسم الصيانة التقنية المصدّر`
+        data: base64Data,
+        isBase64: true,
+        mimeType: 'application/pdf',
+        title: 'تقرير الصيانة الشهري - سند',
+        text: `تقرير قسم الصيانة التقنية المصدّر من تطبيق سند المحاسبي بتاريخ ${todayStr}`
       });
     } catch (error) {
-      console.error('Error generating Maintenance Report:', error);
-      alert('⚠️ تعذر تصدير تقرير الصيانة.');
+      console.error('Error generating PDF:', error);
+      if (typeof window !== 'undefined') {
+        window.print();
+      }
     } finally {
       setIsExportingPDF(false);
-    }
-  };
-
-  // 🔹 دالة الطباعة المباشرة لكرت أو تقرير الصيانة
-  const handlePrintMaintenance = () => {
-    soundManager.playSuccessChime();
-    try {
-      window.print();
-    } catch (err) {
-      alert('⚠️ تعذر فتح أمر الطباعة.');
     }
   };
 
@@ -306,27 +321,6 @@ export default function Maintenance({
   return (
     <div id="maintenance_tab_view" className="space-y-3.5 md:space-y-6 pb-20 md:pb-28">
       
-      <style>{`
-        @media print {
-          body * {
-            visibility: hidden !important;
-          }
-          #maintenance_tab_view, #maintenance_tab_view * {
-            visibility: visible !important;
-          }
-          #maintenance_tab_view {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            background: white !important;
-          }
-          .no-print {
-            display: none !important;
-          }
-        }
-      `}</style>
-
       {/* 1. STATS SUMMARY BAR */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-4">
         <div className="p-2.5 sm:p-4 rounded-xl md:rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
@@ -377,7 +371,7 @@ export default function Maintenance({
       </div>
 
       {/* 2. HEADER ACTIONS & NEW ORDER MODAL/BUTTON */}
-      <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4 no-print">
+      <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
         
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
@@ -395,15 +389,7 @@ export default function Maintenance({
               className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-purple-700 hover:bg-purple-800 text-white shadow-md transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
             >
               {isExportingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              <span>{isExportingPDF ? 'جاري التصدير...' : '📄 تصدير التقرير الشهري'}</span>
-            </button>
-
-            <button
-              onClick={handlePrintMaintenance}
-              className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-md transition cursor-pointer flex items-center gap-1.5"
-            >
-              <Printer className="w-4 h-4" />
-              <span>طباعة كروت الصيانة</span>
+              <span>{isExportingPDF ? 'جاري التصدير...' : '📄 تصدير التقرير الشهري (PDF)'}</span>
             </button>
 
             <button
@@ -501,7 +487,7 @@ export default function Maintenance({
                   </div>
                 </div>
 
-                <div className="flex justify-end items-center gap-2 pt-2 border-t border-slate-200/60 no-print">
+                <div className="flex justify-end items-center gap-2 pt-2 border-t border-slate-200/60">
                   <button
                     type="button"
                     onClick={() => {
@@ -563,7 +549,7 @@ export default function Maintenance({
                 <th className="pb-3">الفني المسؤول</th>
                 <th className="pb-3 text-center">التكلفة والقطع</th>
                 <th className="pb-3 text-center">الحالة</th>
-                <th className="pb-3 pl-2 text-left no-print">إجراءات والتحديث</th>
+                <th className="pb-3 pl-2 text-left">إجراءات والتحديث</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -621,7 +607,7 @@ export default function Maintenance({
                         <option value="delivered">تم التسليم النهائي</option>
                       </select>
                     </td>
-                    <td className="py-3 pl-2 text-left flex justify-end gap-1.5 no-print">
+                    <td className="py-3 pl-2 text-left flex justify-end gap-1.5">
                       <button
                         type="button"
                         onClick={() => {
@@ -682,7 +668,7 @@ export default function Maintenance({
         drag
         dragMomentum={false}
         whileDrag={{ scale: 1.1 }}
-        className="fixed bottom-6 right-6 z-40 touch-none cursor-grab active:cursor-grabbing no-print"
+        className="fixed bottom-6 right-6 z-40 touch-none cursor-grab active:cursor-grabbing"
       >
         <button
           onClick={() => {
@@ -1036,6 +1022,115 @@ export default function Maintenance({
           </div>
         </div>
       )}
+
+      {/* HIDDEN PRINTABLE CONTAINER FOR PDF EXPORT */}
+      <div
+        id="maintenance-tab-pdf-printable-report"
+        className="bg-white text-slate-900 p-8 font-sans"
+        style={{ display: 'none', width: '820px', direction: 'rtl' }}
+      >
+        {/* Document Header */}
+        <div className="border-b-2 border-purple-900 pb-4 mb-6 flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-black text-purple-950">
+              {storeName || 'مركز الصيانة والورشة الفنية المعتمدة'}
+            </h1>
+            <h2 className="text-base font-bold text-slate-700 mt-1">
+              تقرير كروت الصيانة والأداء الشهري المالي
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              تاريخ الطباعة: {new Date().toLocaleDateString('ar-EG')} - {new Date().toLocaleTimeString('ar-EG')}
+            </p>
+          </div>
+          <div className="text-left font-mono bg-purple-50 p-3 rounded-xl border border-purple-200">
+            <span className="text-xs text-purple-800 font-sans font-bold block">نوع السند:</span>
+            <span className="text-sm font-black text-purple-950">تقرير صيانة شهري رسمـي</span>
+          </div>
+        </div>
+
+        {/* Financial KPI Grid */}
+        <div className="grid grid-cols-4 gap-3 mb-6 font-mono text-center">
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+            <span className="text-xs font-sans font-bold text-slate-500 block">إجمالي كروت الصيانة</span>
+            <span className="text-lg font-black text-slate-900">{orders.length} جهاز</span>
+          </div>
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+            <span className="text-xs font-sans font-bold text-slate-500 block">الأجهزة المنجزة</span>
+            <span className="text-lg font-black text-emerald-600">{completedOrders.length} جهاز</span>
+          </div>
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+            <span className="text-xs font-sans font-bold text-slate-500 block">تكلفة قطع الغيار</span>
+            <span className="text-lg font-black text-rose-600">{totalSpareParts.toLocaleString()} {currency}</span>
+          </div>
+          <div className="p-3 bg-purple-50 rounded-xl border border-purple-300">
+            <span className="text-xs font-sans font-bold text-purple-800 block">صافي ربح أجور اليد</span>
+            <span className="text-lg font-black text-emerald-600">{totalLaborFees.toLocaleString()} {currency}</span>
+          </div>
+        </div>
+
+        {/* Orders Detailed Table */}
+        <div className="mb-6">
+          <h3 className="text-sm font-bold text-purple-950 mb-2 border-r-4 border-purple-700 pr-2">
+            📋 كشف وسجل كروت صيانة الورشة الفنية:
+          </h3>
+          <table className="w-full text-[11px] text-right border-collapse border border-slate-300">
+            <thead>
+              <tr className="bg-purple-900 text-white font-bold">
+                <th className="p-2 border border-purple-800">رقم الكرت</th>
+                <th className="p-2 border border-purple-800">العميل والهاتف</th>
+                <th className="p-2 border border-purple-800">الجهاز والعطل</th>
+                <th className="p-2 border border-purple-800">الفني</th>
+                <th className="p-2 border border-purple-800 text-center">الحالة</th>
+                <th className="p-2 border border-purple-800 text-center">التكلفة الإجمالية</th>
+                <th className="p-2 border border-purple-800 text-center">أجور اليد</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-4 text-center text-slate-400">لا توجد كروت صيانة مسجلة.</td>
+                </tr>
+              ) : (
+                orders.map((o, i) => {
+                  const spare = o.sparePartsCost || 0;
+                  const labor = o.laborFee ?? Math.max(0, o.cost - spare);
+                  return (
+                    <tr key={o.id} className={i % 2 === 0 ? 'bg-slate-50' : 'bg-white'}>
+                      <td className="p-2 border border-slate-300 font-mono font-bold">#{o.orderNumber}</td>
+                      <td className="p-2 border border-slate-300">
+                        <div className="font-bold">{o.customerName}</div>
+                        <div className="text-[9px] text-slate-500 font-mono">{o.customerPhone}</div>
+                      </td>
+                      <td className="p-2 border border-slate-300">
+                        <div className="font-bold">{o.deviceName}</div>
+                        <div className="text-[9px] text-slate-500">{o.issueDescription}</div>
+                      </td>
+                      <td className="p-2 border border-slate-300 font-bold">{o.technicianName || 'الورشة'}</td>
+                      <td className="p-2 border border-slate-300 text-center font-bold">
+                        {o.status === 'received' ? 'مستلم' :
+                         o.status === 'repairing' ? 'جاري الصيانة' :
+                         o.status === 'completed' ? 'جاهز للاستلام' : 'تم التسليم'}
+                      </td>
+                      <td className="p-2 border border-slate-300 text-center font-mono font-bold">{o.cost.toLocaleString()} {currency}</td>
+                      <td className="p-2 border border-slate-300 text-center font-mono font-bold text-emerald-700">{labor.toLocaleString()} {currency}</td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer */}
+        <div className="pt-6 border-t-2 border-slate-300 flex justify-between items-center text-xs text-slate-600 font-bold">
+          <div>
+            <span>توقيع وختم مهندس الورشة والإدارة: ______________________</span>
+          </div>
+          <div className="text-left font-mono">
+            <span>تم الاستخراج عبر نظام سند المحاسبي</span>
+          </div>
+        </div>
+      </div>
 
     </div>
   );

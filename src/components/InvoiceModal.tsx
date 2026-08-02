@@ -5,13 +5,17 @@
 
 import React, { useState, useEffect } from 'react';
 import { Printer, Download, X, ShieldCheck, Heart, Smartphone, SlidersHorizontal, MessageCircle, FileDown, Loader2, Share2, Bluetooth, QrCode, ArrowRight } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import { QRCodeSVG } from 'qrcode.react';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
 import { Invoice, SystemSettings, Customer } from '../types';
 import { soundManager } from '../utils/sound';
+import { requestStoragePermissionOnDemand } from '../utils/androidPermissions';
 import { saveAndShareFile } from '../utils/fileExport';
+import { getSafeHtml2CanvasOptions } from '../utils/pdfHelper';
 
 interface InvoiceModalProps {
   invoice: Invoice | null;
@@ -63,102 +67,155 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
 
   if (!invoice) return null;
 
-  // 1. دالة الطباعة المباشرة عبر نافذة أندرويد/المتصفح الرسمية
-  const handlePrint = () => {
+  const getHtml2CanvasOptions = () => getSafeHtml2CanvasOptions({
+    onclone: (clonedDoc: Document) => {
+      const origCard = document.getElementById('invoice-printable-card');
+      const clonedCard = clonedDoc.getElementById('invoice-printable-card');
+      if (origCard && clonedCard) {
+        const origElements = Array.from(origCard.querySelectorAll('*'));
+        const clonedElements = Array.from(clonedCard.querySelectorAll('*'));
+
+        const cardComputed = window.getComputedStyle(origCard);
+        clonedCard.style.color = cardComputed.color.includes('oklch') ? '#1e293b' : cardComputed.color;
+        clonedCard.style.backgroundColor = cardComputed.backgroundColor.includes('oklch') ? '#ffffff' : cardComputed.backgroundColor;
+
+        origElements.forEach((origEl, idx) => {
+          const clonedEl = clonedElements[idx] as HTMLElement;
+          if (clonedEl) {
+            const computed = window.getComputedStyle(origEl);
+            if (computed.color && !computed.color.includes('oklch')) {
+              clonedEl.style.color = computed.color;
+            } else if (computed.color && computed.color.includes('oklch')) {
+              clonedEl.style.color = '#1e293b';
+            }
+            if (computed.backgroundColor && !computed.backgroundColor.includes('oklch') && computed.backgroundColor !== 'rgba(0, 0, 0, 0)') {
+              clonedEl.style.backgroundColor = computed.backgroundColor;
+            } else if (computed.backgroundColor && computed.backgroundColor.includes('oklch')) {
+              clonedEl.style.backgroundColor = '#ffffff';
+            }
+            if (computed.borderColor && !computed.borderColor.includes('oklch')) {
+              clonedEl.style.borderColor = computed.borderColor;
+            } else if (computed.borderColor && computed.borderColor.includes('oklch')) {
+              clonedEl.style.borderColor = '#e2e8f0';
+            }
+          }
+        });
+      }
+    }
+  });
+
+  const handlePrint = async () => {
     soundManager.playSuccessChime();
     try {
-      window.print();
+      const element = document.getElementById('invoice-printable-card');
+      if (element) {
+        try {
+          const canvas = await html2canvas(element, getHtml2CanvasOptions());
+          const imgData = canvas.toDataURL('image/png');
+          const imgWidth = canvas.width;
+          const imgHeight = canvas.height;
+
+          const pdfWidth = paperSize === '80mm' ? 80 : 58;
+          const pdfHeight = (imgHeight * pdfWidth) / imgWidth;
+
+          const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: [pdfWidth, pdfHeight + 2],
+          });
+
+          pdf.addImage(imgData, 'PNG', 0, 1, pdfWidth, pdfHeight);
+          const fileName = `طباعة_فاتورة_${invoice.invoiceNumber}.pdf`;
+          const base64Data = pdf.output('datauristring').split(',')[1];
+
+          await saveAndShareFile({
+            fileName,
+            data: base64Data,
+            isBase64: true,
+            mimeType: 'application/pdf',
+            title: `فاتورة ${invoice.invoiceNumber}`,
+            text: `طباعة فاتورة رقم ${invoice.invoiceNumber}`
+          });
+        } catch (canvasErr) {
+          console.warn('html2canvas print failed, falling back to window.print():', canvasErr);
+          if (typeof window !== 'undefined') {
+            window.print();
+          }
+        }
+      } else if (typeof window !== 'undefined') {
+        window.print();
+      }
     } catch (err) {
-      console.error('Print error:', err);
-      alert('⚠️ تعذر فتح شاشة الطباعة المباشرة.');
+      console.error('خطأ في الطباعة والتصدير:', err);
+      if (typeof window !== 'undefined') {
+        window.print();
+      }
     }
   };
 
-  // 2. دالة طباعة/إرسال البلوتوث المباشرة (عبر جسر AndroidInterface المدمج)
   const handleBluetoothPrint = async () => {
     soundManager.playSuccessChime();
+    await requestStoragePermissionOnDemand();
     setIsBluetoothConnecting(true);
     try {
-      let receiptText = `-----------------------------------------\n`;
-      receiptText += `        ${settings.storeName.toUpperCase()}        \n`;
-      if (settings.address) receiptText += `        ${settings.address}        \n`;
-      if (settings.phone) receiptText += `        هاتف: ${settings.phone}        \n`;
-      receiptText += `-----------------------------------------\n`;
-      receiptText += `رقم الفاتورة: ${invoice.invoiceNumber}\n`;
-      receiptText += `التاريخ: ${new Date(invoice.date).toLocaleString('ar-YE')}\n`;
-      receiptText += `العميل: ${invoice.customerName}\n`;
-      receiptText += `نوع الدفع: ${invoice.type === 'cash' ? 'نقدي (كاش)' : 'ذمم وآجل'}\n`;
-      receiptText += `-----------------------------------------\n`;
-      
-      invoice.items.forEach(item => {
-        receiptText += `${item.name}\n`;
-        receiptText += `  ${item.quantity} x ${item.sellingPrice} = ${item.total} ${settings.currency}\n`;
-      });
-      
-      receiptText += `-----------------------------------------\n`;
-      receiptText += `المجموع: ${invoice.totalAmount} ${settings.currency}\n`;
-      if (invoice.discount > 0) receiptText += `الخصم: -${invoice.discount} ${settings.currency}\n`;
-      receiptText += `الصافي النهائي: ${invoice.finalAmount} ${settings.currency}\n`;
-      receiptText += `-----------------------------------------\n`;
-      receiptText += `       شكراً لتعاملكم وزيارتكم لنا!       \n`;
-      receiptText += `-----------------------------------------\n`;
-
-      if ((window as any).AndroidInterface && (window as any).AndroidInterface.printReceipt) {
-        (window as any).AndroidInterface.printReceipt(receiptText);
-      } else if (Capacitor.isNativePlatform()) {
-        await Share.share({
-          title: `طباعة فاتورة ${invoice.invoiceNumber}`,
-          text: receiptText,
-          dialogTitle: 'إرسال الفاتورة للطابعة'
+      if (typeof navigator !== 'undefined' && 'bluetooth' in navigator) {
+        const device = await (navigator as any).bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb', '49535343-fe7d-4ae5-8fa9-9fafd205e455']
         });
+        if (device) {
+          alert(`✅ تم الاقتران بطابعة البلوتوث الحرارية (${device.name || 'طابعة البلوتوث'}). جاري إرسال البيانات...`);
+          handlePrint();
+        }
       } else {
         handlePrint();
       }
     } catch (err) {
-      console.error('Bluetooth print error:', err);
+      console.log('Bluetooth thermal print:', err);
       handlePrint();
     } finally {
       setIsBluetoothConnecting(false);
     }
   };
 
-  // 3. دالة تصدير وتأمين ملف PDF/مشاركة المستند
   const handleExportPDF = async () => {
     if (isExportingPDF) return;
     soundManager.playSuccessChime();
+    await requestStoragePermissionOnDemand();
     setIsExportingPDF(true);
 
     try {
-      let textContent = `👑 *${settings.storeName.toUpperCase()}* 👑\n`;
-      textContent += `فاتورة مبيعات رقم: ${invoice.invoiceNumber}\n`;
-      textContent += `التاريخ والوقت: ${new Date(invoice.date).toLocaleString('ar-YE')}\n`;
-      textContent += `العميل المستلم: ${invoice.customerName}\n`;
-      textContent += `شروط الفاتورة: ${invoice.type === 'cash' ? 'نقدي (كاش)' : 'ذمم وآجل'}\n`;
-      textContent += `-----------------------------------------\n`;
-      textContent += `تفاصيل المبيعات:\n`;
-      
-      invoice.items.forEach((item, idx) => {
-        textContent += `${idx + 1}. ${item.name} | الكمية: ${item.quantity} | السعر: ${item.sellingPrice} | المجموع: ${item.total} ${settings.currency}\n`;
-      });
-      
-      textContent += `-----------------------------------------\n`;
-      textContent += `المجموع الفرعي: ${invoice.totalAmount} ${settings.currency}\n`;
-      if (invoice.discount > 0) textContent += `الخصم: -${invoice.discount} ${settings.currency}\n`;
-      textContent += `الصافي النهائي للتسديد: ${invoice.finalAmount} ${settings.currency}\n`;
+      const element = document.getElementById('invoice-printable-card');
+      if (!element) return;
 
-      const fileName = `Invoice_${invoice.invoiceNumber}.txt`;
+      const canvas = await html2canvas(element, getHtml2CanvasOptions());
+      const imgData = canvas.toDataURL('image/png');
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+
+      const pdfWidth = paperSize === '80mm' ? 80 : 58;
+      const pdfHeight = (imgHeight * pdfWidth) / imgWidth;
+
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [pdfWidth, pdfHeight + 2],
+      });
+
+      pdf.addImage(imgData, 'PNG', 0, 1, pdfWidth, pdfHeight);
+      const fileName = `فاتورة_${invoice.invoiceNumber}.pdf`;
+      const base64Data = pdf.output('datauristring').split(',')[1];
 
       await saveAndShareFile({
         fileName,
-        data: textContent,
-        isBase64: false,
-        mimeType: 'text/plain',
+        data: base64Data,
+        isBase64: true,
+        mimeType: 'application/pdf',
         title: `فاتورة ${invoice.invoiceNumber}`,
         text: `فاتورة مبيعات من ${settings.storeName} - رقم ${invoice.invoiceNumber}`
       });
     } catch (error) {
-      console.error('فشل تصدير الفاتورة:', error);
-      alert('⚠️ تعذر تصدير الفاتورة حالياً.');
+      console.error('فشل تصدير الفاتورة كـ PDF:', error);
     } finally {
       setIsExportingPDF(false);
     }
@@ -170,7 +227,6 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
     soundManager.playScanBeep();
   };
 
-  // 4. دالة تنزيل الملف النصي
   const handleDownload = async () => {
     soundManager.playSuccessChime();
     
@@ -212,7 +268,6 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
     });
   };
 
-  // 5. دالة مشاركة الفاتورة عبر واتساب
   const handleSendWhatsApp = () => {
     soundManager.playSuccessChime();
 
@@ -220,7 +275,7 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
     if (cleanedPhone.startsWith('00')) {
       cleanedPhone = cleanedPhone.slice(2);
     }
-    if (cleanedPhone.length === 9 && (cleanedPhone.startsWith('77') || cleanedPhone.startsWith('73') || cleanedPhone.startsWith('71') || cleanedPhone.startsWith('70'))) {
+    if (cleanedPhone.length === 9 && cleanedPhone.startsWith('7')) {
       cleanedPhone = '967' + cleanedPhone;
     }
 
@@ -253,35 +308,12 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
   };
 
   return (
-    <div id="invoice_modal_overlay" className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-2 sm:p-4 print:p-0 print:bg-white print:fixed print:inset-0">
+    <div id="invoice_modal_overlay" className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-2 sm:p-4 print:bg-white print:absolute print:inset-0">
       
-      <style>{`
-        @media print {
-          body * {
-            visibility: hidden !important;
-          }
-          #invoice-printable-card, #invoice-printable-card * {
-            visibility: visible !important;
-          }
-          #invoice-printable-card {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            padding: 10px !important;
-            margin: 0 !important;
-            background: white !important;
-          }
-          .no-print {
-            display: none !important;
-          }
-        }
-      `}</style>
-
-      <div className="w-full max-w-sm max-h-[92vh] rounded-2xl bg-white text-black shadow-2xl border border-gray-200 overflow-hidden relative animate-fadeIn flex flex-col justify-between print:max-h-none print:shadow-none print:border-none print:w-full print:rounded-none">
+      <div className="w-full max-w-sm max-h-[92vh] rounded-2xl bg-white text-black shadow-2xl border border-gray-200 overflow-hidden relative animate-fadeIn flex flex-col justify-between no-print">
         
         {/* Modal Top Control Bar */}
-        <div className="p-3 bg-slate-900 text-white flex justify-between items-center border-b border-gray-800 shrink-0 no-print">
+        <div className="p-3 bg-slate-900 text-white flex justify-between items-center border-b border-gray-800 shrink-0">
           <button
             id="return_to_pos_btn"
             onClick={onClose}
@@ -311,7 +343,7 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
         </div>
 
         {/* Paper format selector */}
-        <div className="p-2.5 bg-slate-950 border-b border-gray-800 flex items-center justify-between text-xs text-gray-300 shrink-0 no-print">
+        <div className="p-2.5 bg-slate-950 border-b border-gray-800 flex items-center justify-between text-xs text-gray-300 shrink-0">
           <div className="flex items-center gap-1.5">
             <SlidersHorizontal className="w-3.5 h-3.5 text-[#C5A862]" />
             <span>العرض:</span>
@@ -489,7 +521,7 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
 
         {/* WhatsApp Sender */}
         {showWhatsAppForm && (
-          <div className="px-3 py-2.5 bg-[#0c141e] border-t border-gray-800 text-xs text-gray-300 space-y-2 animate-fadeIn shrink-0 no-print">
+          <div className="px-3 py-2.5 bg-[#0c141e] border-t border-gray-800 text-xs text-gray-300 space-y-2 animate-fadeIn shrink-0">
             <div className="flex items-center justify-between">
               <span className="font-bold text-[#F3E7C4] flex items-center gap-1">
                 <MessageCircle className="w-4 h-4 text-green-400" /> إرسال الفاتورة عبر الواتساب
@@ -521,7 +553,7 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
         )}
 
         {/* Modal Bottom Actions */}
-        <div className="p-2.5 bg-slate-900 border-t border-gray-800 grid grid-cols-5 gap-1.5 shrink-0 no-print">
+        <div className="p-2.5 bg-slate-900 border-t border-gray-800 grid grid-cols-5 gap-1.5 shrink-0">
           <button
             id="print_thermal_invoice_btn"
             onClick={handlePrint}

@@ -31,10 +31,12 @@ import {
   Clock,
   X,
   Plus,
-  ShieldCheck
+  ShieldCheck,
+  Download
 } from 'lucide-react';
 import { Customer, Payment, Invoice } from '../types';
 import { soundManager } from '../utils/sound';
+import { saveAndShareFile } from '../utils/fileExport';
 import CustomerEditModal from './CustomerEditModal';
 import CustomerReminderModal from './CustomerReminderModal';
 import CustomerStatementModal from './CustomerStatementModal';
@@ -208,6 +210,25 @@ export default function Customers({
     return name.slice(0, 2).toUpperCase();
   };
 
+  // Export Customers list to CSV
+  const handleExportCustomersCSV = async () => {
+    soundManager.playSuccessChime();
+    let csvData = '\uFEFF';
+    csvData += 'اسم العميل,رقم الهاتف,إجمالي المديونية,سقف الائتمان,تاريخ الاستحقاق,نقاط الولاء,الملاحظات\n';
+    activeCustomers.forEach(c => {
+      csvData += `"${(c.name || '').replace(/"/g, '""')}","${c.phone || ''}",${c.totalDebt || 0},${c.creditLimit || 0},"${c.debtDueDate || ''}",${c.loyaltyPoints || 0},"${(c.notes || '').replace(/"/g, '""')}"\n`;
+    });
+
+    const fileName = `عملاء_سند_${new Date().toISOString().split('T')[0]}.csv`;
+    await saveAndShareFile({
+      fileName,
+      data: csvData,
+      mimeType: 'text/csv;charset=utf-8',
+      title: 'قائمة العملاء والديون',
+      text: 'تصدير قائمة العملاء والديون من تطبيق سند المحاسبي'
+    });
+  };
+
   return (
     <div id="customers_tab_view" className="space-y-3.5 md:space-y-6 pb-20 md:pb-28">
       
@@ -308,6 +329,15 @@ export default function Customers({
               >
                 <CreditCard className="w-4 h-4" />
                 <span>سند قبض تسديد</span>
+              </button>
+
+              <button
+                onClick={handleExportCustomersCSV}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer"
+                title="تصدير ملف CSV"
+              >
+                <Download className="w-4 h-4 text-amber-400" />
+                <span>تصدير CSV</span>
               </button>
 
               <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold overflow-x-auto whitespace-nowrap scrollbar-none gap-1 max-w-full">

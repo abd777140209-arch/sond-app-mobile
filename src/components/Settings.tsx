@@ -1,7 +1,7 @@
 /**
-* @license
-* SPDX-License-Identifier: Apache-2.0
-*/
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 import React, { useState, useRef } from 'react';
 import { 
@@ -44,11 +44,11 @@ import {
 } from 'lucide-react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
-import { FilePicker } from '@capawesome/capacitor-file-picker';
-import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
+import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { SystemSettings, AppTheme, CardShape, DisplayDensity, CurrencyRate, BackupFrequency } from '../types';
-import { ensureCustomFolder } from '../utils/fileExport';
+import { ensureCustomFolder, saveAndShareFile, ensureStoragePermissions } from '../utils/fileExport';
 import { DEFAULT_CURRENCIES } from '../utils/seedData';
 import { soundManager } from '../utils/sound';
 import { loadLicenseLocally, saveLicenseLocally, generateHWID, LicenseInfo } from '../utils/licensing';
@@ -619,6 +619,190 @@ export default function Settings({
     }
   };
 
+  // 💾 دالة إنشاء نسخة احتياطية مباشرة في ذاكرة الهاتف (Directory.Documents)
+  const handleCreateBackupNow = async () => {
+    soundManager.playSuccessChime();
+    const nowIso = new Date().toISOString();
+    setLastLocalBackupDate(nowIso);
+    setLastDriveBackupDate(nowIso);
+
+    const cleanFolder = (backupFolderPath || 'SanadAccounting')
+      .trim()
+      .replace(/^Documents\//i, '')
+      .replace(/^\/+|\/+$/g, '') || 'SanadAccounting';
+
+    localStorage.setItem('sanad_custom_save_folder', cleanFolder);
+
+    try {
+      if (onBackupData) {
+        await onBackupData();
+      }
+
+      const getParsed = (key: string) => {
+        try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; }
+      };
+
+      const fullBackupData = {
+        settings: getParsed('smart_accounting_settings') || settings,
+        products: getParsed('smart_accounting_products') || [],
+        customers: getParsed('smart_accounting_customers') || [],
+        invoices: getParsed('smart_accounting_invoices') || [],
+        payments: getParsed('smart_accounting_payments') || [],
+        transactions: getParsed('smart_accounting_transactions') || [],
+        maintenanceOrders: getParsed('smart_accounting_maintenance') || [],
+        employees: getParsed('smart_accounting_employees') || [],
+        payrollRecords: getParsed('smart_accounting_payroll') || [],
+        users: getParsed('smart_accounting_users') || [],
+        exportedAt: nowIso
+      };
+
+      const jsonStr = JSON.stringify(fullBackupData, null, 2);
+      const fileName = `Sanad_Backup_${new Date().toISOString().slice(0, 10)}_${Date.now().toString().slice(-4)}.json`;
+
+      if (Capacitor.isNativePlatform()) {
+        try {
+          await ensureStoragePermissions();
+
+          try {
+            await Filesystem.mkdir({
+              path: cleanFolder,
+              directory: Directory.Documents,
+              recursive: true
+            });
+          } catch (mkdirErr) {
+            console.log('Mkdir note:', mkdirErr);
+          }
+
+          const relativePath = `${cleanFolder}/${fileName}`;
+          const writeResult = await Filesystem.writeFile({
+            path: relativePath,
+            data: jsonStr,
+            directory: Directory.Documents,
+            recursive: true,
+            encoding: Encoding.UTF8
+          });
+
+          const fullSavedPath = `Documents/${cleanFolder}/${fileName}`;
+
+          let sharedSuccess = false;
+          if (writeResult && writeResult.uri) {
+            try {
+              await Share.share({
+                title: 'نظام سند المحاسبي - النسخة الاحتياطية',
+                text: `ملف النسخة الاحتياطية المكتملة بتاريخ ${new Date().toLocaleDateString('ar-YE')}\n📄 المكان: ${fullSavedPath}`,
+                url: writeResult.uri,
+                dialogTitle: 'تم الحفظ بنجاح! يمكنك المشاركة أو الاحتفاظ بها'
+              });
+              sharedSuccess = true;
+            } catch (shareErr: any) {
+              const errStr = String(shareErr || '').toLowerCase();
+              if (!errStr.includes('cancel') && !errStr.includes('dismiss') && !errStr.includes('abort')) {
+                console.warn('Native share dialog info:', shareErr);
+              }
+            }
+          }
+
+          if (!sharedSuccess) {
+            alert(`✅ تم حفظ النسخة الاحتياطية بنجاح بذاكرة الهاتف!\n📁 المسار: ${fullSavedPath}`);
+          }
+          return;
+        } catch (nativeErr) {
+          console.warn('Native write failed, executing fallback export:', nativeErr);
+        }
+      }
+
+      await saveAndShareFile({
+        fileName,
+        data: jsonStr,
+        mimeType: 'application/json',
+        title: 'نظام سند المحاسبي - النسخة الاحتياطية',
+        text: 'ملف قاعدة البيانات والنسخة الاحتياطية لنظام سند المحاسبي',
+        folderName: cleanFolder
+      });
+
+    } catch (err) {
+      console.error('Backup creation error:', err);
+      alert('⚠️ حدث خطأ أثناء إعداد أو حفظ ملف النسخة الاحتياطية.');
+    }
+  };
+
+  // 📤 دالة مشاركة النسخة الاحتياطية عبر لوحة المشاركة المباشرة (WhatsApp, Drive, Telegram)
+  const handleShareBackupData = async () => {
+    soundManager.playSuccessChime();
+    const nowIso = new Date().toISOString();
+    setLastLocalBackupDate(nowIso);
+    setLastDriveBackupDate(nowIso);
+
+    try {
+      if (onBackupData) {
+        await onBackupData();
+      }
+
+      const getParsed = (key: string) => {
+        try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; }
+      };
+
+      const fullBackupData = {
+        settings: getParsed('smart_accounting_settings') || settings,
+        products: getParsed('smart_accounting_products') || [],
+        customers: getParsed('smart_accounting_customers') || [],
+        invoices: getParsed('smart_accounting_invoices') || [],
+        payments: getParsed('smart_accounting_payments') || [],
+        transactions: getParsed('smart_accounting_transactions') || [],
+        maintenanceOrders: getParsed('smart_accounting_maintenance') || [],
+        employees: getParsed('smart_accounting_employees') || [],
+        payrollRecords: getParsed('smart_accounting_payroll') || [],
+        users: getParsed('smart_accounting_users') || [],
+        exportedAt: nowIso
+      };
+
+      const jsonStr = JSON.stringify(fullBackupData, null, 2);
+      const fileName = `Sanad_Share_Backup_${new Date().toISOString().slice(0, 10)}_${Date.now().toString().slice(-4)}.json`;
+
+      if (Capacitor.isNativePlatform()) {
+        try {
+          await ensureStoragePermissions();
+
+          const writeResult = await Filesystem.writeFile({
+            path: fileName,
+            data: jsonStr,
+            directory: Directory.Cache,
+            recursive: true,
+            encoding: Encoding.UTF8
+          });
+
+          if (writeResult && writeResult.uri) {
+            await Share.share({
+              title: 'مشاركة نسخة البيانات - نظام سند المحاسبي',
+              text: `ملف النسخة الاحتياطية الشاملة لنظام سند المحاسبي بتاريخ ${new Date().toLocaleDateString('ar-YE')}`,
+              url: writeResult.uri,
+              dialogTitle: 'اختر التطبيق لمشاركة النسخة الاحتياطية (WhatsApp, Drive, Telegram...)'
+            });
+            return;
+          }
+        } catch (nativeErr: any) {
+          const errStr = String(nativeErr || '').toLowerCase();
+          if (errStr.includes('cancel') || errStr.includes('dismiss') || errStr.includes('abort')) {
+            return;
+          }
+          console.warn('Native Share attempt error:', nativeErr);
+        }
+      }
+
+      await saveAndShareFile({
+        fileName,
+        data: jsonStr,
+        mimeType: 'application/json',
+        title: 'مشاركة نسخة البيانات - نظام سند المحاسبي',
+        text: 'ملف قاعدة البيانات والنسخة الاحتياطية لنظام سند المحاسبي'
+      });
+
+    } catch (err) {
+      console.error('Share backup error:', err);
+      alert('⚠️ تعذر إتمام مشاركة ملف النسخة الاحتياطية.');
+    }
+  };
+
   return (
     <div id="settings_tab_view" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start pb-28 dir-rtl" dir="rtl">
       
@@ -817,7 +1001,14 @@ export default function Settings({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-white p-3 rounded-lg border border-slate-200">
               <div>
                 <label className="text-xs font-bold text-slate-800 block">مجلد تخزين النسخ بالذاكرة المحلية:</label>
-                <p className="text-[11px] text-slate-500 font-mono mt-0.5">{backupFolderPath}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="font-mono text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg dir-ltr text-right">
+                    Documents/{backupFolderPath.replace(/^Documents\//i, '')}
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                    Directory.Documents
+                  </span>
+                </div>
               </div>
               <button
                 type="button"
@@ -938,41 +1129,7 @@ export default function Settings({
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-2 border-t border-slate-100">
             <button
               type="button"
-              onClick={async () => {
-                soundManager.playSuccessChime();
-                const nowIso = new Date().toISOString();
-                setLastLocalBackupDate(nowIso);
-                setLastDriveBackupDate(nowIso);
-                try {
-                  await onBackupData();
-                  const rawData = localStorage.getItem('sanad_accounting_complete_db') || localStorage.getItem('SanadAccounting_data') || '{}';
-                  const fileName = `Sanad_Backup_${nowIso.slice(0, 10)}.json`;
-
-                  if (Capacitor.isNativePlatform()) {
-                    await Filesystem.writeFile({
-                      path: `${backupFolderPath}/${fileName}`,
-                      data: rawData,
-                      directory: Directory.Documents,
-                      recursive: true
-                    });
-                    alert(`✓ تم حفظ النسخة الاحتياطية بنجاح في مجلد:\n${backupFolderPath}/${fileName}`);
-                  } else {
-                    const blob = new Blob([rawData], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = fileName;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                    alert('✓ تم إنشاء وتنزيل النسخة الاحتياطية بنجاح في ذاكرة الهاتف!');
-                  }
-                } catch (err) {
-                  console.warn('Backup error:', err);
-                  alert('⚠️ حدث خطأ أثناء الحفظ، يرجى التحقق من أذونات التخزين.');
-                }
-              }}
+              onClick={handleCreateBackupNow}
               className="py-3 px-3 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer flex items-center justify-center gap-2 shadow-sm active:scale-95"
             >
               <RefreshCw className="w-4 h-4" />
@@ -981,51 +1138,7 @@ export default function Settings({
 
             <button
               type="button"
-              onClick={async () => {
-                soundManager.playSuccessChime();
-                const nowIso = new Date().toISOString();
-                setLastLocalBackupDate(nowIso);
-                setLastDriveBackupDate(nowIso);
-                try {
-                  await onBackupData();
-                  const rawData = localStorage.getItem('sanad_accounting_complete_db') || localStorage.getItem('SanadAccounting_data') || '{}';
-                  const fileName = `Sanad_Backup_${nowIso.slice(0, 10)}.json`;
-
-                  if (Capacitor.isNativePlatform()) {
-                    const writeFileResult = await Filesystem.writeFile({
-                      path: fileName,
-                      data: rawData,
-                      directory: Directory.Cache
-                    });
-
-                    await Share.share({
-                      title: 'نسخة احتياطية - نظام سند المحاسبي',
-                      text: 'ملف النسخة الاحتياطية لقاعدة بيانات نظام سند',
-                      url: writeFileResult.uri,
-                      dialogTitle: 'مشاركة النسخة الاحتياطية'
-                    });
-                    return;
-                  }
-
-                  if (navigator.share) {
-                    const file = new File([rawData], fileName, { type: 'application/json' });
-                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                      await navigator.share({
-                        title: 'نسخة احتياطية - نظام سند المحاسبي',
-                        text: 'ملف النسخة الاحتياطية لقاعدة بيانات نظام سند',
-                        files: [file]
-                      });
-                      return;
-                    }
-                  }
-                  
-                  navigator.clipboard.writeText(rawData);
-                  alert('✓ تم نسخ محتوى قاعدة البيانات إلى الحافظة، يمكنك لصقه وإرساله عبر واتساب فوراً!');
-                } catch (err) {
-                  console.warn('Share backup error:', err);
-                  alert('⚠️ تعذر إتمام عملية مشاركة النسخة الاحتياطية.');
-                }
-              }}
+              onClick={handleShareBackupData}
               className="py-3 px-3 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition cursor-pointer flex items-center justify-center gap-2 shadow-sm active:scale-95"
             >
               <Share2 className="w-4 h-4" />
@@ -1891,7 +2004,7 @@ export default function Settings({
               </div>
 
               <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[10.5px] text-slate-500 dark:text-slate-400 space-y-1">
-                <p className="font-bold text-slate-700 dark:text-slate-300">💡 معلومة هامة:</p>
+                <p className="font-bold text-slate-700 dark:text-slate-300">💡 معلوومة هامة:</p>
                 <p>ربط حساب Google اختياري كلياً. عند تفعيله، يتم حفظ نسخة احتياطية مشفرة بداخل المجلد السحابي لحسابك تلقائياً لضمان عدم ضياع البيانات عند تغيير الجوال.</p>
               </div>
             </div>
