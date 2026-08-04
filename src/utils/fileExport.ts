@@ -56,7 +56,17 @@ export function setGoogleDriveAccount(email: string): void {
 }
 
 export async function ensureStoragePermissions(): Promise<boolean> {
-  return true;
+  if (!Capacitor.isNativePlatform()) return true;
+  try {
+    const status = await Filesystem.checkPermissions();
+    if (status.publicStorage !== 'granted') {
+      const req = await Filesystem.requestPermissions();
+      return req.publicStorage === 'granted';
+    }
+    return true;
+  } catch {
+    return true;
+  }
 }
 
 export async function ensureCustomFolder(folderPath?: string): Promise<boolean> {
@@ -80,30 +90,39 @@ export async function saveSilentBackupFile(
   }
 }
 
+/**
+ * 🎯 دالة الحفظ والمشاركة الموحدة المعتمدة على Capacitor Native
+ */
 export async function saveAndShareFile(options: SaveAndShareOptions): Promise<boolean> {
   const jsonString = typeof options.data === 'string' ? options.data : JSON.stringify(options.data, null, 2);
   const fileName = options.fileName || `sanad_backup_${new Date().toISOString().slice(0, 10)}.json`;
+  const isNative = Capacitor.isNativePlatform();
 
-  if (typeof (window as any).AndroidBridge !== 'undefined') {
-    (window as any).AndroidBridge.saveBackupNative(jsonString, fileName);
-    return true;
-  }
-
-  if ('showSaveFilePicker' in window) {
+  // 1. التنفيذ الناتيف على أجهزة الأندرويد
+  if (isNative) {
     try {
-      const handle = await (window as any).showSaveFilePicker({
-        suggestedName: fileName,
-        types: [{ description: 'JSON Backup', accept: { 'application/json': ['.json'] } }]
+      const writeResult = await Filesystem.writeFile({
+        path: fileName,
+        data: jsonString,
+        directory: Directory.Cache,
+        encoding: Encoding.UTF8
       });
-      const writable = await handle.createWritable();
-      await writable.write(jsonString);
-      await writable.close();
-      return true;
+
+      if (writeResult.uri) {
+        await Share.share({
+          title: options.title || 'حفظ نسخة احتياطية - نظام سند',
+          text: options.text || 'ملف بيانات نظام سند المحاسبي',
+          url: writeResult.uri,
+          dialogTitle: 'اختر مكان حفظ الملف أو مشاركته'
+        });
+        return true;
+      }
     } catch (e) {
-      return false;
+      console.warn('Native export fallback:', e);
     }
   }
 
+  // 2. التنفيذ على الكمبيوتر أو المتصفح
   try {
     const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -120,16 +139,10 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
   }
 }
 
+/**
+ * 🎯 دالة استعادة وقراءة الملفات
+ */
 export async function importDataFromFile(): Promise<any> {
-  if (typeof (window as any).AndroidBridge !== 'undefined') {
-    (window as any).AndroidBridge.restoreBackupNative();
-    return new Promise((resolve) => {
-      (window as any).onNativeRestoreSuccess = (data: any) => {
-        resolve(data);
-      };
-    });
-  }
-
   return new Promise((resolve, reject) => {
     const input = document.createElement('input');
     input.type = 'file';
