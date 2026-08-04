@@ -1,7 +1,8 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
- * File Export & Storage Engine - Sond Accounting System
+ * File Export & Storage Manager - Sond Accounting System
+ * برمجة وتطوير: م. عبدالمجيد المحواشي
  */
 
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
@@ -91,14 +92,14 @@ export async function saveSilentBackupFile(
 }
 
 /**
- * 🎯 دالة الحفظ والمشاركة الموحدة المعتمدة على Capacitor Native
+ * 🎯 دالة الحفظ والمشاركة الموحدة لنظام سند (تخدم الكمبيوتر والجوال)
  */
 export async function saveAndShareFile(options: SaveAndShareOptions): Promise<boolean> {
   const jsonString = typeof options.data === 'string' ? options.data : JSON.stringify(options.data, null, 2);
   const fileName = options.fileName || `sanad_backup_${new Date().toISOString().slice(0, 10)}.json`;
   const isNative = Capacitor.isNativePlatform();
 
-  // 1. التنفيذ الناتيف على أجهزة الأندرويد
+  // 1. إذا كان يعمل كتطبيق هاتف (Android APK)
   if (isNative) {
     try {
       const writeResult = await Filesystem.writeFile({
@@ -110,10 +111,10 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
 
       if (writeResult.uri) {
         await Share.share({
-          title: options.title || 'حفظ نسخة احتياطية - نظام سند',
-          text: options.text || 'ملف بيانات نظام سند المحاسبي',
+          title: options.title || 'حفظ وتصدير - نظام سند المحاسبي',
+          text: options.text || 'ملف بيانات مستند من نظام سند',
           url: writeResult.uri,
-          dialogTitle: 'اختر مكان حفظ الملف أو مشاركته'
+          dialogTitle: 'اختر طريقة الحفظ أو المشاركة'
         });
         return true;
       }
@@ -122,7 +123,7 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
     }
   }
 
-  // 2. التنفيذ على الكمبيوتر أو المتصفح
+  // 2. إذا كان يعمل على الكمبيوتر / المتصفح
   try {
     const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -140,7 +141,7 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
 }
 
 /**
- * 🎯 دالة استعادة وقراءة الملفات
+ * 🎯 دالة استعادة وقراءة ملفات النسخ الاحتياطي في نظام سند
  */
 export async function importDataFromFile(): Promise<any> {
   return new Promise((resolve, reject) => {
