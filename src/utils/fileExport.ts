@@ -105,7 +105,6 @@ export async function ensureCustomFolder(folderPath?: string): Promise<boolean> 
     });
     return true;
   } catch (err) {
-    // Attempt fallback in Directory.ExternalStorage or Directory.Data safely for Capacitor Filesystem
     try {
       await Filesystem.mkdir({
         path: cleanFolder,
@@ -240,7 +239,6 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
         }
       }
 
-      // Try fetching file URI for native sharing
       let fileUri = writeResult?.uri;
       if (!fileUri) {
         try {
@@ -255,7 +253,6 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
       }
 
       if (fileUri) {
-        // Trigger Native Share (allows selecting Google Drive directly on Android!)
         try {
           await Share.share({
             title: title,
@@ -279,7 +276,7 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
     }
   }
 
-  // 2. Web / WebView Fallback (Blob + Navigator Share / Direct Download Link)
+  // 2. Web / WebView Fallback
   try {
     const blob = isBase64 
       ? base64ToBlob(cleanData, mimeType)
@@ -287,7 +284,6 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
 
     const blobUrl = URL.createObjectURL(blob);
 
-    // Try Web Share API if supported
     if (typeof navigator !== 'undefined' && (navigator as any).canShare) {
       try {
         const fileToShare = new File([blob], fileName, { type: mimeType });
@@ -306,11 +302,9 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
           URL.revokeObjectURL(blobUrl);
           return true;
         }
-        console.warn('Web share failed, proceeding to direct download link:', webShareErr);
       }
     }
 
-    // Direct Browser Download via <a> tag
     const link = document.createElement('a');
     link.href = blobUrl;
     link.download = fileName;
@@ -335,6 +329,39 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
 }
 
 /**
+ * 🎯 [الدالة الجديدة المضافة] - لاستقبال وقراءة ملفات النسخ الاحتياطي المستلمة في الهاتف/الكمبيوتر
+ */
+export async function importDataFromFile(): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json, application/json';
+
+    input.onchange = (event: any) => {
+      const file = event.target.files?.[0];
+      if (!file) {
+        reject('لم يتم اختيار أي ملف');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const parsedData = JSON.parse(e.target?.result as string);
+          resolve(parsedData);
+        } catch (err) {
+          reject('الملف المختار غير صالح أو تالف');
+        }
+      };
+      reader.onerror = () => reject('حدث خطأ أثناء قراءة الملف من ذاكرة الجهاز');
+      reader.readAsText(file);
+    };
+
+    input.click();
+  });
+}
+
+/**
  * Triggers Google Drive upload / export dialog for a backup or document
  */
 export async function uploadToGoogleDrive(
@@ -346,7 +373,6 @@ export async function uploadToGoogleDrive(
   const driveAccount = getGoogleDriveAccount();
   const isNative = Capacitor.isNativePlatform();
 
-  // Save first locally
   await saveAndShareFile({
     fileName,
     data: jsonOrBase64Content,
