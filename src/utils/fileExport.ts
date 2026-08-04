@@ -11,12 +11,15 @@ export interface SaveAndShareOptions {
   fileName: string;
   data: string; // Base64 or plain string
   isBase64?: boolean;
-  mimeType?: string;
+  mimeType?: string; // e.g. 'application/pdf', 'text/csv', 'application/json'
   title?: string;
   text?: string;
-  folderName?: string;
+  folderName?: string; // If omitted, uses getCustomSaveFolder()
 }
 
+/**
+ * Gets user's configured custom save folder (Defaults to 'SanadAccounting')
+ */
 export function getCustomSaveFolder(): string {
   try {
     const saved = localStorage.getItem('sanad_custom_save_folder');
@@ -29,6 +32,9 @@ export function getCustomSaveFolder(): string {
   return 'SanadAccounting';
 }
 
+/**
+ * Sets user's configured custom save folder
+ */
 export function setCustomSaveFolder(folderName: string): void {
   try {
     const clean = (folderName || 'SanadAccounting').trim().replace(/^\/+|\/+$/g, '');
@@ -38,6 +44,9 @@ export function setCustomSaveFolder(folderName: string): void {
   }
 }
 
+/**
+ * Gets user's configured Google Drive Account
+ */
 export function getGoogleDriveAccount(): string {
   try {
     return localStorage.getItem('sanad_google_drive_account') || '';
@@ -46,6 +55,9 @@ export function getGoogleDriveAccount(): string {
   }
 }
 
+/**
+ * Sets user's configured Google Drive Account
+ */
 export function setGoogleDriveAccount(email: string): void {
   try {
     localStorage.setItem('sanad_google_drive_account', (email || '').trim());
@@ -54,6 +66,9 @@ export function setGoogleDriveAccount(email: string): void {
   }
 }
 
+/**
+ * Dynamically checks and requests storage permissions on native Android / iOS
+ */
 export async function ensureStoragePermissions(): Promise<boolean> {
   if (!Capacitor.isNativePlatform()) {
     return true;
@@ -72,59 +87,194 @@ export async function ensureStoragePermissions(): Promise<boolean> {
 }
 
 /**
- * 🎯 دالة الحفظ والمشاركة المحدثة - تضمن نجاح العمليات على كافة إصدارات الأندرويد
+ * Ensures a custom folder (e.g. 'SanadAccounting' or user specified path) exists inside Directory.Documents on Android/Native
+ */
+export async function ensureCustomFolder(folderPath?: string): Promise<boolean> {
+  if (!Capacitor.isNativePlatform()) {
+    return false;
+  }
+  await ensureStoragePermissions();
+  const targetFolder = folderPath || getCustomSaveFolder();
+  const cleanFolder = targetFolder.trim().replace(/^\/+|\/+$/g, '');
+  
+  try {
+    await Filesystem.mkdir({
+      path: cleanFolder,
+      directory: Directory.Documents,
+      recursive: true,
+    });
+    return true;
+  } catch (err) {
+    try {
+      await Filesystem.mkdir({
+        path: cleanFolder,
+        directory: Directory.ExternalStorage,
+        recursive: true,
+      });
+      return true;
+    } catch (fallbackErr) {
+      console.log(`Directory ${cleanFolder} creation info:`, err, fallbackErr);
+      return true;
+    }
+  }
+}
+
+/**
+ * Ensures the default or custom Sanad folder exists inside Directory.Documents on Android/Native
+ */
+export async function ensureSanadFolder(): Promise<boolean> {
+  return ensureCustomFolder(getCustomSaveFolder());
+}
+
+/**
+ * Saves a backup file silently in local storage without opening UI dialogs
+ */
+export async function saveSilentBackupFile(
+  fileName: string,
+  jsonString: string,
+  folderPath?: string
+): Promise<string | null> {
+  const isNative = Capacitor.isNativePlatform();
+  const targetFolder = folderPath || getCustomSaveFolder();
+  const cleanFolder = targetFolder.trim().replace(/^\/+|\/+$/g, '');
+
+  if (isNative) {
+    try {
+      await ensureCustomFolder(cleanFolder);
+      const writeResult = await Filesystem.writeFile({
+        path: `${cleanFolder}/${fileName}`,
+        data: jsonString,
+        directory: Directory.Documents,
+        recursive: true,
+        encoding: Encoding.UTF8
+      });
+      console.log(`[Silent Backup] Successfully saved to Documents/${cleanFolder}/${fileName}`);
+      return writeResult.uri;
+    } catch (err) {
+      console.warn(`[Silent Backup] Write to Documents/${cleanFolder} failed, trying Cache/ExternalStorage:`, err);
+      try {
+        const extResult = await Filesystem.writeFile({
+          path: fileName,
+          data: jsonString,
+          directory: Directory.Cache,
+          encoding: Encoding.UTF8
+        });
+        return extResult.uri;
+      } catch (extErr) {
+        console.error('[Silent Backup] External write failed as well:', extErr);
+        return null;
+      }
+    }
+  } else {
+    try {
+      localStorage.setItem(`sanad_auto_backup_${fileName}`, jsonString);
+      return `localStorage:sanad_auto_backup_${fileName}`;
+    } catch (e) {
+      console.warn('[Silent Backup] Web localStorage backup error:', e);
+      return null;
+    }
+  }
+}
+
+/**
+ * Saves a file and offers sharing / download options safely across Capacitor Native, WebViews, and Web Browsers.
  */
 export async function saveAndShareFile(options: SaveAndShareOptions): Promise<boolean> {
   const {
     fileName,
     data,
     isBase64 = false,
-    mimeType = 'application/json',
+    mimeType = 'application/pdf',
     title = 'تصدير سند/تقرير - تطبيق سند',
-    text = 'ملف مستند من نظام سند المحاسبي'
+    text = 'ملف مستند من نظام سند المحاسبي',
+    folderName
   } = options;
 
   const isNative = Capacitor.isNativePlatform();
   const cleanData = isBase64 && data.includes(',') ? data.split(',')[1] : data;
+  const targetFolder = folderName || getCustomSaveFolder();
+  const cleanFolder = targetFolder.trim().replace(/^\/+|\/+$/g, '');
+  const relativeFilePath = `${cleanFolder}/${fileName}`;
 
-  // 1. التنفيذ المباشر على أجهزة الأندرويد والجوال (Native App)
+  // 1. Native Capacitor Android / iOS Attempt
   if (isNative) {
     try {
       await ensureStoragePermissions();
+      await ensureCustomFolder(cleanFolder);
 
-      // نكتب الملف في ذاكرة Cache لضمان وصول FileProvider والمشاركة بدون رفض من الأندرويد
-      const writeResult = await Filesystem.writeFile({
-        path: fileName,
-        data: cleanData,
-        directory: Directory.Cache,
-        encoding: isBase64 ? undefined : Encoding.UTF8
-      });
+      let writeResult;
+      let usedDirectory = Directory.Documents;
 
-      let fileUri = writeResult?.uri;
-
-      if (!fileUri) {
-        const uriRes = await Filesystem.getUri({
-          path: fileName,
-          directory: Directory.Cache
+      try {
+        writeResult = await Filesystem.writeFile({
+          path: relativeFilePath,
+          data: cleanData,
+          directory: Directory.Documents,
+          recursive: true,
+          encoding: isBase64 ? undefined : Encoding.UTF8
         });
-        fileUri = uriRes.uri;
+        usedDirectory = Directory.Documents;
+      } catch (docErr) {
+        console.warn('Filesystem write to Documents failed, attempting Directory.Cache:', docErr);
+        try {
+          writeResult = await Filesystem.writeFile({
+            path: fileName,
+            data: cleanData,
+            directory: Directory.Cache,
+            encoding: isBase64 ? undefined : Encoding.UTF8
+          });
+          usedDirectory = Directory.Cache;
+        } catch (extErr) {
+          console.warn('Filesystem write to Cache failed, attempting Directory.Data:', extErr);
+          writeResult = await Filesystem.writeFile({
+            path: fileName,
+            data: cleanData,
+            directory: Directory.Data,
+            encoding: isBase64 ? undefined : Encoding.UTF8
+          });
+          usedDirectory = Directory.Data;
+        }
+      }
+
+      // Try fetching file URI for native sharing
+      let fileUri = writeResult?.uri;
+      if (!fileUri) {
+        try {
+          const uriRes = await Filesystem.getUri({
+            path: usedDirectory === Directory.Documents ? relativeFilePath : fileName,
+            directory: usedDirectory
+          });
+          fileUri = uriRes.uri;
+        } catch (uriErr) {
+          console.warn('Could not retrieve URI directly:', uriErr);
+        }
       }
 
       if (fileUri) {
-        await Share.share({
-          title: title,
-          text: text,
-          url: fileUri,
-          dialogTitle: title || 'حفظ وتصدير الملف'
-        });
+        // Trigger Native Share (allows selecting Google Drive directly on Android!)
+        try {
+          await Share.share({
+            title: title,
+            text: `${text}\n📄 الملف محفوظ في ذاكرة الهاتف: ${fileName}`,
+            url: fileUri,
+            dialogTitle: title || 'حفظ وتصدير الملف'
+          });
+        } catch (shareErr: any) {
+          const errStr = String(shareErr || '').toLowerCase();
+          if (!errStr.includes('cancel') && !errStr.includes('dismiss') && !errStr.includes('abort')) {
+            console.warn('Native Share dialog error:', shareErr);
+          }
+        }
+
         return true;
       }
+
     } catch (nativeErr) {
-      console.warn('Native Capacitor file write failed, falling back to Blob download:', nativeErr);
+      console.warn('Native Capacitor file write failed, falling back to Web Blob download:', nativeErr);
     }
   }
 
-  // 2. التنفيذ على المتصفح / الويب (Web Download Fallback)
+  // 2. Web / WebView Fallback (Blob + Navigator Share / Direct Download Link)
   try {
     const blob = isBase64 
       ? base64ToBlob(cleanData, mimeType)
@@ -132,6 +282,30 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
 
     const blobUrl = URL.createObjectURL(blob);
 
+    // Try Web Share API if supported
+    if (typeof navigator !== 'undefined' && (navigator as any).canShare) {
+      try {
+        const fileToShare = new File([blob], fileName, { type: mimeType });
+        if ((navigator as any).canShare({ files: [fileToShare] })) {
+          await navigator.share({
+            title: title,
+            text: text,
+            files: [fileToShare]
+          });
+          URL.revokeObjectURL(blobUrl);
+          return true;
+        }
+      } catch (webShareErr: any) {
+        const errStr = String(webShareErr || '').toLowerCase();
+        if (errStr.includes('cancel') || errStr.includes('abort') || errStr.includes('dismiss')) {
+          URL.revokeObjectURL(blobUrl);
+          return true;
+        }
+        console.warn('Web share failed, proceeding to direct download link:', webShareErr);
+      }
+    }
+
+    // Direct Browser Download via <a> tag
     const link = document.createElement('a');
     link.href = blobUrl;
     link.download = fileName;
@@ -156,7 +330,36 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
 }
 
 /**
- * 🎯 دالة استيراد وقراءة الملفات المباشرة من ذاكرة الجوال والكمبيوتر
+ * Triggers Google Drive upload / export dialog for a backup or document
+ */
+export async function uploadToGoogleDrive(
+  fileName: string, 
+  jsonOrBase64Content: string, 
+  isBase64: boolean = false,
+  mimeType: string = 'application/json'
+): Promise<boolean> {
+  const driveAccount = getGoogleDriveAccount();
+  const isNative = Capacitor.isNativePlatform();
+
+  // Save first locally
+  await saveAndShareFile({
+    fileName,
+    data: jsonOrBase64Content,
+    isBase64,
+    mimeType,
+    title: `رفع إلى Google Drive (${driveAccount || 'حساب الهاتف'})`,
+    text: `نسخة احتياطية / مستند لنظام سند ${driveAccount ? `- الحساب: ${driveAccount}` : ''}`
+  });
+
+  if (!isNative) {
+    window.open('https://drive.google.com/drive/my-drive', '_blank');
+  }
+
+  return true;
+}
+
+/**
+ * 🎯 [دالة استرجاع واستيراد الملفات]
  */
 export async function importDataFromFile(): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -188,7 +391,10 @@ export async function importDataFromFile(): Promise<any> {
   });
 }
 
-export function base64ToBlob(base64Data: string, contentType: string = 'application/json'): Blob {
+/**
+ * Converts a Base64 string to Blob for Web browser download
+ */
+export function base64ToBlob(base64Data: string, contentType: string = 'application/pdf'): Blob {
   const cleanBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
   const byteCharacters = atob(cleanBase64);
   const byteArrays = [];
