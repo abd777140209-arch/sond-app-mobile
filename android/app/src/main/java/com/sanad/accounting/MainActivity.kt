@@ -7,12 +7,13 @@ import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import com.getcapacitor.BridgeActivity;
+import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
 
 public class MainActivity extends BridgeActivity {
 
     private String jsonToSave = "";
 
-    // 🎯 1. منتقي الحفظ المباشر من واجهة الأندرويد الرسمية (SAF)
     private final ActivityResultLauncher<String> createDocumentLauncher =
             registerForActivityResult(new ActivityResultContracts.CreateDocument("application/json"), uri -> {
                 if (uri != null) {
@@ -25,14 +26,19 @@ public class MainActivity extends BridgeActivity {
                 }
             });
 
-    // 🎯 2. منتقي القراءة والاسترجاع المباشر من ذاكرة الجهاز
     private final ActivityResultLauncher<String[]> openDocumentLauncher =
             registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
                 if (uri != null) {
                     try {
-                        byte[] bytes = getContentResolver().openInputStream(uri).readAllBytes();
-                        String jsonString = new String(bytes);
-                        
+                        InputStream inputStream = getContentResolver().openInputStream(uri);
+                        ByteArrayOutputStream result = new ByteArrayOutputStream();
+                        byte[] buffer = new byte[1024];
+                        int length;
+                        while ((length = inputStream.read(buffer)) != -1) {
+                            result.write(buffer, 0, length);
+                        }
+                        String jsonString = result.toString("UTF-8");
+
                         WebView webView = getBridge().getWebView();
                         if (webView != null) {
                             webView.post(() -> webView.evaluateJavascript(
@@ -48,15 +54,12 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
-        // ربط الجسر المباشر مع الـ WebView التابع لـ Capacitor
         WebView webView = getBridge().getWebView();
         if (webView != null) {
             webView.addJavascriptInterface(new AndroidBridge(), "AndroidBridge");
         }
     }
 
-    // 🎯 الجسر البرمجي بين أندرويد وReact / TypeScript
     public class AndroidBridge {
         @JavascriptInterface
         public void saveBackupNative(String jsonContent, String fileName) {
