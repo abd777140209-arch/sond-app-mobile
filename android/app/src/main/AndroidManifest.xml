@@ -3,22 +3,24 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- ====================================================================== -->
-    <!-- الأذونات المعتمدة لنظام أندرويد (Android APK - حتى أندرويد 16+)             -->
+    <!-- الأذونات المعتمدة لنظام أندرويد (Android APK - مأخوذة ومطورة من المحاسب برو) -->
     <!-- ====================================================================== -->
 
-    <!-- 1. إذن الإشعارات (Android 13+ / API 33) -->
+    <!-- 1. إذن الإشعارات والدخول في وضع السكون -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-    <!-- 2. إذن الكاميرا (لقراءة وقراءة الباركوود وإدخال المنتجات) -->
+    <!-- 2. إذن الكاميرا وقارئ الباركود -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
 
     <!-- 3. إذن الاتصال بالإنترنت والشبكة (للمزامنة السحابية وبوابة المطور) -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- 4. أذونات التخزين والذاكرة الشاملة لجميع إصدارات أندرويد (Android 10 حتى Android 16) -->
+    <!-- 4. أذونات التخزين والذاكرة الشاملة لتجاوز قيود أندرويد (Legacy Storage) -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
@@ -26,10 +28,19 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
-    <!-- 5. إذن الاهتزاز والتنبيهات الصوتية عند إجراء عمليات البيع أوالصيانة -->
-    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- 5. أذونات البلوتوث والاقتران بالطابعات الحرارية وإدارة الأجهزة المجاورة -->
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
 
-    <!-- 6. إذن المايكروفون والصوتيات (للمساعد الصوتي والذكاء الاصطناعي) -->
+    <!-- 6. أذونات الهاتف والبصمة لقراءة معرّف الجهاز الموثق (HWID) وتوثيق التفعيل -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!-- 7. إذن الاهتزاز والصوتيات للمساعد الصوتي والذكاء الاصطناعي -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
@@ -44,6 +55,7 @@
         android:usesCleartextTraffic="true"
         android:requestLegacyExternalStorage="true">
 
+        <!-- النشاط الرئيسي للبرنامج -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -55,6 +67,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 🎯 مزود مشاركة واستقبال الملفات مع الواتساب وجوجل درايف (FileProvider) -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
     </application>
 
 </manifest>
