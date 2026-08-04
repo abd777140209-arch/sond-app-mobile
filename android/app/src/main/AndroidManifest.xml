@@ -51,17 +51,17 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:hardwareAccelerated="true"
-        android:theme="@android:style/Theme.DeviceDefault.NoActionBar"
+        android:theme="@style/Theme.AppCompat.NoActionBar"
         android:usesCleartextTraffic="true"
         android:requestLegacyExternalStorage="true">
 
-        <!-- النشاط الرئيسي للبرنامج -->
+        <!-- النشاط الرئيسي للبرنامج (مسار كامل مائة بالمائة) -->
         <activity
-            android:name=".MainActivity"
+            android:name="com.sanad.accounting.MainActivity"
             android:exported="true"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|layoutDirection|smallestScreenSize|screenLayout|uiMode"
             android:label="سُند المحاسبي الذكي"
-            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+            android:theme="@style/Theme.AppCompat.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
