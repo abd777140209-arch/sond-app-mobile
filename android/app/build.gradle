@@ -38,10 +38,6 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    
-    // 🎯 المكتبات الأساسية لـ Capacitor المسؤولة عن تشغيل الواجهة وجسر الأندرويد
-    implementation project(':capacitor-android')
-    implementation project(':capacitor-cordova-android-plugins')
 }
 
 apply from: 'capacitor.build.gradle'
