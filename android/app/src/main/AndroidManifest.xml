@@ -3,7 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- ====================================================================== -->
-    <!-- الأذونات المعتمدة لنظام أندرويد (Android APK - مأخوذة ومطورة من المحاسب برو) -->
+    <!-- الأذونات المعتمدة لنظام سُند المحاسبي (Android APK) -->
     <!-- ====================================================================== -->
 
     <!-- 1. إذن الإشعارات والدخول في وضع السكون -->
@@ -20,10 +20,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- 4. أذونات التخزين والذاكرة الشاملة لتجاوز قيود أندرويد (Legacy Storage) -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
+    <!-- 4. أذونات التخزين والذاكرة الشاملة (تتوافق مع أندرويد القديم والحديث) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:ignore="ScopedStorage" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
@@ -51,7 +50,8 @@
         android:label="نظام سُند المحاسبي"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.SanadAccounting"
+        android:hardwareAccelerated="true"
+        android:theme="@style/AppTheme.NoActionBar"
         android:usesCleartextTraffic="true"
         android:requestLegacyExternalStorage="true">
 
@@ -59,9 +59,9 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|layoutDirection"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|layoutDirection|smallestScreenSize|screenLayout|uiMode"
             android:label="سُند المحاسبي الذكي"
-            android:theme="@style/Theme.SanadAccounting">
+            android:theme="@style/AppTheme.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
