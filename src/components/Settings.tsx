@@ -560,7 +560,7 @@ export default function Settings({
     if (Capacitor.isNativePlatform()) {
       try {
         const result = await FilePicker.pickFiles({
-          types: ['*/*'],
+          types: ['*/*', 'application/json', 'text/plain'],
           readData: true,
         });
 
@@ -569,45 +569,75 @@ export default function Settings({
           let jsonContent = '';
 
           if (pickedFile.data) {
-            try {
-              const binString = atob(pickedFile.data);
-              const bytes = Uint8Array.from(binString, (m) => m.codePointAt(0)!);
-              jsonContent = new TextDecoder().decode(bytes);
-            } catch {
-              jsonContent = atob(pickedFile.data);
+            const rawData = pickedFile.data.trim();
+            // Check if rawData is already JSON string or base64 encoded
+            if (rawData.startsWith('{') || rawData.startsWith('[')) {
+              jsonContent = rawData;
+            } else {
+              try {
+                const cleanBase64 = rawData.replace(/\s/g, '');
+                const binString = atob(cleanBase64);
+                const bytes = Uint8Array.from(binString, (m) => m.codePointAt(0)!);
+                jsonContent = new TextDecoder().decode(bytes);
+              } catch {
+                try {
+                  jsonContent = decodeURIComponent(escape(atob(rawData.replace(/\s/g, ''))));
+                } catch {
+                  jsonContent = rawData;
+                }
+              }
             }
-          } else if (pickedFile.path) {
-            const res = await fetch(pickedFile.path);
-            jsonContent = await res.text();
+          } else if (pickedFile.path || (pickedFile as any).webPath) {
+            const filePath = pickedFile.path || (pickedFile as any).webPath || '';
+            try {
+              const fileRead = await Filesystem.readFile({
+                path: filePath,
+                encoding: Encoding.UTF8
+              });
+              jsonContent = typeof fileRead.data === 'string' ? fileRead.data : '';
+            } catch (fsErr) {
+              try {
+                const res = await fetch(filePath);
+                jsonContent = await res.text();
+              } catch (fetchErr) {
+                console.warn('Fetch fallback error for picked file path:', fetchErr);
+              }
+            }
           }
 
           if (jsonContent) {
             if (!confirm('⚠️ تنبيه هام: استعادة النسخة الاحتياطية ستقوم باستبدال البيانات الحالية بالبيانات الموجودة بداخل الملف المختار. هل أنت متأكد من الاستمرار؟')) {
               return;
             }
-            const json = JSON.parse(jsonContent);
-            const restoreRes = onRestoreData(json);
-            const handleResult = (ok: boolean) => {
-              if (ok) {
-                soundManager.playSuccessChime();
-                alert('✓ تم استعادة النسخة الاحتياطية وإعادة تشغيل النظام بنجاح تام!');
-                window.location.reload();
-              } else {
-                soundManager.playWarningBeep();
-                alert('❌ فشل استعادة البيانات: الملف المرفق لا يحتوي على بنية بيانات محاسبية صحيحة.');
-              }
-            };
+            try {
+              const json = JSON.parse(jsonContent);
+              const restoreRes = onRestoreData(json);
+              const handleResult = (ok: boolean) => {
+                if (ok) {
+                  soundManager.playSuccessChime();
+                  alert('✓ تم استعادة النسخة الاحتياطية وإعادة تشغيل النظام بنجاح تام!');
+                  window.location.reload();
+                } else {
+                  soundManager.playWarningBeep();
+                  alert('❌ فشل استعادة البيانات: الملف المرفق لا يحتوي على بنية بيانات محاسبية صحيحة.');
+                }
+              };
 
-            if (restoreRes instanceof Promise) {
-              restoreRes.then(handleResult).catch((err) => {
-                soundManager.playWarningBeep();
-                console.error("Backup Restore Error: ", err);
-                alert('❌ عذراً، حدث خطأ أثناء تطبيق النسخة الاحتياطية.');
-              });
-            } else {
-              handleResult(restoreRes);
+              if (restoreRes instanceof Promise) {
+                restoreRes.then(handleResult).catch((err) => {
+                  soundManager.playWarningBeep();
+                  console.error("Backup Restore Error: ", err);
+                  alert('❌ عذراً، حدث خطأ أثناء تطبيق النسخة الاحتياطية.');
+                });
+              } else {
+                handleResult(restoreRes);
+              }
+              return;
+            } catch (jsonParseErr) {
+              console.error('Invalid JSON content parsed:', jsonParseErr);
+              alert('❌ صيغة الملف المختار غير صحيحة. يرجى اختيار ملف نسخة احتياطية بصيغة JSON.');
+              return;
             }
-            return;
           }
         }
       } catch (err) {

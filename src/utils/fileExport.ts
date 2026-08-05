@@ -206,7 +206,10 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
   } = options;
 
   const isNative = Capacitor.isNativePlatform();
-  const cleanData = isBase64 && data.includes(',') ? data.split(',')[1] : data;
+  // Clean Base64 strings to prevent broken base64 payload errors in Filesystem plugin
+  const cleanData = isBase64
+    ? data.replace(/^data:.*?;base64,/, '').replace(/\s/g, '')
+    : data;
   const targetFolder = folderName || getCustomSaveFolder();
   const cleanFolder = targetFolder.trim().replace(/^\/+|\/+$/g, '');
   const relativeFilePath = `${cleanFolder}/${fileName}`;
@@ -218,7 +221,7 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
 
       let writeUri = '';
 
-      // A) Write to Cache Directory FIRST (ALWAYS succeeds on Android 8 to 15 without scoped storage blocks)
+      // A) Write to Cache Directory FIRST (ALWAYS succeeds on Android without scoped storage blocks)
       try {
         const cacheResult = await Filesystem.writeFile({
           path: fileName,
@@ -277,6 +280,8 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
             return true;
           }
           console.warn('Capacitor Share failed:', shareErr);
+          alert(`✓ تم حفظ الملف بنجاح على ذاكرة الهاتف:\n📁 Documents/${relativeFilePath}`);
+          return true;
         }
       }
 
@@ -286,7 +291,7 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
   }
 
   // 2. WEB SHARE API (ANDROID MOBILE CHROME / WEBVIEW FALLBACK)
-  if (typeof navigator !== 'undefined' && navigator.canShare && navigator.share) {
+  if (typeof navigator !== 'undefined' && (navigator as any).canShare && (navigator as any).share) {
     try {
       const blob = isBase64 
         ? base64ToBlob(cleanData, mimeType)
@@ -294,8 +299,8 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
       
       const file = new File([blob], fileName, { type: mimeType });
 
-      if (navigator.canShare({ files: [file] })) {
-        await navigator.share({
+      if ((navigator as any).canShare({ files: [file] })) {
+        await (navigator as any).share({
           title: title || fileName,
           text: text || '',
           files: [file]
@@ -332,22 +337,23 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
       URL.revokeObjectURL(blobUrl);
     }, 4000);
 
-    // Also attempt Data URI direct download for strict Android WebViews
-    if (!isBase64 && (mimeType.includes('json') || mimeType.includes('text') || mimeType.includes('csv'))) {
-      try {
-        const dataUri = `data:${mimeType};charset=utf-8,${encodeURIComponent(data)}`;
-        const altLink = document.createElement('a');
-        altLink.href = dataUri;
-        altLink.download = fileName;
-        altLink.style.display = 'none';
-        document.body.appendChild(altLink);
-        altLink.click();
-        setTimeout(() => {
-          if (document.body.contains(altLink)) document.body.removeChild(altLink);
-        }, 1000);
-      } catch (dataUriErr) {
-        console.warn('Data URI download attempt:', dataUriErr);
-      }
+    // Also trigger Data URI direct download for strict Android WebViews that block blob: URIs
+    try {
+      const dataUri = isBase64 
+        ? `data:${mimeType};base64,${cleanData}`
+        : `data:${mimeType};charset=utf-8,${encodeURIComponent(data)}`;
+        
+      const altLink = document.createElement('a');
+      altLink.href = dataUri;
+      altLink.download = fileName;
+      altLink.style.display = 'none';
+      document.body.appendChild(altLink);
+      altLink.click();
+      setTimeout(() => {
+        if (document.body.contains(altLink)) document.body.removeChild(altLink);
+      }, 1000);
+    } catch (dataUriErr) {
+      console.warn('Data URI download attempt:', dataUriErr);
     }
 
     return true;
@@ -360,7 +366,7 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
     try {
       if (navigator.clipboard) {
         await navigator.clipboard.writeText(data);
-        alert(`📄 تعذر تنزيل الملف بشكل تلقائي بالمتصفح.\n✅ تم نسخ محتوى الملف (${fileName}) للحافظة بنجاح! يمكنك لصقه وحفظه.`);
+        alert(`📄 تعذر إظهار قائمة التنزيل التلقائي بالمتصفح.\n✅ تم نسخ محتوى الملف (${fileName}) للحافظة بنجاح! يمكنك لصقه وحفظه.`);
         return true;
       }
     } catch (clipErr) {

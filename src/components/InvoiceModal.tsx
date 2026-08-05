@@ -302,7 +302,11 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
     const encodedText = encodeURIComponent(text);
     const whatsappUrl = `https://api.whatsapp.com/send?phone=${cleanedPhone}&text=${encodedText}`;
     
-    window.open(whatsappUrl, '_blank');
+    if (Capacitor.isNativePlatform()) {
+      window.location.href = whatsappUrl;
+    } else {
+      window.open(whatsappUrl, '_blank');
+    }
   };
 
   return (

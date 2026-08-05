@@ -840,15 +840,20 @@ export default function App() {
     return success;
   };
 
-  const handleRestoreData = async (restored: any): Promise<boolean> => {
-    if (!restored || typeof restored !== 'object') return false;
+  const handleRestoreData = async (restoredInput: any): Promise<boolean> => {
+    if (!restoredInput || typeof restoredInput !== 'object') return false;
 
-    if (restored.settings) {
+    // Support nested JSON wrappers like { data: { ... } } or { backup: { ... } }
+    const restored = restoredInput.data || restoredInput.backup || restoredInput;
+    let hasRestoredAny = false;
+
+    if (restored.settings && typeof restored.settings === 'object') {
       setSettings(restored.settings);
       localStorage.setItem('smart_accounting_settings', JSON.stringify(restored.settings));
       if (license.licenseKey) {
         saveStoreSettings(license.licenseKey, restored.settings);
       }
+      hasRestoredAny = true;
     }
     if (Array.isArray(restored.products)) {
       setProducts(restored.products);
@@ -856,6 +861,7 @@ export default function App() {
       if (license.licenseKey) {
         restored.products.forEach((p: any) => p && p.id && saveStoreDocument(license.licenseKey, 'products', p.id, p));
       }
+      hasRestoredAny = true;
     }
     if (Array.isArray(restored.customers)) {
       setCustomers(restored.customers);
@@ -863,6 +869,7 @@ export default function App() {
       if (license.licenseKey) {
         restored.customers.forEach((c: any) => c && c.id && saveStoreDocument(license.licenseKey, 'customers', c.id, c));
       }
+      hasRestoredAny = true;
     }
     if (Array.isArray(restored.invoices)) {
       setInvoices(restored.invoices);
@@ -870,6 +877,7 @@ export default function App() {
       if (license.licenseKey) {
         restored.invoices.forEach((inv: any) => inv && inv.id && saveStoreDocument(license.licenseKey, 'invoices', inv.id, inv));
       }
+      hasRestoredAny = true;
     }
     if (Array.isArray(restored.payments)) {
       setPayments(restored.payments);
@@ -877,6 +885,7 @@ export default function App() {
       if (license.licenseKey) {
         restored.payments.forEach((pay: any) => pay && pay.id && saveStoreDocument(license.licenseKey, 'payments', pay.id, pay));
       }
+      hasRestoredAny = true;
     }
     if (Array.isArray(restored.transactions)) {
       setTransactions(restored.transactions);
@@ -884,6 +893,7 @@ export default function App() {
       if (license.licenseKey) {
         restored.transactions.forEach((tx: any) => tx && tx.id && saveStoreDocument(license.licenseKey, 'transactions', tx.id, tx));
       }
+      hasRestoredAny = true;
     }
     if (Array.isArray(restored.maintenanceOrders)) {
       setMaintenanceOrders(restored.maintenanceOrders);
@@ -891,6 +901,7 @@ export default function App() {
       if (license.licenseKey) {
         restored.maintenanceOrders.forEach((m: any) => m && m.id && saveStoreDocument(license.licenseKey, 'maintenanceOrders', m.id, m));
       }
+      hasRestoredAny = true;
     }
     if (Array.isArray(restored.employees)) {
       setEmployees(restored.employees);
@@ -898,6 +909,7 @@ export default function App() {
       if (license.licenseKey) {
         restored.employees.forEach((emp: any) => emp && emp.id && saveStoreDocument(license.licenseKey, 'employees', emp.id, emp));
       }
+      hasRestoredAny = true;
     }
     if (Array.isArray(restored.payrollRecords)) {
       setPayrollRecords(restored.payrollRecords);
@@ -905,12 +917,14 @@ export default function App() {
       if (license.licenseKey) {
         restored.payrollRecords.forEach((pr: any) => pr && pr.id && saveStoreDocument(license.licenseKey, 'payrollRecords', pr.id, pr));
       }
+      hasRestoredAny = true;
     }
     if (Array.isArray(restored.users)) {
       setUsers(restored.users);
       localStorage.setItem('smart_accounting_users', JSON.stringify(restored.users));
+      hasRestoredAny = true;
     }
-    return true;
+    return hasRestoredAny;
   };
 
   const handleResetDatabase = async () => {
