@@ -557,7 +557,7 @@ export default function Settings({
 
   const handleRestoreWithFilePicker = async () => {
     soundManager.playScanBeep();
-    if (Capacitor.isNativePlatform() || (window as any).Capacitor) {
+    if (Capacitor.isNativePlatform()) {
       try {
         const result = await FilePicker.pickFiles({
           types: ['application/json', 'text/plain', '*/*'],

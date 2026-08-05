@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   ShoppingCart, 
   Wallet, 
@@ -33,6 +33,8 @@ import {
 } from 'lucide-react';
 import { Product, Customer, Invoice, Payment, Transaction, SystemSettings, Employee } from '../types';
 import { soundManager } from '../utils/sound';
+import { Capacitor } from '@capacitor/core';
+import { FilePicker } from '@capawesome/capacitor-file-picker';
 import FloatingCalculator from './FloatingCalculator';
 
 interface MobileDashboardViewProps {
@@ -75,6 +77,24 @@ export default function MobileDashboardView({
   onRestoreData
 }: MobileDashboardViewProps) {
   
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const processFileRestore = async (json: any) => {
+    if (!onRestoreData) return;
+    if (!confirm('⚠️ تنبيه هام: استعادة النسخة الاحتياطية ستقوم باستبدال البيانات الحالية بالبيانات الموجودة بداخل الملف المختار. هل أنت متأكد من الاستمرار؟')) {
+      return;
+    }
+    const success = await onRestoreData(json);
+    if (success) {
+      soundManager.playSuccessChime();
+      alert('✅ تم استعادة النسخة الاحتياطية بنجاح بنسبة 100%!');
+      window.location.reload();
+    } else {
+      soundManager.playWarningBeep();
+      alert('❌ فشل استعادة الملف. الرجاء التأكد من صحة ملف النسخة الاحتياطية.');
+    }
+  };
+
   const handleFileRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -82,20 +102,56 @@ export default function MobileDashboardView({
     reader.onload = async (event) => {
       try {
         const parsed = JSON.parse(event.target?.result as string);
-        if (onRestoreData) {
-          const success = await onRestoreData(parsed);
-          if (success) {
-            soundManager.playSuccessChime();
-            alert('✅ تم استعادة النسخة الاحتياطية بنجاح بنسبة 100%!');
-          } else {
-            alert('❌ فشل استعادة الملف. الرجاء التأكد من صحة ملف النسخة الاحتياطية.');
-          }
-        }
+        await processFileRestore(parsed);
       } catch (err) {
+        soundManager.playWarningBeep();
         alert('❌ صيغة الملف غير صحيحة.');
+      } finally {
+        e.target.value = '';
       }
     };
     reader.readAsText(file);
+  };
+
+  const handleRestoreClick = async () => {
+    soundManager.playScanBeep();
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const result = await FilePicker.pickFiles({
+          types: ['application/json', 'text/plain', '*/*'],
+          readData: true,
+        });
+
+        if (result.files && result.files.length > 0) {
+          const pickedFile = result.files[0];
+          let jsonContent = '';
+
+          if (pickedFile.data) {
+            try {
+              jsonContent = atob(pickedFile.data);
+            } catch {
+              jsonContent = pickedFile.data;
+            }
+          } else if (pickedFile.path) {
+            const res = await fetch(pickedFile.path);
+            jsonContent = await res.text();
+          }
+
+          if (jsonContent) {
+            const parsed = JSON.parse(jsonContent);
+            await processFileRestore(parsed);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Native FilePicker error or cancelled, falling back to standard input:', err);
+      }
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+      fileInputRef.current.click();
+    }
   };
   
   // Multi-Currency Selection
@@ -414,16 +470,21 @@ export default function MobileDashboardView({
             </button>
 
             {/* Restore Backup Button */}
-            <label className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer border border-slate-700">
+            <button
+              type="button"
+              onClick={handleRestoreClick}
+              className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer border border-slate-700"
+            >
               <Upload className="w-4 h-4 text-emerald-400" />
               <span>استعادة نسخة</span>
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleFileRestore}
-                className="hidden"
-              />
-            </label>
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".json,application/json,text/plain,text/json,*/*"
+              onChange={handleFileRestore}
+              className="hidden"
+            />
           </div>
         </section>
 

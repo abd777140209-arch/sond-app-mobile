@@ -198,7 +198,33 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
   const cleanFolder = targetFolder.trim().replace(/^\/+|\/+$/g, '');
   const relativeFilePath = `${cleanFolder}/${fileName}`;
 
-  // 1. Native Capacitor Android / iOS Attempt
+  // ALWAYS create and click a web download link (Blob / Data URI) first to ensure browser / WebView downloads the file directly
+  let webDownloadSuccess = false;
+  try {
+    const blob = isBase64 
+      ? base64ToBlob(cleanData, mimeType)
+      : new Blob([data], { type: mimeType });
+
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = fileName;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+
+    setTimeout(() => {
+      if (document.body.contains(link)) {
+        document.body.removeChild(link);
+      }
+      URL.revokeObjectURL(blobUrl);
+    }, 3000);
+    webDownloadSuccess = true;
+  } catch (webLinkErr) {
+    console.warn('Web blob download link attempt:', webLinkErr);
+  }
+
+  // 1. Native Capacitor Android / iOS Attempt (Save to Filesystem + Share)
   if (isNative) {
     try {
       await ensureStoragePermissions();
@@ -255,7 +281,7 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
       }
 
       if (fileUri) {
-        // Trigger Native Share (allows selecting Google Drive directly on Android!)
+        // Trigger Native Share
         try {
           await Share.share({
             title: title,
@@ -269,69 +295,23 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
             console.warn('Native Share dialog error:', shareErr);
           }
         }
-
-        alert(`✅ تم حفظ الملف بنجاح بذاكرة الهاتف!\n📁 المجلد المختار: Documents/${cleanFolder}\n📄 اسم الملف: ${fileName}`);
-        return true;
       }
+
+      alert(`✅ تم حفظ النسخة الاحتياطية وتنزيلها بنجاح!\n📁 اسم الملف: ${fileName}\n📄 المجلد: Documents/${cleanFolder}`);
+      return true;
 
     } catch (nativeErr) {
-      console.warn('Native Capacitor file write failed, falling back to Web Blob download:', nativeErr);
+      console.warn('Native Capacitor file write failed:', nativeErr);
     }
   }
 
-  // 2. Web / WebView Fallback (Blob + Navigator Share / Direct Download Link)
-  try {
-    const blob = isBase64 
-      ? base64ToBlob(cleanData, mimeType)
-      : new Blob([data], { type: mimeType });
-
-    const blobUrl = URL.createObjectURL(blob);
-
-    // Try Web Share API if supported
-    if (typeof navigator !== 'undefined' && (navigator as any).canShare) {
-      try {
-        const fileToShare = new File([blob], fileName, { type: mimeType });
-        if ((navigator as any).canShare({ files: [fileToShare] })) {
-          await navigator.share({
-            title: title,
-            text: text,
-            files: [fileToShare]
-          });
-          URL.revokeObjectURL(blobUrl);
-          return true;
-        }
-      } catch (webShareErr: any) {
-        const errStr = String(webShareErr || '').toLowerCase();
-        if (errStr.includes('cancel') || errStr.includes('abort') || errStr.includes('dismiss')) {
-          URL.revokeObjectURL(blobUrl);
-          return true;
-        }
-        console.warn('Web share failed, proceeding to direct download link:', webShareErr);
-      }
-    }
-
-    // Direct Browser Download via <a> tag
-    const link = document.createElement('a');
-    link.href = blobUrl;
-    link.download = fileName;
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    
-    setTimeout(() => {
-      if (document.body.contains(link)) {
-        document.body.removeChild(link);
-      }
-      URL.revokeObjectURL(blobUrl);
-    }, 2000);
-
+  if (webDownloadSuccess) {
+    alert(`✅ تم تنزيل النسخة الاحتياطية بنجاح!\n📄 اسم الملف: ${fileName}`);
     return true;
-
-  } catch (webErr) {
-    console.error('All file export and download attempts failed:', webErr);
-    alert('⚠️ تعذر إكمال تنزيل الملف بشكل تلقائي. يرجى إعادة المحاولة.');
-    return false;
   }
+
+  alert('⚠️ تعذر تنزيل الملف بشكل تلقائي. يرجى إعادة المحاولة.');
+  return false;
 }
 
 /**
