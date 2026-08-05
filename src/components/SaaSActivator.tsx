@@ -202,8 +202,30 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
           </p>
         </div>
 
-        {/* Dynamic Trial / Expired Banner */}
-        {license.status === 'trial' && (
+        {/* Dynamic Trial / Expired / Revoked Banner */}
+        {license.customerName === 'حساب موقوف / ترخيص ملغى' && (
+          <div className="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-xs text-rose-800 dark:text-rose-200 font-bold flex items-start gap-3 shadow-sm">
+            <ShieldAlert className="w-6 h-6 text-rose-600 shrink-0 mt-0.5 animate-pulse" />
+            <div className="space-y-1.5">
+              <span className="text-sm font-black text-rose-700 dark:text-rose-300 block">
+                ⛔ تم إيقاف الحساب وإلغاء كود الترخيص من المطور!
+              </span>
+              <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-semibold">
+                لقد تم حذف أو تعطيل كود التفعيل المنسوب لنشاطك التجاري من قبل المطور. يرجى التواصل فوراً مع الدعم الفني لاستكمال التسديد وإعادة فتح الخدمة.
+              </p>
+              <a 
+                href="https://wa.me/967777140209" 
+                target="_blank" 
+                rel="noreferrer" 
+                className="inline-flex items-center gap-1.5 mt-1 px-3.5 py-2 bg-emerald-600 text-white rounded-xl text-xs font-black hover:bg-emerald-500 transition shadow-md"
+              >
+                💬 التواصل المباشر عبر واتساب (777140209)
+              </a>
+            </div>
+          </div>
+        )}
+
+        {license.status === 'trial' && license.customerName !== 'حساب موقوف / ترخيص ملغى' && (
           <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-3">
             <CalendarClock className="w-5 h-5 shrink-0 text-amber-500 mt-0.5" />
             <div>

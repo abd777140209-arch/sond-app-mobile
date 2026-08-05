@@ -19,6 +19,7 @@ import {
   LogOut, 
   ArrowRight,
   Shield,
+  ShieldAlert,
   Database,
   Download,
   Upload
@@ -71,6 +72,7 @@ import {
   syncStoreCollection, 
   syncStoreSettings 
 } from './utils/firebaseSync';
+import { listenToLicenseOnCloud, checkLicenseOnCloud } from './utils/firebase';
 
 export default function App() {
   const [settings, setSettings] = useState<SystemSettings>(() => {
@@ -313,6 +315,68 @@ export default function App() {
 
   const [license, setLicense] = useState<LicenseInfo>(() => loadLicenseLocally());
   const isActivated = license.status === 'active' || license.status === 'trial' || isDevAdminRoute;
+  const [showRevokedModal, setShowRevokedModal] = useState<boolean>(false);
+
+  // 🔒 Real-time Firestore License Enforcement (Auto-Locks immediately if Developer deletes or suspends license)
+  useEffect(() => {
+    if (!license.licenseKey || license.status === 'unlicensed' || isDevAdminRoute) {
+      return;
+    }
+
+    const currentKey = license.licenseKey;
+    const currentHwid = license.hwid || generateHWID();
+
+    const handleLicenseRevoked = (reason: string) => {
+      console.warn(`[License Security] License key ${currentKey} was ${reason} on Cloud! Revoking access...`);
+      soundManager.playWarningBeep();
+
+      const revokedLicense: LicenseInfo = {
+        licenseKey: '',
+        status: 'unlicensed',
+        activatedAt: '',
+        expiresAt: '',
+        hwid: currentHwid,
+        subscriptionType: 'trial',
+        customerName: 'حساب موقوف / ترخيص ملغى'
+      };
+
+      saveLicenseLocally(revokedLicense);
+      setLicense(revokedLicense);
+      setShowRevokedModal(true);
+    };
+
+    // 1. Attach Real-Time Firestore Snapshot Listener
+    const unsubRealtime = listenToLicenseOnCloud(currentKey, (status) => {
+      if (status === 'deleted' || status === 'suspended' || status === 'expired' || status === 'not_found') {
+        handleLicenseRevoked(status);
+      }
+    });
+
+    // 2. Periodic Active Verification Check (every 20 seconds when online)
+    const checkActiveCloudLicense = async () => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+      try {
+        const checkRes = await checkLicenseOnCloud(currentKey, currentHwid);
+        if (!checkRes.success) {
+          if (checkRes.message === 'KEY_NOT_FOUND' || checkRes.message === 'KEY_SUSPENDED' || checkRes.message === 'KEY_EXPIRED') {
+            handleLicenseRevoked(checkRes.message);
+          }
+        }
+      } catch (err) {
+        console.warn('Periodic license check warning:', err);
+      }
+    };
+
+    // Initial check on mount
+    checkActiveCloudLicense();
+
+    const intervalId = setInterval(checkActiveCloudLicense, 20000);
+
+    return () => {
+      unsubRealtime();
+      clearInterval(intervalId);
+    };
+  }, [license.licenseKey, license.status, isDevAdminRoute]);
   const [isBiometricLocked, setIsBiometricLocked] = useState<boolean>(() => {
     return localStorage.getItem('sond_biometrics_enabled') === 'true';
   });
@@ -1290,6 +1354,55 @@ export default function App() {
         onClose={() => setShowDeveloperModal(false)}
         currentHwid={license.hwid || generateHWID()}
       />
+
+      {/* ⛔ License Revoked / Account Suspended Alert Modal */}
+      {showRevokedModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn" dir="rtl">
+          <div className="w-full max-w-md bg-white dark:bg-[#0F172A] border border-rose-500/50 rounded-3xl p-6 text-center space-y-5 shadow-2xl relative overflow-hidden">
+            
+            {/* Warning Icon Header */}
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800/60 flex items-center justify-center text-rose-600 dark:text-rose-400 shadow-inner animate-bounce">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-xl font-black text-slate-900 dark:text-white">
+                ⛔ تم إيقاف وإلغاء ترخيص الحساب!
+              </h3>
+              <div className="text-xs text-slate-700 dark:text-slate-200 font-bold leading-relaxed p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/40 text-right space-y-2">
+                <p className="text-sm text-rose-700 dark:text-rose-300 font-extrabold">
+                  ⚠️ تنبيه هام: لقد تم حذف أو تعليق كود التفعيل المنسوب لنشاطك التجاري من قبل المطور وإدارة النظام.
+                </p>
+                <p className="text-xs text-slate-600 dark:text-slate-300 font-bold pt-1 border-t border-rose-200/40 dark:border-rose-900/20">
+                  لإعادة فتح النظام واستئناف أعمالك، يرجى التواصل المباشر مع المطور والدعم الفني لاستكمال التسديد والتفعيل:
+                </p>
+                <div className="text-center pt-1 font-mono font-black text-sky-600 dark:text-sky-400 text-sm select-all">
+                  📞 777140209
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-1">
+              <a
+                href="https://wa.me/967777140209"
+                target="_blank"
+                rel="noreferrer"
+                className="w-full py-3.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs transition shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                💬 التواصل المباشر عبر واتساب للتسديد (777140209)
+              </a>
+              <button
+                type="button"
+                onClick={() => setShowRevokedModal(false)}
+                className="w-full py-3 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition cursor-pointer"
+              >
+                إغلاق والعودة لشاشة التفعيل ❌
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -15,7 +15,8 @@ import {
   setDoc, 
   getDocs, 
   collection, 
-  deleteDoc 
+  deleteDoc,
+  onSnapshot
 } from 'firebase/firestore';
 
 export interface CloudLicense {
@@ -292,6 +293,9 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
           }
 
           return { success: true, message: 'VALID', data: license };
+        } else {
+          // Document explicitly deleted or does not exist on Firestore Cloud!
+          return { success: false, message: 'KEY_NOT_FOUND' };
         }
       } catch (cloudErr) {
         console.warn('Firestore cloud check fallback to local database:', cloudErr);
@@ -316,6 +320,45 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
   } catch (error) {
     console.warn('SaaS Verification fallback check:', error);
     return { success: false, message: 'SERVER_ERROR' };
+  }
+}
+
+// Listen to Real-Time License changes on Firestore Cloud (Auto-Lock when Deleted/Suspended)
+export function listenToLicenseOnCloud(
+  key: string,
+  onStatusChange: (status: 'active' | 'suspended' | 'deleted' | 'expired' | 'not_found', data?: CloudLicense) => void
+): () => void {
+  const cleanKey = key.trim().toUpperCase();
+  if (!cleanKey) return () => {};
+
+  const db = getFirestoreDb();
+  if (!db) return () => {};
+
+  try {
+    const docRef = doc(db, 'licenses', cleanKey);
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (!docSnap.exists()) {
+        // License key was deleted by developer/admin in Firestore!
+        console.warn(`[License Realtime] Document ${cleanKey} deleted on Cloud! Locking system...`);
+        onStatusChange('deleted');
+      } else {
+        const data = docSnap.data() as CloudLicense;
+        if (data.status === 'suspended') {
+          onStatusChange('suspended', data);
+        } else if (data.expiresAt && new Date(data.expiresAt) < new Date()) {
+          onStatusChange('expired', data);
+        } else {
+          onStatusChange('active', data);
+        }
+      }
+    }, (error) => {
+      console.warn('Real-time license listener error:', error);
+    });
+
+    return unsubscribe;
+  } catch (err) {
+    console.warn('Failed to attach license snapshot listener:', err);
+    return () => {};
   }
 }
 
