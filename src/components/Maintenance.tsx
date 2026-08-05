@@ -99,10 +99,6 @@ export default function Maintenance({
 
   const handleExportMonthlyMaintenancePDF = async () => {
     soundManager.playSuccessChime();
-    if (!Capacitor.isNativePlatform()) {
-      window.print();
-      return;
-    }
     try {
       setIsExportingPDF(true);
       const reportElement = document.getElementById('maintenance-tab-pdf-printable-report');

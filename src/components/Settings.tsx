@@ -661,64 +661,12 @@ export default function Settings({
       const jsonStr = JSON.stringify(fullBackupData, null, 2);
       const fileName = `Sanad_Backup_${new Date().toISOString().slice(0, 10)}_${Date.now().toString().slice(-4)}.json`;
 
-      if (Capacitor.isNativePlatform()) {
-        try {
-          await ensureStoragePermissions();
-
-          try {
-            await Filesystem.mkdir({
-              path: cleanFolder,
-              directory: Directory.Documents,
-              recursive: true
-            });
-          } catch (mkdirErr) {
-            console.log('Mkdir note:', mkdirErr);
-          }
-
-          const relativePath = `${cleanFolder}/${fileName}`;
-          const writeResult = await Filesystem.writeFile({
-            path: relativePath,
-            data: jsonStr,
-            directory: Directory.Documents,
-            recursive: true,
-            encoding: Encoding.UTF8
-          });
-
-          const fullSavedPath = `Documents/${cleanFolder}/${fileName}`;
-
-          let sharedSuccess = false;
-          if (writeResult && writeResult.uri) {
-            try {
-              await Share.share({
-                title: 'نظام سند المحاسبي - النسخة الاحتياطية',
-                text: `ملف النسخة الاحتياطية المكتملة بتاريخ ${new Date().toLocaleDateString('ar-YE')}\n📄 المكان: ${fullSavedPath}`,
-                url: writeResult.uri,
-                dialogTitle: 'تم الحفظ بنجاح! يمكنك المشاركة أو الاحتفاظ بها'
-              });
-              sharedSuccess = true;
-            } catch (shareErr: any) {
-              const errStr = String(shareErr || '').toLowerCase();
-              if (!errStr.includes('cancel') && !errStr.includes('dismiss') && !errStr.includes('abort')) {
-                console.warn('Native share dialog info:', shareErr);
-              }
-            }
-          }
-
-          if (!sharedSuccess) {
-            alert(`✅ تم حفظ النسخة الاحتياطية بنجاح بذاكرة الهاتف!\n📁 المسار: ${fullSavedPath}`);
-          }
-          return;
-        } catch (nativeErr) {
-          console.warn('Native write failed, executing fallback export:', nativeErr);
-        }
-      }
-
       await saveAndShareFile({
         fileName,
         data: jsonStr,
         mimeType: 'application/json',
         title: 'نظام سند المحاسبي - النسخة الاحتياطية',
-        text: 'ملف قاعدة البيانات والنسخة الاحتياطية لنظام سند المحاسبي',
+        text: `ملف النسخة الاحتياطية لقاعدة البيانات بتاريخ ${new Date().toLocaleDateString('ar-YE')}`,
         folderName: cleanFolder
       });
 

@@ -106,7 +106,7 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
 
   const handlePrint = async () => {
     soundManager.playSuccessChime();
-    if (!Capacitor.isNativePlatform()) {
+    if (!Capacitor.isNativePlatform() && window.innerWidth >= 768) {
       window.print();
       return;
     }

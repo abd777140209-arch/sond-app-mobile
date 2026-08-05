@@ -36,7 +36,8 @@ import {
   Zap,
   Tag,
   Download,
-  Loader2
+  Loader2,
+  Table
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -71,6 +72,7 @@ interface ProfitReportsProps {
 type PeriodPreset = 'today' | 'week' | 'month' | '30days' | 'year' | 'custom' | 'all';
 type InvoiceTypeFilter = 'all' | 'cash' | 'debt';
 type ReportSubTab = 'sales' | 'maintenance' | 'inventory';
+type DisplayMode = 'charts' | 'tables';
 
 const COLORS = ['#10B981', '#2563EB', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
 
@@ -85,6 +87,7 @@ export default function ProfitReports({
   isPrivacyMode = false
 }: ProfitReportsProps) {
   const [reportSubTab, setReportSubTab] = useState<ReportSubTab>('sales');
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('charts');
   // Multi-Currency Selection
   const activeCurrencies = settings?.currencies && settings.currencies.length > 0
     ? settings.currencies
@@ -182,10 +185,6 @@ export default function ProfitReports({
 
   const handleExportSummaryPDF = async () => {
     soundManager.playSuccessChime();
-    if (!Capacitor.isNativePlatform()) {
-      window.print();
-      return;
-    }
     try {
       setIsExportingPDF(true);
       const reportElement = document.getElementById('profit_reports_view');
@@ -633,7 +632,11 @@ export default function ProfitReports({
             <button
               onClick={() => {
                 soundManager.playSuccessChime();
-                window.print();
+                if (Capacitor.isNativePlatform() || window.innerWidth < 768) {
+                  handleExportSummaryPDF();
+                } else {
+                  window.print();
+                }
               }}
               className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-blue-500/20 no-print"
             >
@@ -691,43 +694,82 @@ export default function ProfitReports({
 
         </div>
 
-        {/* REPORT SECTION SWITCHER TABS */}
-        <div className="pt-3 border-t border-slate-100 flex items-center justify-start gap-2 overflow-x-auto pb-1">
-          <button
-            onClick={() => setReportSubTab('sales')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
-              reportSubTab === 'sales'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            <BarChart3 className="w-4 h-4" />
-            <span>📊 أرباح ومبيعات POS</span>
-          </button>
+        {/* REPORT SECTION SWITCHER TABS & DISPLAY MODE SWITCHER */}
+        <div className="pt-3 border-t border-slate-100 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          <div className="flex items-center justify-start gap-2 overflow-x-auto pb-1">
+            <button
+              onClick={() => setReportSubTab('sales')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                reportSubTab === 'sales'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span>📊 أرباح ومبيعات POS</span>
+            </button>
 
-          <button
-            onClick={() => setReportSubTab('maintenance')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
-              reportSubTab === 'maintenance'
-                ? 'bg-purple-600 text-white shadow-sm'
-                : 'bg-purple-50 text-purple-900 border border-purple-200 hover:bg-purple-100'
-            }`}
-          >
-            <Wrench className="w-4 h-4" />
-            <span>🛠️ إحصائيات وربحية الصيانة والأداء التنافسي</span>
-          </button>
+            <button
+              onClick={() => setReportSubTab('maintenance')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                reportSubTab === 'maintenance'
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'bg-purple-50 text-purple-900 border border-purple-200 hover:bg-purple-100'
+              }`}
+            >
+              <Wrench className="w-4 h-4" />
+              <span>🛠️ إحصائيات وربحية الصيانة</span>
+            </button>
 
-          <button
-            onClick={() => setReportSubTab('inventory')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
-              reportSubTab === 'inventory'
-                ? 'bg-amber-600 text-white shadow-sm'
-                : 'bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100'
-            }`}
-          >
-            <Package className="w-4 h-4" />
-            <span>📦 مُساعد المخزون والأصناف الراكدة</span>
-          </button>
+            <button
+              onClick={() => setReportSubTab('inventory')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                reportSubTab === 'inventory'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100'
+              }`}
+            >
+              <Package className="w-4 h-4" />
+              <span>📦 مُساعد المخزون والراكد</span>
+            </button>
+          </div>
+
+          {/* Toggle View Mode (Interactive Charts vs Mobile Tables) */}
+          <div className="flex items-center justify-center self-end md:self-auto bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
+            <span className="text-[10px] text-slate-500 font-bold px-1.5 hidden sm:inline">نمط العرض:</span>
+            <button
+              type="button"
+              onClick={() => {
+                soundManager.playScanBeep();
+                setDisplayMode('charts');
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                displayMode === 'charts'
+                  ? 'bg-white text-blue-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="عرض المخططات البيانية التفاعلية"
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              <span>عرض تفاعلي (مخططات)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                soundManager.playScanBeep();
+                setDisplayMode('tables');
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                displayMode === 'tables'
+                  ? 'bg-white text-emerald-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="عرض الجداول المبسطة لتناسب الهواتف الذكية"
+            >
+              <Table className="w-3.5 h-3.5" />
+              <span>جداول مبسطة (هواتف) 📱</span>
+            </button>
+          </div>
         </div>
 
       </div>
@@ -804,114 +846,272 @@ export default function ProfitReports({
 
           </div>
 
-          {/* TIMELINE REVENUE & PROFIT CHART */}
-          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-blue-600" />
-              المخطط الزمني لحركة المبيعات والأرباح
-            </h3>
+          {/* CONDITIONAL RENDERING: INTERACTIVE CHARTS VS SIMPLIFIED TABLES */}
+          {displayMode === 'charts' ? (
+            <>
+              {/* TIMELINE REVENUE & PROFIT CHART */}
+              <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-blue-600" />
+                  المخطط الزمني لحركة المبيعات والأرباح
+                </h3>
 
-            <div className="h-72 w-full">
-              {timelineChartData.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-slate-400 text-xs">
-                  لا توجد بيانات مبيعات متوفرة للفترة المحددة.
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={timelineChartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#2563EB" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#2563EB" stopOpacity={0}/>
-                      </linearGradient>
-                      <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.4}/>
-                        <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                    <XAxis dataKey="dateLabel" stroke="#64748B" fontSize={11} />
-                    <YAxis stroke="#64748B" fontSize={11} />
-                    <Tooltip contentStyle={{ backgroundColor: '#FFFFFF', borderRadius: '12px', borderColor: '#E2E8F0', color: '#0F172A', fontSize: '12px' }} />
-                    <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-                    <Area type="monotone" dataKey="revenue" name="إجمالي المبيعات" stroke="#2563EB" fillOpacity={1} fill="url(#colorRevenue)" strokeWidth={2} />
-                    <Area type="monotone" dataKey="profit" name="صافي الأرباح" stroke="#10B981" fillOpacity={1} fill="url(#colorProfit)" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </div>
-
-          {/* TOP PRODUCTS & PAYMENT DISTRIBUTION */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
-            {/* Top Profitable Products */}
-            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-blue-600" />
-                أكثر الأصناف ربحية للفترة
-              </h3>
-
-              <div className="space-y-2">
-                {stats.topProducts.length === 0 ? (
-                  <div className="py-8 text-center text-slate-400 text-xs">لا توجد بيانات أصناف.</div>
-                ) : (
-                  stats.topProducts.map((p, idx) => (
-                    <div key={p.name} className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-6 h-6 rounded-lg bg-blue-50 text-blue-600 font-black text-xs flex items-center justify-center shrink-0">
-                          #{idx + 1}
-                        </span>
-                        <div>
-                          <div className="font-bold text-slate-900">{p.name}</div>
-                          <div className="text-[10px] text-slate-400">الكمية المباعة: {p.qty} حبة</div>
-                        </div>
-                      </div>
-                      <div className="text-left font-mono">
-                        <div className="font-black text-emerald-600">+{p.profit.toLocaleString()} {currency}</div>
-                        <div className="text-[9px] text-slate-400">إجمالي المبيعات: {p.revenue.toLocaleString()}</div>
-                      </div>
+                <div className="h-72 w-full">
+                  {timelineChartData.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-slate-400 text-xs">
+                      لا توجد بيانات مبيعات متوفرة للفترة المحددة.
                     </div>
-                  ))
-                )}
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={timelineChartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#2563EB" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#2563EB" stopOpacity={0}/>
+                          </linearGradient>
+                          <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10B981" stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                        <XAxis dataKey="dateLabel" stroke="#64748B" fontSize={11} />
+                        <YAxis stroke="#64748B" fontSize={11} />
+                        <Tooltip contentStyle={{ backgroundColor: '#FFFFFF', borderRadius: '12px', borderColor: '#E2E8F0', color: '#0F172A', fontSize: '12px' }} />
+                        <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                        <Area type="monotone" dataKey="revenue" name="إجمالي المبيعات" stroke="#2563EB" fillOpacity={1} fill="url(#colorRevenue)" strokeWidth={2} />
+                        <Area type="monotone" dataKey="profit" name="صافي الأرباح" stroke="#10B981" fillOpacity={1} fill="url(#colorProfit)" strokeWidth={2} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+
+              {/* TOP PRODUCTS & PAYMENT DISTRIBUTION */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                {/* Top Profitable Products */}
+                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-blue-600" />
+                    أكثر الأصناف ربحية للفترة
+                  </h3>
+
+                  <div className="space-y-2">
+                    {stats.topProducts.length === 0 ? (
+                      <div className="py-8 text-center text-slate-400 text-xs">لا توجد بيانات أصناف.</div>
+                    ) : (
+                      stats.topProducts.map((p, idx) => (
+                        <div key={p.name} className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2.5">
+                            <span className="w-6 h-6 rounded-lg bg-blue-50 text-blue-600 font-black text-xs flex items-center justify-center shrink-0">
+                              #{idx + 1}
+                            </span>
+                            <div>
+                              <div className="font-bold text-slate-900">{p.name}</div>
+                              <div className="text-[10px] text-slate-400">الكمية المباعة: {p.qty} حبة</div>
+                            </div>
+                          </div>
+                          <div className="text-left font-mono">
+                            <div className="font-black text-emerald-600">+{p.profit.toLocaleString()} {currency}</div>
+                            <div className="text-[9px] text-slate-400">إجمالي المبيعات: {p.revenue.toLocaleString()}</div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Cash vs Debt Payment Breakdown */}
+                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <PieIcon className="w-4 h-4 text-blue-600" />
+                    توزيع المبيعات النقدية والآجلة
+                  </h3>
+
+                  <div className="h-56 w-full flex items-center justify-center">
+                    {piePaymentData.length === 0 ? (
+                      <div className="text-slate-400 text-xs">لا توجد بيانات تسديد.</div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={piePaymentData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={55}
+                            outerRadius={80}
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                            {piePaymentData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip contentStyle={{ backgroundColor: '#FFFFFF', borderRadius: '12px', borderColor: '#E2E8F0', color: '#0F172A', fontSize: '12px' }} />
+                          <Legend wrapperStyle={{ fontSize: '12px' }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+            </>
+          ) : (
+            /* SIMPLIFIED TABLE VIEW FOR MOBILE / COMPACT SCREENS */
+            <div className="space-y-6">
+              {/* Timeline Sales Table */}
+              <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Table className="w-4 h-4 text-emerald-600" />
+                    جدول البيانات الزمنيّة للمبيعات والأرباح
+                  </h3>
+                  <span className="text-xs text-slate-400 font-mono">
+                    السجلات: {timelineChartData.length}
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-right border-collapse min-w-[550px]">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                        <th className="p-2.5">التاريخ / الفترة</th>
+                        <th className="p-2.5 text-center">الفواتير</th>
+                        <th className="p-2.5 text-left">المبيعات</th>
+                        <th className="p-2.5 text-left">التكلفة</th>
+                        <th className="p-2.5 text-left">صافي الربح</th>
+                        <th className="p-2.5 text-center">الهامش %</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {timelineChartData.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-slate-400">لا توجد بيانات للفترة المحددة</td>
+                        </tr>
+                      ) : (
+                        timelineChartData.map((row) => {
+                          const margin = row.revenue > 0 ? ((row.profit / row.revenue) * 100).toFixed(1) : '0';
+                          return (
+                            <tr key={row.dateLabel} className="hover:bg-slate-50 transition">
+                              <td className="p-2.5 font-bold text-slate-900 font-mono dir-ltr text-right">{row.dateLabel}</td>
+                              <td className="p-2.5 text-center font-mono font-bold text-slate-600">{row.count}</td>
+                              <td className="p-2.5 text-left font-mono font-bold text-blue-600">{fmt(row.revenue)}</td>
+                              <td className="p-2.5 text-left font-mono text-slate-600">{fmt(row.cost)}</td>
+                              <td className="p-2.5 text-left font-mono font-bold text-emerald-600">+{fmt(row.profit)}</td>
+                              <td className="p-2.5 text-center font-mono font-bold">
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px]">
+                                  %{margin}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                    {timelineChartData.length > 0 && (
+                      <tfoot>
+                        <tr className="bg-slate-900 text-white font-bold text-xs">
+                          <td className="p-2.5">الإجمالي الكلي</td>
+                          <td className="p-2.5 text-center font-mono">{stats.invoiceCount}</td>
+                          <td className="p-2.5 text-left font-mono text-blue-300">{fmt(stats.totalRevenue)}</td>
+                          <td className="p-2.5 text-left font-mono text-slate-300">{fmt(stats.totalCostOfGoods)}</td>
+                          <td className="p-2.5 text-left font-mono text-emerald-300">+{fmt(stats.grossProfit)}</td>
+                          <td className="p-2.5 text-center font-mono text-amber-300">%{stats.profitMargin.toFixed(1)}</td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+
+              {/* Top Products & Payment Breakdown Tables */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                {/* Top Products Table */}
+                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-blue-600" />
+                    جدول الأكثر مبيعاً وربحية
+                  </h3>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-right border-collapse min-w-[320px]">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                          <th className="p-2">#</th>
+                          <th className="p-2">اسم الصنف</th>
+                          <th className="p-2 text-center">الكمية</th>
+                          <th className="p-2 text-left">المبيعات</th>
+                          <th className="p-2 text-left">الربح الصافي</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {stats.topProducts.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="py-6 text-center text-slate-400">لا توجد بيانات أصناف</td>
+                          </tr>
+                        ) : (
+                          stats.topProducts.map((p, idx) => (
+                            <tr key={p.name} className="hover:bg-slate-50">
+                              <td className="p-2 font-black text-blue-600">#{idx + 1}</td>
+                              <td className="p-2 font-bold text-slate-900">{p.name}</td>
+                              <td className="p-2 text-center font-mono font-bold text-slate-700">{p.qty}</td>
+                              <td className="p-2 text-left font-mono text-slate-600">{fmt(p.revenue)}</td>
+                              <td className="p-2 text-left font-mono font-bold text-emerald-600">+{fmt(p.profit)}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Payment Breakdown Table */}
+                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <PieIcon className="w-4 h-4 text-blue-600" />
+                    جدول توزيع مبيعات الدفع (كاش / آجل)
+                  </h3>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-right border-collapse min-w-[300px]">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                          <th className="p-2.5">طريقة الدفع</th>
+                          <th className="p-2.5 text-left">إجمالي المبيعات</th>
+                          <th className="p-2.5 text-center">النسبة المئوية</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {piePaymentData.length === 0 ? (
+                          <tr>
+                            <td colSpan={3} className="py-6 text-center text-slate-400">لا توجد عمليات مبيعات</td>
+                          </tr>
+                        ) : (
+                          piePaymentData.map((item) => {
+                            const pct = stats.totalRevenue > 0 ? ((item.value / stats.totalRevenue) * 100).toFixed(1) : '0';
+                            return (
+                              <tr key={item.name} className="hover:bg-slate-50">
+                                <td className="p-2.5 font-bold text-slate-900 flex items-center gap-2">
+                                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                                  {item.name}
+                                </td>
+                                <td className="p-2.5 text-left font-mono font-bold text-slate-800">{fmt(item.value)}</td>
+                                <td className="p-2.5 text-center font-mono font-bold text-blue-600">%{pct}</td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
               </div>
             </div>
-
-            {/* Cash vs Debt Payment Breakdown */}
-            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <PieIcon className="w-4 h-4 text-blue-600" />
-                توزيع المبيعات النقدية والآجلة
-              </h3>
-
-              <div className="h-56 w-full flex items-center justify-center">
-                {piePaymentData.length === 0 ? (
-                  <div className="text-slate-400 text-xs">لا توجد بيانات تسديد.</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={piePaymentData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={55}
-                        outerRadius={80}
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        {piePaymentData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: '#FFFFFF', borderRadius: '12px', borderColor: '#E2E8F0', color: '#0F172A', fontSize: '12px' }} />
-                      <Legend wrapperStyle={{ fontSize: '12px' }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </div>
-
-          </div>
+          )}
         </div>
       )}
 
@@ -981,85 +1181,128 @@ export default function ProfitReports({
             </div>
           </div>
 
-          {/* Technician Performance Index Section */}
-          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <Award className="w-5 h-5 text-purple-600" />
-                  مؤشر أداء وكفاءة فنيي الصيانة (Technician Performance Index)
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  عرض إجمالي الأجهزة المنجزة وإيرادات أجور اليد لكل فني صيانة بالمنشأة
-                </p>
+          {/* CONDITIONAL RENDERING: CARDS VS TABLE */}
+          {displayMode === 'charts' ? (
+            /* Technician Performance Index Section (Cards View) */
+            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Award className="w-5 h-5 text-purple-600" />
+                    مؤشر أداء وكفاءة فنيي الصيانة (Technician Performance Index)
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    عرض إجمالي الأجهزة المنجزة وإيرادات أجور اليد لكل فني صيانة بالمنشأة
+                  </p>
+                </div>
+              </div>
+
+              {maintenanceStats.techniciansList.length === 0 ? (
+                <div className="py-12 text-center text-slate-400 text-xs">
+                  لا توجد سجلات صيانة منجزة لفنيين حالياً.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {maintenanceStats.techniciansList.map((tech, idx) => {
+                    const maxCompleted = maintenanceStats.techniciansList[0]?.completedCount || 1;
+                    const percent = Math.round((tech.completedCount / maxCompleted) * 100);
+
+                    return (
+                      <div key={tech.name} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 relative overflow-hidden">
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-9 h-9 rounded-xl font-black text-xs flex items-center justify-center shrink-0 ${
+                              idx === 0 ? 'bg-amber-100 text-amber-900 border border-amber-300' :
+                              idx === 1 ? 'bg-slate-200 text-slate-800' : 'bg-purple-100 text-purple-800'
+                            }`}>
+                              #{idx + 1}
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-slate-900 text-sm">{tech.name}</h4>
+                              <span className="text-[10px] text-purple-700 bg-purple-50 font-bold px-2 py-0.5 rounded-md border border-purple-100">
+                                فني صيانة معتمد
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <span className="text-lg font-black text-purple-900 font-mono">{tech.completedCount}</span>
+                            <span className="text-[10px] text-slate-400 block font-sans">جهاز منجز</span>
+                          </div>
+                        </div>
+
+                        {/* Financial performance for technician */}
+                        <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-200/80 font-mono">
+                          <div className="bg-white p-2 rounded-xl border border-slate-200">
+                            <span className="text-[9.5px] text-slate-400 font-sans block">أجور اليد للفني:</span>
+                            <span className="font-bold text-emerald-600 text-xs">{fmt(tech.laborFee)}</span>
+                          </div>
+                          <div className="bg-white p-2 rounded-xl border border-slate-200">
+                            <span className="text-[9.5px] text-slate-400 font-sans block">إجمالي الإيرادات:</span>
+                            <span className="font-bold text-blue-600 text-xs">{fmt(tech.revenue)}</span>
+                          </div>
+                        </div>
+
+                        {/* Performance Bar */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[10px] font-bold text-slate-500">
+                            <span>معدل الإنجاز النسبي:</span>
+                            <span className="text-purple-700">{percent}%</span>
+                          </div>
+                          <div className="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
+                            <div 
+                              className="h-full bg-purple-600 rounded-full transition-all duration-500" 
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Simplified Table View for Maintenance */
+            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Table className="w-4 h-4 text-purple-600" />
+                جدول أداء وفنيي قسم الصيانة
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-right border-collapse min-w-[500px]">
+                  <thead>
+                    <tr className="bg-purple-900 text-white font-bold">
+                      <th className="p-2.5">#</th>
+                      <th className="p-2.5">اسم الفني</th>
+                      <th className="p-2.5 text-center">الأجهزة المنجزة</th>
+                      <th className="p-2.5 text-left">أجور اليد (صافي الربح)</th>
+                      <th className="p-2.5 text-left">قطع الغيار</th>
+                      <th className="p-2.5 text-left">إجمالي الإيرادات</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {maintenanceStats.techniciansList.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center text-slate-400">لا توجد سجلات فنيين صيانة</td>
+                      </tr>
+                    ) : (
+                      maintenanceStats.techniciansList.map((tech, idx) => (
+                        <tr key={tech.name} className="hover:bg-purple-50/50">
+                          <td className="p-2.5 font-bold text-purple-900">#{idx + 1}</td>
+                          <td className="p-2.5 font-bold text-slate-900">{tech.name}</td>
+                          <td className="p-2.5 text-center font-mono font-bold text-purple-700">{tech.completedCount}</td>
+                          <td className="p-2.5 text-left font-mono font-bold text-emerald-600">{fmt(tech.laborFee)}</td>
+                          <td className="p-2.5 text-left font-mono text-rose-600">{fmt(tech.spareParts)}</td>
+                          <td className="p-2.5 text-left font-mono font-bold text-slate-900">{fmt(tech.revenue)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
-
-            {maintenanceStats.techniciansList.length === 0 ? (
-              <div className="py-12 text-center text-slate-400 text-xs">
-                لا توجد سجلات صيانة منجزة لفنيين حالياً.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {maintenanceStats.techniciansList.map((tech, idx) => {
-                  const maxCompleted = maintenanceStats.techniciansList[0]?.completedCount || 1;
-                  const percent = Math.round((tech.completedCount / maxCompleted) * 100);
-
-                  return (
-                    <div key={tech.name} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 relative overflow-hidden">
-                      <div className="flex justify-between items-start">
-                        <div className="flex items-center gap-2.5">
-                          <div className={`w-9 h-9 rounded-xl font-black text-xs flex items-center justify-center shrink-0 ${
-                            idx === 0 ? 'bg-amber-100 text-amber-900 border border-amber-300' :
-                            idx === 1 ? 'bg-slate-200 text-slate-800' : 'bg-purple-100 text-purple-800'
-                          }`}>
-                            #{idx + 1}
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-slate-900 text-sm">{tech.name}</h4>
-                            <span className="text-[10px] text-purple-700 bg-purple-50 font-bold px-2 py-0.5 rounded-md border border-purple-100">
-                              فني صيانة معتمد
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="text-right">
-                          <span className="text-lg font-black text-purple-900 font-mono">{tech.completedCount}</span>
-                          <span className="text-[10px] text-slate-400 block font-sans">جهاز منجز</span>
-                        </div>
-                      </div>
-
-                      {/* Financial performance for technician */}
-                      <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-200/80 font-mono">
-                        <div className="bg-white p-2 rounded-xl border border-slate-200">
-                          <span className="text-[9.5px] text-slate-400 font-sans block">أجور اليد للفني:</span>
-                          <span className="font-bold text-emerald-600 text-xs">{fmt(tech.laborFee)}</span>
-                        </div>
-                        <div className="bg-white p-2 rounded-xl border border-slate-200">
-                          <span className="text-[9.5px] text-slate-400 font-sans block">إجمالي الإيرادات:</span>
-                          <span className="font-bold text-blue-600 text-xs">{fmt(tech.revenue)}</span>
-                        </div>
-                      </div>
-
-                      {/* Performance Bar */}
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-[10px] font-bold text-slate-500">
-                          <span>معدل الإنجاز النسبي:</span>
-                          <span className="text-purple-700">{percent}%</span>
-                        </div>
-                        <div className="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
-                          <div 
-                            className="h-full bg-purple-600 rounded-full transition-all duration-500" 
-                            style={{ width: `${percent}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          )}
 
         </div>
       )}
@@ -1099,88 +1342,169 @@ export default function ProfitReports({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
-            {/* Top Selling Items (الأكثر مبيعاً) */}
-            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <Flame className="w-5 h-5 text-amber-500" />
-                  الأصناف الأكثر مبيعاً بكثافة (Top Sellers - آخر 30 يوماً)
-                </h3>
+          {/* CONDITIONAL RENDERING: CARDS VS TABLES */}
+          {displayMode === 'charts' ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              
+              {/* Top Selling Items (الأكثر مبيعاً) */}
+              <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Flame className="w-5 h-5 text-amber-500" />
+                    الأصناف الأكثر مبيعاً بكثافة (Top Sellers - آخر 30 يوماً)
+                  </h3>
+                </div>
+
+                <div className="space-y-2">
+                  {deadStockAndTopSellers.topSellers.length === 0 ? (
+                    <div className="py-8 text-center text-slate-400 text-xs">لا توجد سجلات مبيعات في آخر 30 يوماً.</div>
+                  ) : (
+                    deadStockAndTopSellers.topSellers.map((item, idx) => (
+                      <div key={item.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-6 h-6 rounded-lg bg-amber-100 text-amber-900 font-black text-xs flex items-center justify-center shrink-0">
+                            #{idx + 1}
+                          </span>
+                          <div>
+                            <div className="font-bold text-slate-900">{item.name}</div>
+                            <div className="text-[10px] text-slate-400">الباركود: {item.barcode} | المخزون المتبقي: {item.stock} حبة</div>
+                          </div>
+                        </div>
+
+                        <div className="text-left font-mono">
+                          <div className="font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                            {item.qtySold30Days} مبيعة
+                          </div>
+                          <div className="text-[9.5px] text-slate-500 mt-0.5">{item.sellingPrice.toLocaleString()} {currency}</div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
 
-              <div className="space-y-2">
-                {deadStockAndTopSellers.topSellers.length === 0 ? (
-                  <div className="py-8 text-center text-slate-400 text-xs">لا توجد سجلات مبيعات في آخر 30 يوماً.</div>
-                ) : (
-                  deadStockAndTopSellers.topSellers.map((item, idx) => (
-                    <div key={item.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-6 h-6 rounded-lg bg-amber-100 text-amber-900 font-black text-xs flex items-center justify-center shrink-0">
-                          #{idx + 1}
-                        </span>
-                        <div>
-                          <div className="font-bold text-slate-900">{item.name}</div>
-                          <div className="text-[10px] text-slate-400">الباركود: {item.barcode} | المخزون المتبقي: {item.stock} حبة</div>
-                        </div>
-                      </div>
+              {/* Dead Stock Items (الأصناف الراكدة) */}
+              <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Package className="w-5 h-5 text-rose-600" />
+                    الأصناف الراكدة (Dead Stock - بدون بيع منذ 30 يوم)
+                  </h3>
+                </div>
 
-                      <div className="text-left font-mono">
-                        <div className="font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
-                          {item.qtySold30Days} مبيعة
-                        </div>
-                        <div className="text-[9.5px] text-slate-500 mt-0.5">{item.sellingPrice.toLocaleString()} {currency}</div>
-                      </div>
+                <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                  {deadStockAndTopSellers.deadStockItems.length === 0 ? (
+                    <div className="py-8 text-center text-emerald-600 text-xs font-bold">
+                      🎉 ممتاز! لا توجد أصناف راكدة معطلة للسيولة بالمنشأة.
                     </div>
-                  ))
-                )}
-              </div>
-            </div>
+                  ) : (
+                    deadStockAndTopSellers.deadStockItems.map(item => (
+                      <div key={item.id} className="p-3 rounded-xl bg-rose-50/50 border border-rose-200 flex items-center justify-between text-xs">
+                        <div>
+                          <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                            <span>{item.name}</span>
+                            <span className="text-[9px] bg-rose-100 text-rose-800 font-bold px-1.5 py-0.2 rounded">
+                              راكد ❄️
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-slate-500 mt-0.5 font-mono">
+                            الكمية بالمخزن: <span className="font-bold text-slate-800">{item.stock}</span> | رأس المال المعطل: <span className="font-bold text-rose-700">{fmt(item.tiedCapital)}</span>
+                          </div>
+                        </div>
 
-            {/* Dead Stock Items (الأصناف الراكدة) */}
-            <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <Package className="w-5 h-5 text-rose-600" />
-                  الأصناف الراكدة (Dead Stock - بدون بيع منذ 30 يوم)
-                </h3>
-              </div>
-
-              <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
-                {deadStockAndTopSellers.deadStockItems.length === 0 ? (
-                  <div className="py-8 text-center text-emerald-600 text-xs font-bold">
-                    🎉 ممتاز! لا توجد أصناف راكدة معطلة للسيولة بالمنشأة.
-                  </div>
-                ) : (
-                  deadStockAndTopSellers.deadStockItems.map(item => (
-                    <div key={item.id} className="p-3 rounded-xl bg-rose-50/50 border border-rose-200 flex items-center justify-between text-xs">
-                      <div>
-                        <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                          <span>{item.name}</span>
-                          <span className="text-[9px] bg-rose-100 text-rose-800 font-bold px-1.5 py-0.2 rounded">
-                            راكد ❄️
+                        <div className="text-left font-mono">
+                          <span className="text-[10px] text-slate-400 block">السعر الحالي: {item.sellingPrice.toLocaleString()} {currency}</span>
+                          <span className="text-[9.5px] font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                            مقترح تصفية بـ {(item.sellingPrice * 0.85).toFixed(0)} {currency}
                           </span>
                         </div>
-                        <div className="text-[10px] text-slate-500 mt-0.5 font-mono">
-                          الكمية بالمخزن: <span className="font-bold text-slate-800">{item.stock}</span> | رأس المال المعطل: <span className="font-bold text-rose-700">{fmt(item.tiedCapital)}</span>
-                        </div>
                       </div>
-
-                      <div className="text-left font-mono">
-                        <span className="text-[10px] text-slate-400 block">السعر الحالي: {item.sellingPrice.toLocaleString()} {currency}</span>
-                        <span className="text-[9.5px] font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
-                          مقترح تصفية بـ {(item.sellingPrice * 0.85).toFixed(0)} {currency}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                )}
+                    ))
+                  )}
+                </div>
               </div>
+
             </div>
+          ) : (
+            /* SIMPLIFIED TABLES FOR INVENTORY */
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              
+              {/* Top Sellers Table */}
+              <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <Flame className="w-4 h-4 text-amber-500" />
+                  جدول الأصناف الأكثر مبيعاً (آخر 30 يوماً)
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-right border-collapse min-w-[320px]">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                        <th className="p-2">#</th>
+                        <th className="p-2">اسم الصنف</th>
+                        <th className="p-2 text-center">المباع</th>
+                        <th className="p-2 text-center">المتبقي</th>
+                        <th className="p-2 text-left">سعر البيع</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {deadStockAndTopSellers.topSellers.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-6 text-center text-slate-400">لا توجد مبيعات في 30 يوماً</td>
+                        </tr>
+                      ) : (
+                        deadStockAndTopSellers.topSellers.map((item, idx) => (
+                          <tr key={item.id} className="hover:bg-slate-50">
+                            <td className="p-2 font-black text-amber-600">#{idx + 1}</td>
+                            <td className="p-2 font-bold text-slate-900">{item.name}</td>
+                            <td className="p-2 text-center font-mono font-bold text-emerald-600">{item.qtySold30Days}</td>
+                            <td className="p-2 text-center font-mono text-slate-600">{item.stock}</td>
+                            <td className="p-2 text-left font-mono font-bold">{fmt(item.sellingPrice)}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
 
-          </div>
+              {/* Dead Stock Table */}
+              <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <Package className="w-4 h-4 text-rose-600" />
+                  جدول الأصناف الراكدة (السيولة المعطلة)
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-right border-collapse min-w-[360px]">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                        <th className="p-2">الصنف</th>
+                        <th className="p-2 text-center">المخزون</th>
+                        <th className="p-2 text-left">السيولة المعطلة</th>
+                        <th className="p-2 text-left">مقترح التصفية</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {deadStockAndTopSellers.deadStockItems.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="py-6 text-center text-emerald-600 font-bold">🎉 لا توجد أصناف راكدة معطلة!</td>
+                        </tr>
+                      ) : (
+                        deadStockAndTopSellers.deadStockItems.map((item) => (
+                          <tr key={item.id} className="hover:bg-rose-50/50">
+                            <td className="p-2 font-bold text-slate-900">{item.name}</td>
+                            <td className="p-2 text-center font-mono font-bold text-slate-700">{item.stock}</td>
+                            <td className="p-2 text-left font-mono font-bold text-rose-600">{fmt(item.tiedCapital)}</td>
+                            <td className="p-2 text-left font-mono text-purple-700 font-bold">{fmt(item.sellingPrice * 0.85)}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
 
+            </div>
+          )}
         </div>
       )}
 
