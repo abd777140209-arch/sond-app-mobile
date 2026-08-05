@@ -18,7 +18,10 @@ import {
   EyeOff, 
   LogOut, 
   ArrowRight,
-  Shield
+  Shield,
+  Database,
+  Download,
+  Upload
 } from 'lucide-react';
 
 import { Product, Customer, Invoice, Payment, Transaction, SystemSettings, MaintenanceOrder, Employee, PayrollRecord, UserAccount, AuditLog } from './types';
@@ -722,6 +725,7 @@ export default function App() {
   };
 
   const handleBackupData = async () => {
+    soundManager.playSuccessChime();
     const backupObj = {
       settings,
       products,
@@ -745,6 +749,7 @@ export default function App() {
       title: 'نسخة احتياطية - نظام سند المحاسبي',
       text: `ملف النسخة الاحتياطية لقاعدة البيانات بتاريخ ${new Date().toLocaleDateString('ar-YE')}`
     });
+    addAuditLog('backup_created', 'أخذ نسخة احتياطية كاملة لقاعدة البيانات', `ملف: ${fileName}`);
   };
 
   const handleRestoreData = async (restored: any) => {
@@ -892,6 +897,16 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Quick Backup Button */}
+          <button
+            onClick={handleBackupData}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 text-xs font-bold transition cursor-pointer shadow-2xs"
+            title="أخذ نسخة احتياطية وحفظها في ذاكرة الهاتف / الويب"
+          >
+            <Download className="w-3.5 h-3.5 text-blue-600" />
+            <span className="hidden xs:inline font-bold">نسخ احتياطي</span>
+          </button>
+
           {/* Developer Modal Button */}
           <button
             onClick={() => setShowDeveloperModal(true)}
@@ -978,6 +993,8 @@ export default function App() {
                 setIsCashierMode={setIsCashierMode}
                 setShowPinCheckModal={setShowPinCheckModal}
                 setShowPrivacyPinModal={setShowPrivacyPinModal}
+                onBackupData={handleBackupData}
+                onRestoreData={handleRestoreData}
               />
             )}
 

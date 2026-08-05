@@ -26,7 +26,10 @@ import {
   ClipboardCheck, 
   History, 
   Sparkles,
-  Calculator
+  Calculator,
+  Download,
+  Upload,
+  HardDrive
 } from 'lucide-react';
 import { Product, Customer, Invoice, Payment, Transaction, SystemSettings, Employee } from '../types';
 import { soundManager } from '../utils/sound';
@@ -48,6 +51,8 @@ interface MobileDashboardViewProps {
   setIsCashierMode?: (val: boolean) => void;
   setShowPinCheckModal?: (val: boolean) => void;
   setShowPrivacyPinModal?: (val: boolean) => void;
+  onBackupData?: () => void;
+  onRestoreData?: (data: any) => Promise<boolean>;
 }
 
 export default function MobileDashboardView({
@@ -65,8 +70,33 @@ export default function MobileDashboardView({
   isCashierMode = false,
   setIsCashierMode,
   setShowPinCheckModal,
-  setShowPrivacyPinModal
+  setShowPrivacyPinModal,
+  onBackupData,
+  onRestoreData
 }: MobileDashboardViewProps) {
+  
+  const handleFileRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        if (onRestoreData) {
+          const success = await onRestoreData(parsed);
+          if (success) {
+            soundManager.playSuccessChime();
+            alert('✅ تم استعادة النسخة الاحتياطية بنجاح بنسبة 100%!');
+          } else {
+            alert('❌ فشل استعادة الملف. الرجاء التأكد من صحة ملف النسخة الاحتياطية.');
+          }
+        }
+      } catch (err) {
+        alert('❌ صيغة الملف غير صحيحة.');
+      }
+    };
+    reader.readAsText(file);
+  };
   
   // Multi-Currency Selection
   const activeCurrencies = settings?.currencies && settings.currencies.length > 0
@@ -352,6 +382,48 @@ export default function MobileDashboardView({
               </div>
             </button>
 
+          </div>
+        </section>
+
+        {/* BACKUP & RESTORE BANNER CARD */}
+        <section className="p-4 rounded-2xl bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white shadow-lg space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-blue-500/20 rounded-xl text-blue-400">
+                <HardDrive className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-xs font-black text-white">النسخ الاحتياطي وحماية البيانات 💾</h3>
+                <p className="text-[10px] text-blue-200">تخزين نسختك في ذاكرة الهاتف الداخلية أو مشاركتها بسهولة</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            {/* Take Backup Button */}
+            <button
+              onClick={() => {
+                if (onBackupData) {
+                  onBackupData();
+                }
+              }}
+              className="py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer"
+            >
+              <Download className="w-4 h-4" />
+              <span>حفظ نسخة احتياطية</span>
+            </button>
+
+            {/* Restore Backup Button */}
+            <label className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer border border-slate-700">
+              <Upload className="w-4 h-4 text-emerald-400" />
+              <span>استعادة نسخة</span>
+              <input
+                type="file"
+                accept=".json"
+                onChange={handleFileRestore}
+                className="hidden"
+              />
+            </label>
           </div>
         </section>
 
