@@ -638,38 +638,37 @@ export default function Settings({
     try {
       if (onBackupData) {
         await onBackupData();
+      } else {
+        const getParsed = (key: string) => {
+          try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; }
+        };
+
+        const fullBackupData = {
+          settings: getParsed('smart_accounting_settings') || settings,
+          products: getParsed('smart_accounting_products') || [],
+          customers: getParsed('smart_accounting_customers') || [],
+          invoices: getParsed('smart_accounting_invoices') || [],
+          payments: getParsed('smart_accounting_payments') || [],
+          transactions: getParsed('smart_accounting_transactions') || [],
+          maintenanceOrders: getParsed('smart_accounting_maintenance') || [],
+          employees: getParsed('smart_accounting_employees') || [],
+          payrollRecords: getParsed('smart_accounting_payroll') || [],
+          users: getParsed('smart_accounting_users') || [],
+          exportedAt: nowIso
+        };
+
+        const jsonStr = JSON.stringify(fullBackupData, null, 2);
+        const fileName = `Sanad_Backup_${new Date().toISOString().slice(0, 10)}_${Date.now().toString().slice(-4)}.json`;
+
+        await saveAndShareFile({
+          fileName,
+          data: jsonStr,
+          mimeType: 'application/json',
+          title: 'نظام سند المحاسبي - النسخة الاحتياطية',
+          text: `ملف النسخة الاحتياطية لقاعدة البيانات بتاريخ ${new Date().toLocaleDateString('ar-YE')}`,
+          folderName: cleanFolder
+        });
       }
-
-      const getParsed = (key: string) => {
-        try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; }
-      };
-
-      const fullBackupData = {
-        settings: getParsed('smart_accounting_settings') || settings,
-        products: getParsed('smart_accounting_products') || [],
-        customers: getParsed('smart_accounting_customers') || [],
-        invoices: getParsed('smart_accounting_invoices') || [],
-        payments: getParsed('smart_accounting_payments') || [],
-        transactions: getParsed('smart_accounting_transactions') || [],
-        maintenanceOrders: getParsed('smart_accounting_maintenance') || [],
-        employees: getParsed('smart_accounting_employees') || [],
-        payrollRecords: getParsed('smart_accounting_payroll') || [],
-        users: getParsed('smart_accounting_users') || [],
-        exportedAt: nowIso
-      };
-
-      const jsonStr = JSON.stringify(fullBackupData, null, 2);
-      const fileName = `Sanad_Backup_${new Date().toISOString().slice(0, 10)}_${Date.now().toString().slice(-4)}.json`;
-
-      await saveAndShareFile({
-        fileName,
-        data: jsonStr,
-        mimeType: 'application/json',
-        title: 'نظام سند المحاسبي - النسخة الاحتياطية',
-        text: `ملف النسخة الاحتياطية لقاعدة البيانات بتاريخ ${new Date().toLocaleDateString('ar-YE')}`,
-        folderName: cleanFolder
-      });
-
     } catch (err) {
       console.error('Backup creation error:', err);
       alert('⚠️ حدث خطأ أثناء إعداد أو حفظ ملف النسخة الاحتياطية.');
@@ -684,10 +683,6 @@ export default function Settings({
     setLastDriveBackupDate(nowIso);
 
     try {
-      if (onBackupData) {
-        await onBackupData();
-      }
-
       const getParsed = (key: string) => {
         try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; }
       };

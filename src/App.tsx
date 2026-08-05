@@ -63,7 +63,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
-import { saveAndShareFile, saveSilentBackupFile, getBackupTimestamp } from './utils/fileExport';
+import { saveAndShareFile, saveSilentBackupFile, getBackupTimestamp, getCustomSaveFolder } from './utils/fileExport';
 import { LicenseInfo, loadLicenseLocally, saveLicenseLocally, generateHWID } from './utils/licensing';
 import { 
   saveStoreDocument, 
@@ -181,6 +181,38 @@ export default function App() {
     }
     return DEFAULT_USERS[0];
   });
+
+  useEffect(() => {
+    localStorage.setItem('smart_accounting_products', JSON.stringify(products));
+  }, [products]);
+
+  useEffect(() => {
+    localStorage.setItem('smart_accounting_customers', JSON.stringify(customers));
+  }, [customers]);
+
+  useEffect(() => {
+    localStorage.setItem('smart_accounting_invoices', JSON.stringify(invoices));
+  }, [invoices]);
+
+  useEffect(() => {
+    localStorage.setItem('smart_accounting_payments', JSON.stringify(payments));
+  }, [payments]);
+
+  useEffect(() => {
+    localStorage.setItem('smart_accounting_transactions', JSON.stringify(transactions));
+  }, [transactions]);
+
+  useEffect(() => {
+    localStorage.setItem('smart_accounting_maintenance', JSON.stringify(maintenanceOrders));
+  }, [maintenanceOrders]);
+
+  useEffect(() => {
+    localStorage.setItem('smart_accounting_employees', JSON.stringify(employees));
+  }, [employees]);
+
+  useEffect(() => {
+    localStorage.setItem('smart_accounting_payroll', JSON.stringify(payrollRecords));
+  }, [payrollRecords]);
 
   useEffect(() => {
     localStorage.setItem('smart_accounting_users', JSON.stringify(users));
@@ -628,16 +660,18 @@ export default function App() {
       description: `مبيعات فاتورة ${nextInvoiceNum} لـ ${saleData.customerName}`
     };
 
+    // Always update local React state synchronously
+    setProducts(updatedProducts);
+    if (updatedCustomer) setCustomers(prev => prev.map(c => c.id === updatedCustomer!.id ? updatedCustomer! : c));
+    setInvoices(prev => [newInvoice, ...prev]);
+    setTransactions(prev => [newTransaction, ...prev]);
+
+    // Also sync to Cloud Firestore if SaaS license key is present
     if (license.licenseKey) {
       saveStoreDocument(license.licenseKey, 'invoices', invoiceId, newInvoice);
       saveStoreDocument(license.licenseKey, 'transactions', newTransaction.id, newTransaction);
       updatedProducts.forEach(p => saveStoreDocument(license.licenseKey, 'products', p.id, p));
       if (updatedCustomer) saveStoreDocument(license.licenseKey, 'customers', updatedCustomer.id, updatedCustomer);
-    } else {
-      setProducts(updatedProducts);
-      if (updatedCustomer) setCustomers(prev => prev.map(c => c.id === updatedCustomer!.id ? updatedCustomer! : c));
-      setInvoices(prev => [...prev, newInvoice]);
-      setTransactions(prev => [...prev, newTransaction]);
     }
 
     addAuditLog('sale_completed', `إصدار فاتورة مبيعات #${nextInvoiceNum}`, `العميل: ${saleData.customerName} - المبلغ: ${saleData.finalAmount} ${settings.currency}`);
@@ -654,21 +688,21 @@ export default function App() {
       initialDebt: debtAmount,
       createdAt: new Date().toISOString()
     };
+    setCustomers(prev => [...prev, newCustomer]);
     if (license.licenseKey) saveStoreDocument(license.licenseKey, 'customers', newCustomer.id, newCustomer);
-    else setCustomers(prev => [...prev, newCustomer]);
   };
 
   const handleUpdateCustomer = (updatedCustomer: Customer) => {
+    setCustomers(prev => prev.map(c => c.id === updatedCustomer.id ? updatedCustomer : c));
     if (license.licenseKey) saveStoreDocument(license.licenseKey, 'customers', updatedCustomer.id, updatedCustomer);
-    else setCustomers(prev => prev.map(c => c.id === updatedCustomer.id ? updatedCustomer : c));
   };
 
   const handleDeleteCustomer = (customerId: string) => {
     const cust = customers.find(c => c.id === customerId);
     if (!cust) return;
     const softDeleted = { ...cust, isDeleted: true, isActive: false };
+    setCustomers(prev => prev.map(c => c.id === customerId ? softDeleted : c));
     if (license.licenseKey) saveStoreDocument(license.licenseKey, 'customers', customerId, softDeleted);
-    else setCustomers(prev => prev.map(c => c.id === customerId ? softDeleted : c));
   };
 
   const handlePayDebt = (customerId: string, amount: number, note: string) => {
@@ -681,53 +715,53 @@ export default function App() {
     const newTransaction: Transaction = { id: `t-${Date.now()}`, type: 'payment', amount, date: dateStr, description: `سداد ديون: ${customer.name}` };
     const updatedCustomer: Customer = { ...customer, totalDebt: Math.max(0, customer.totalDebt - amount) };
 
+    setCustomers(prev => prev.map(c => c.id === customerId ? updatedCustomer : c));
+    setPayments(prev => [...prev, newPayment]);
+    setTransactions(prev => [...prev, newTransaction]);
+
     if (license.licenseKey) {
       saveStoreDocument(license.licenseKey, 'payments', payId, newPayment);
       saveStoreDocument(license.licenseKey, 'transactions', newTransaction.id, newTransaction);
       saveStoreDocument(license.licenseKey, 'customers', customerId, updatedCustomer);
-    } else {
-      setCustomers(prev => prev.map(c => c.id === customerId ? updatedCustomer : c));
-      setPayments(prev => [...prev, newPayment]);
-      setTransactions(prev => [...prev, newTransaction]);
     }
   };
 
   const handleAddProduct = (productData: Omit<Product, 'id'>) => {
     const newProduct: Product = { id: `p-${Date.now()}`, ...productData };
+    setProducts(prev => [...prev, newProduct]);
     if (license.licenseKey) saveStoreDocument(license.licenseKey, 'products', newProduct.id, newProduct);
-    else setProducts(prev => [...prev, newProduct]);
   };
 
   const handleUpdateProduct = (updatedProduct: Product) => {
+    setProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
     if (license.licenseKey) saveStoreDocument(license.licenseKey, 'products', updatedProduct.id, updatedProduct);
-    else setProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
   };
 
   const handleDeleteProduct = (productId: string) => {
     const prod = products.find(p => p.id === productId);
     if (!prod) return;
     const softDeleted = { ...prod, isDeleted: true, stock: 0 };
+    setProducts(prev => prev.map(p => p.id === productId ? softDeleted : p));
     if (license.licenseKey) saveStoreDocument(license.licenseKey, 'products', productId, softDeleted);
-    else setProducts(prev => prev.map(p => p.id === productId ? softDeleted : p));
   };
 
   const handleUpdateProductStock = (productId: string, newStock: number) => {
     const prod = products.find(p => p.id === productId);
     if (!prod) return;
     const updated = { ...prod, stock: newStock };
+    setProducts(prev => prev.map(p => p.id === productId ? updated : p));
     if (license.licenseKey) saveStoreDocument(license.licenseKey, 'products', productId, updated);
-    else setProducts(prev => prev.map(p => p.id === productId ? updated : p));
   };
 
   const handleAddExpense = (amount: number, description: string) => {
     const newTx: Transaction = { id: `t-${Date.now()}`, type: 'expense', amount, date: new Date().toISOString(), description: `مصروفات: ${description}` };
+    setTransactions(prev => [...prev, newTx]);
     if (license.licenseKey) saveStoreDocument(license.licenseKey, 'transactions', newTx.id, newTx);
-    else setTransactions(prev => [...prev, newTx]);
   };
 
   const handleDeleteTransaction = (id: string) => {
+    setTransactions(prev => prev.filter(t => t.id !== id));
     if (license.licenseKey) deleteStoreDocument(license.licenseKey, 'transactions', id);
-    else setTransactions(prev => prev.filter(t => t.id !== id));
   };
 
   const handleAddMaintenanceOrder = (orderData: Omit<MaintenanceOrder, 'id' | 'orderNumber' | 'dateReceived'>) => {
@@ -739,12 +773,7 @@ export default function App() {
       ...orderData
     };
 
-    setMaintenanceOrders(prev => {
-      const updated = [...prev, newOrder];
-      localStorage.setItem('smart_accounting_maintenance', JSON.stringify(updated));
-      return updated;
-    });
-
+    setMaintenanceOrders(prev => [...prev, newOrder]);
     if (license.licenseKey) {
       saveStoreDocument(license.licenseKey, 'maintenanceOrders', newOrder.id, newOrder);
     }
@@ -757,12 +786,7 @@ export default function App() {
     if (!order) return;
     const updated = { ...order, status };
 
-    setMaintenanceOrders(prev => {
-      const updatedList = prev.map(o => o.id === id ? updated : o);
-      localStorage.setItem('smart_accounting_maintenance', JSON.stringify(updatedList));
-      return updatedList;
-    });
-
+    setMaintenanceOrders(prev => prev.map(o => o.id === id ? updated : o));
     if (license.licenseKey) {
       saveStoreDocument(license.licenseKey, 'maintenanceOrders', id, updated);
     }
@@ -773,12 +797,7 @@ export default function App() {
 
   const handleDeleteMaintenanceOrder = (id: string) => {
     const order = maintenanceOrders.find(o => o.id === id);
-    setMaintenanceOrders(prev => {
-      const updatedList = prev.filter(o => o.id !== id);
-      localStorage.setItem('smart_accounting_maintenance', JSON.stringify(updatedList));
-      return updatedList;
-    });
-
+    setMaintenanceOrders(prev => prev.filter(o => o.id !== id));
     if (license.licenseKey) {
       deleteStoreDocument(license.licenseKey, 'maintenanceOrders', id);
     }
@@ -788,7 +807,7 @@ export default function App() {
     }
   };
 
-  const handleBackupData = async () => {
+  const handleBackupData = async (): Promise<boolean> => {
     soundManager.playSuccessChime();
     const backupObj = {
       settings,
@@ -803,7 +822,7 @@ export default function App() {
       users,
       exportedAt: new Date().toISOString()
     };
-    const fileName = `sanad_backup_${getBackupTimestamp()}.json`;
+    const fileName = `Sanad_Backup_${getBackupTimestamp()}.json`;
     const jsonStr = JSON.stringify(backupObj, null, 2);
 
     const success = await saveAndShareFile({
@@ -812,52 +831,80 @@ export default function App() {
       mimeType: 'application/json',
       title: 'نسخة احتياطية - نظام سند المحاسبي',
       text: `ملف النسخة الاحتياطية لقاعدة البيانات بتاريخ ${new Date().toLocaleDateString('ar-YE')}`,
-      folderName: 'SanadAccounting'
+      folderName: getCustomSaveFolder()
     });
 
     if (success) {
       addAuditLog('backup_created', 'أخذ نسخة احتياطية كاملة لقاعدة البيانات', `ملف: ${fileName}`);
     }
+    return success;
   };
 
-  const handleRestoreData = async (restored: any) => {
+  const handleRestoreData = async (restored: any): Promise<boolean> => {
     if (!restored || typeof restored !== 'object') return false;
 
     if (restored.settings) {
       setSettings(restored.settings);
       localStorage.setItem('smart_accounting_settings', JSON.stringify(restored.settings));
+      if (license.licenseKey) {
+        saveStoreSettings(license.licenseKey, restored.settings);
+      }
     }
     if (Array.isArray(restored.products)) {
       setProducts(restored.products);
       localStorage.setItem('smart_accounting_products', JSON.stringify(restored.products));
+      if (license.licenseKey) {
+        restored.products.forEach((p: any) => p && p.id && saveStoreDocument(license.licenseKey, 'products', p.id, p));
+      }
     }
     if (Array.isArray(restored.customers)) {
       setCustomers(restored.customers);
       localStorage.setItem('smart_accounting_customers', JSON.stringify(restored.customers));
+      if (license.licenseKey) {
+        restored.customers.forEach((c: any) => c && c.id && saveStoreDocument(license.licenseKey, 'customers', c.id, c));
+      }
     }
     if (Array.isArray(restored.invoices)) {
       setInvoices(restored.invoices);
       localStorage.setItem('smart_accounting_invoices', JSON.stringify(restored.invoices));
+      if (license.licenseKey) {
+        restored.invoices.forEach((inv: any) => inv && inv.id && saveStoreDocument(license.licenseKey, 'invoices', inv.id, inv));
+      }
     }
     if (Array.isArray(restored.payments)) {
       setPayments(restored.payments);
       localStorage.setItem('smart_accounting_payments', JSON.stringify(restored.payments));
+      if (license.licenseKey) {
+        restored.payments.forEach((pay: any) => pay && pay.id && saveStoreDocument(license.licenseKey, 'payments', pay.id, pay));
+      }
     }
     if (Array.isArray(restored.transactions)) {
       setTransactions(restored.transactions);
       localStorage.setItem('smart_accounting_transactions', JSON.stringify(restored.transactions));
+      if (license.licenseKey) {
+        restored.transactions.forEach((tx: any) => tx && tx.id && saveStoreDocument(license.licenseKey, 'transactions', tx.id, tx));
+      }
     }
     if (Array.isArray(restored.maintenanceOrders)) {
       setMaintenanceOrders(restored.maintenanceOrders);
       localStorage.setItem('smart_accounting_maintenance', JSON.stringify(restored.maintenanceOrders));
+      if (license.licenseKey) {
+        restored.maintenanceOrders.forEach((m: any) => m && m.id && saveStoreDocument(license.licenseKey, 'maintenanceOrders', m.id, m));
+      }
     }
     if (Array.isArray(restored.employees)) {
       setEmployees(restored.employees);
       localStorage.setItem('smart_accounting_employees', JSON.stringify(restored.employees));
+      if (license.licenseKey) {
+        restored.employees.forEach((emp: any) => emp && emp.id && saveStoreDocument(license.licenseKey, 'employees', emp.id, emp));
+      }
     }
     if (Array.isArray(restored.payrollRecords)) {
       setPayrollRecords(restored.payrollRecords);
       localStorage.setItem('smart_accounting_payroll', JSON.stringify(restored.payrollRecords));
+      if (license.licenseKey) {
+        restored.payrollRecords.forEach((pr: any) => pr && pr.id && saveStoreDocument(license.licenseKey, 'payrollRecords', pr.id, pr));
+      }
     }
     if (Array.isArray(restored.users)) {
       setUsers(restored.users);

@@ -406,7 +406,8 @@ export async function uploadToGoogleDrive(
  */
 export function base64ToBlob(base64Data: string, contentType: string = 'application/pdf'): Blob {
   const cleanBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
-  const byteCharacters = atob(cleanBase64);
+  const sanitized = cleanBase64.replace(/\s/g, '');
+  const byteCharacters = atob(sanitized);
   const byteArrays = [];
   for (let offset = 0; offset < byteCharacters.length; offset += 512) {
     const slice = byteCharacters.slice(offset, offset + 512);
