@@ -45,6 +45,19 @@ export function setCustomSaveFolder(folderName: string): void {
 }
 
 /**
+ * Generates formatted timestamp for backup filenames (YYYY-MM-DD_HH-MM)
+ */
+export function getBackupTimestamp(d = new Date()): string {
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  return `${year}-${month}-${day}_${hours}-${minutes}`;
+}
+
+/**
  * Gets user's configured Google Drive Account
  */
 export function getGoogleDriveAccount(): string {

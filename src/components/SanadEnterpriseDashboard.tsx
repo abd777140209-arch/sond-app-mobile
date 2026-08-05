@@ -23,7 +23,8 @@ import {
   setCustomSaveFolder, 
   getGoogleDriveAccount, 
   setGoogleDriveAccount,
-  uploadToGoogleDrive 
+  uploadToGoogleDrive,
+  getBackupTimestamp 
 } from '../utils/fileExport';
 
 export interface SanadEnterpriseDashboardProps {
@@ -74,7 +75,7 @@ export const SanadEnterpriseDashboard: React.FC<SanadEnterpriseDashboardProps> =
     setUploadingDrive(true);
     try {
       const backupsData = localStorage.getItem('sanad_auto_backups') || '[]';
-      const fileName = `sanad_backup_drive_${new Date().toISOString().slice(0, 10)}.json`;
+      const fileName = `sanad_backup_drive_${getBackupTimestamp()}.json`;
       
       await uploadToGoogleDrive(fileName, backupsData, false, 'application/json');
       logOwnerAuditAction('GOOGLE_DRIVE_BACKUP', `تم تصدير النسخة الاحتياطية (${fileName}) بحساب Google Drive: ${googleAccount || 'معرف الهاتف'}`);

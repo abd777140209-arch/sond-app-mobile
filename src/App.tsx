@@ -60,9 +60,9 @@ import DeveloperPortalModal from './components/DeveloperPortalModal';
 
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
-import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
-import { saveAndShareFile, saveSilentBackupFile } from './utils/fileExport';
+import { saveAndShareFile, saveSilentBackupFile, getBackupTimestamp } from './utils/fileExport';
 import { LicenseInfo, loadLicenseLocally, saveLicenseLocally, generateHWID } from './utils/licensing';
 import { 
   saveStoreDocument, 
@@ -384,7 +384,7 @@ export default function App() {
           console.log(`[Scheduled Local Backup] Due for frequency (${localSched}). Creating silent local backup...`);
           const backupObj = { settings, products, customers, invoices, payments, transactions, exportedAt: nowIso };
           const jsonStr = JSON.stringify(backupObj, null, 2);
-          const fileName = `sanad_backup_auto_${nowIso.split('T')[0]}.json`;
+          const fileName = `sanad_backup_auto_${getBackupTimestamp()}.json`;
           const folder = settings.backupFolderPath || 'Documents/SanadAccounting';
 
           await saveSilentBackupFile(fileName, jsonStr, folder);
@@ -433,7 +433,7 @@ export default function App() {
       const nowIso = new Date().toISOString();
       const backupObj = { settings, products, customers, invoices, payments, transactions, exportedAt: nowIso };
       const jsonStr = JSON.stringify(backupObj, null, 2);
-      const fileName = `sanad_backup_exit_${nowIso.split('T')[0]}.json`;
+      const fileName = `sanad_backup_exit_${getBackupTimestamp()}.json`;
       const folder = settings.backupFolderPath || 'Documents/SanadAccounting';
 
       saveSilentBackupFile(fileName, jsonStr, folder);
@@ -739,17 +739,21 @@ export default function App() {
       users,
       exportedAt: new Date().toISOString()
     };
-    const fileName = `sanad_backup_${new Date().toISOString().split('T')[0]}.json`;
+    const fileName = `sanad_backup_${getBackupTimestamp()}.json`;
     const jsonStr = JSON.stringify(backupObj, null, 2);
 
-    await saveAndShareFile({
+    const success = await saveAndShareFile({
       fileName,
       data: jsonStr,
       mimeType: 'application/json',
       title: 'نسخة احتياطية - نظام سند المحاسبي',
-      text: `ملف النسخة الاحتياطية لقاعدة البيانات بتاريخ ${new Date().toLocaleDateString('ar-YE')}`
+      text: `ملف النسخة الاحتياطية لقاعدة البيانات بتاريخ ${new Date().toLocaleDateString('ar-YE')}`,
+      folderName: 'SanadAccounting'
     });
-    addAuditLog('backup_created', 'أخذ نسخة احتياطية كاملة لقاعدة البيانات', `ملف: ${fileName}`);
+
+    if (success) {
+      addAuditLog('backup_created', 'أخذ نسخة احتياطية كاملة لقاعدة البيانات', `ملف: ${fileName}`);
+    }
   };
 
   const handleRestoreData = async (restored: any) => {

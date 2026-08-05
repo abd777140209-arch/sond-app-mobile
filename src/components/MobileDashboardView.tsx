@@ -118,7 +118,7 @@ export default function MobileDashboardView({
     if (Capacitor.isNativePlatform()) {
       try {
         const result = await FilePicker.pickFiles({
-          types: ['application/json', 'text/plain', '*/*'],
+          types: ['*/*'],
           readData: true,
         });
 
@@ -128,9 +128,11 @@ export default function MobileDashboardView({
 
           if (pickedFile.data) {
             try {
-              jsonContent = atob(pickedFile.data);
+              const binString = atob(pickedFile.data);
+              const bytes = Uint8Array.from(binString, (m) => m.codePointAt(0)!);
+              jsonContent = new TextDecoder().decode(bytes);
             } catch {
-              jsonContent = pickedFile.data;
+              jsonContent = atob(pickedFile.data);
             }
           } else if (pickedFile.path) {
             const res = await fetch(pickedFile.path);

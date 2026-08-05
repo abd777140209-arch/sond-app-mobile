@@ -8,6 +8,8 @@
  * نظام التنبيهات الذكية + النسخ الاحتياطي التلقائي وسجل تدقيق المالك (Audit Trail)
  */
 
+import { getBackupTimestamp } from '../utils/fileExport';
+
 export interface EnterpriseAlert {
   id: string;
   type: 'warning' | 'danger' | 'info';
@@ -111,7 +113,7 @@ export const downloadBackupFile = () => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `sanad_backup_${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `sanad_backup_${getBackupTimestamp()}.json`;
   a.click();
   URL.revokeObjectURL(url);
 };
