@@ -233,7 +233,7 @@ export default function App() {
             await Filesystem.requestPermissions();
           }
         } catch (err) {
-          console.warn('[Storage Permission Request Warning]:', err);
+          console.log('[Storage Permission Handled]:', err);
         }
       }
     };

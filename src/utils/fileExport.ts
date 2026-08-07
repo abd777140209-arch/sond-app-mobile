@@ -214,91 +214,58 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
   const cleanData = isBase64
     ? data.replace(/^data:.*?;base64,/, '').replace(/\s/g, '')
     : data;
-    
-  const targetFolder = folderName || getCustomSaveFolder();
-  const cleanFolder = targetFolder.trim().replace(/^\/+|\/+$/g, '') || 'SanadAccounting';
-  const relativeFilePath = `${cleanFolder}/${fileName}`;
-
-  console.log(`[saveAndShareFile] File: ${fileName}, MIME: ${mimeType}, Folder: ${cleanFolder}`);
 
   let writtenUri: string | null = null;
 
-  // 1. CAPACITOR NATIVE FILESYSTEM WRITE (DIRECT TO DOCUMENTS / SANADACCOUNTING)
-  try {
+  // 1. CAPACITOR NATIVE FILESYSTEM WRITE (SAFE WRITE TO CACHE FIRST FOR ANDROID 11+)
+  if (Capacitor.isNativePlatform()) {
     try {
-      await ensureStoragePermissions();
-    } catch (permErr) {
-      console.warn('[fileExport] Permissions request warning:', permErr);
-    }
-
-    // A) Attempt writing to Directory.Documents (SanadAccounting/filename)
-    try {
-      const docResult = await Filesystem.writeFile({
-        path: relativeFilePath,
+      // ⚠️ الكتابة المباشرة في Directory.Cache تضمن النجاح 100% في أندرويد بدون الحاجة لأذونات معقدة
+      const cacheResult = await Filesystem.writeFile({
+        path: fileName,
         data: cleanData,
-        directory: Directory.Documents,
+        directory: Directory.Cache,
         recursive: true,
         encoding: isBase64 ? undefined : Encoding.UTF8
       });
-      writtenUri = docResult.uri;
-      console.log('[fileExport] Successfully wrote to Directory.Documents:', writtenUri);
-    } catch (docErr) {
-      console.warn('[fileExport] Documents folder write warning:', docErr);
-      // Fallback: direct write to Documents root
+      writtenUri = cacheResult.uri;
+      console.log('[fileExport] Successfully wrote to Cache:', writtenUri);
+    } catch (cacheErr) {
+      console.warn('[fileExport] Cache write error, attempting Documents:', cacheErr);
       try {
-        const docDirectResult = await Filesystem.writeFile({
+        const docResult = await Filesystem.writeFile({
           path: fileName,
           data: cleanData,
           directory: Directory.Documents,
           recursive: true,
           encoding: isBase64 ? undefined : Encoding.UTF8
         });
-        writtenUri = docDirectResult.uri;
-        console.log('[fileExport] Successfully wrote to Documents root:', writtenUri);
-      } catch (docDirectErr) {
-        console.warn('[fileExport] Documents root write warning:', docDirectErr);
+        writtenUri = docResult.uri;
+      } catch (docErr) {
+        console.error('[fileExport] All Native writes failed:', docErr);
       }
     }
 
-    // B) If Documents write failed, write to Directory.Cache
-    if (!writtenUri) {
+    // 2. TRIGGER NATIVE ANDROID SHARE SHEET WITH FILE URI
+    if (writtenUri) {
       try {
-        const cacheResult = await Filesystem.writeFile({
-          path: fileName,
-          data: cleanData,
-          directory: Directory.Cache,
-          recursive: true,
-          encoding: isBase64 ? undefined : Encoding.UTF8
+        await Share.share({
+          title: title || fileName,
+          text: text ? `${text}\n📄 المستند: ${fileName}` : `📄 المستند: ${fileName}`,
+          url: writtenUri,
+          dialogTitle: title || 'مشاركة وحفظ المستند'
         });
-        writtenUri = cacheResult.uri;
-        console.log('[fileExport] Wrote to Cache:', writtenUri);
-      } catch (cacheErr) {
-        console.warn('[fileExport] Cache write warning:', cacheErr);
-      }
-    }
-  } catch (fsPluginErr) {
-    console.warn('[fileExport] Filesystem plugin unavailable:', fsPluginErr);
-  }
-
-  // 2. TRIGGER NATIVE ANDROID SHARE SHEET WITH FILE URI
-  if (writtenUri) {
-    try {
-      await Share.share({
-        title: title || fileName,
-        text: text ? `${text}\n📄 المستند: ${fileName}` : `📄 المستند: ${fileName}`,
-        url: writtenUri,
-        dialogTitle: title || 'مشاركة وحفظ المستند'
-      });
-      console.log('[fileExport] Native share sheet opened for URI:', writtenUri);
-      return true;
-    } catch (shareErr: any) {
-      const errStr = String(shareErr?.message || shareErr || '').toLowerCase();
-      if (errStr.includes('cancel') || errStr.includes('dismiss') || errStr.includes('abort')) {
-        console.log('[fileExport] User dismissed share sheet');
+        console.log('[fileExport] Native share sheet opened for URI:', writtenUri);
+        return true;
+      } catch (shareErr: any) {
+        const errStr = String(shareErr?.message || shareErr || '').toLowerCase();
+        if (errStr.includes('cancel') || errStr.includes('dismiss') || errStr.includes('abort')) {
+          console.log('[fileExport] User dismissed share sheet');
+          return true;
+        }
+        console.warn('[fileExport] Share plugin call error:', shareErr);
         return true;
       }
-      console.warn('[fileExport] Share plugin call error:', shareErr);
-      return true;
     }
   }
 
@@ -328,7 +295,7 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
     }
   }
 
-  // 4. STANDARD BROWSER DOWNLOAD LINK FALLBACK (NO POPUP ALERTS)
+  // 4. STANDARD BROWSER DOWNLOAD LINK FALLBACK
   try {
     const blob = isBase64 
       ? base64ToBlob(cleanData, mimeType)
@@ -349,41 +316,9 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
       URL.revokeObjectURL(blobUrl);
     }, 4000);
 
-    // Data URI direct download fallback for strict WebViews
-    try {
-      const dataUri = isBase64 
-        ? `data:${mimeType};base64,${cleanData}`
-        : `data:${mimeType};charset=utf-8,${encodeURIComponent(data)}`;
-        
-      const altLink = document.createElement('a');
-      altLink.href = dataUri;
-      altLink.download = fileName;
-      altLink.style.display = 'none';
-      document.body.appendChild(altLink);
-      altLink.click();
-      setTimeout(() => {
-        if (document.body.contains(altLink)) document.body.removeChild(altLink);
-      }, 1000);
-    } catch (dataUriErr) {
-      console.warn('[fileExport] Data URI download attempt:', dataUriErr);
-    }
-
     return true;
   } catch (webLinkErr) {
     console.warn('[fileExport] Web blob download link attempt:', webLinkErr);
-  }
-
-  // 5. EMERGENCY CLIPBOARD FALLBACK
-  if (!isBase64 && data) {
-    try {
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(data);
-        console.log('[fileExport] Copied content to clipboard fallback');
-        return true;
-      }
-    } catch (clipErr) {
-      console.warn('[fileExport] Clipboard write warning:', clipErr);
-    }
   }
 
   return false;
