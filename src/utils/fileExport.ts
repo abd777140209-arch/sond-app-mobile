@@ -200,7 +200,6 @@ export async function saveSilentBackupFile(
  * Saves a file and offers sharing / download options safely across Capacitor Native, WebViews, and Web Browsers.
  */
 export async function saveAndShareFile(options: SaveAndShareOptions): Promise<boolean> {
-  alert("اختبار: تم استدعاء دالة التحديث الجديدة بنجاح!");
   const {
     fileName,
     data,
@@ -208,20 +207,16 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
     mimeType = 'application/pdf',
     title = 'تصدير سند/تقرير - تطبيق سند',
     text = 'ملف مستند من نظام سند المحاسبي',
-    folderName
   } = options;
 
-  // Clean Base64 payload to remove headers or whitespace
   const cleanData = isBase64
     ? data.replace(/^data:.*?;base64,/, '').replace(/\s/g, '')
     : data;
 
   let writtenUri: string | null = null;
 
-  // 1. CAPACITOR NATIVE FILESYSTEM WRITE (SAFE WRITE TO CACHE FIRST FOR ANDROID 11+)
   if (Capacitor.isNativePlatform()) {
     try {
-      // ⚠️ الكتابة المباشرة في Directory.Cache تضمن النجاح 100% في أندرويد بدون الحاجة لأذونات معقدة
       const cacheResult = await Filesystem.writeFile({
         path: fileName,
         data: cleanData,
@@ -230,24 +225,11 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
         encoding: isBase64 ? undefined : Encoding.UTF8
       });
       writtenUri = cacheResult.uri;
-      console.log('[fileExport] Successfully wrote to Cache:', writtenUri);
+      console.log('[fileExport] Saved to Cache successfully:', writtenUri);
     } catch (cacheErr) {
-      console.warn('[fileExport] Cache write error, attempting Documents:', cacheErr);
-      try {
-        const docResult = await Filesystem.writeFile({
-          path: fileName,
-          data: cleanData,
-          directory: Directory.Documents,
-          recursive: true,
-          encoding: isBase64 ? undefined : Encoding.UTF8
-        });
-        writtenUri = docResult.uri;
-      } catch (docErr) {
-        console.error('[fileExport] All Native writes failed:', docErr);
-      }
+      console.warn('[fileExport] Cache write error:', cacheErr);
     }
 
-    // 2. TRIGGER NATIVE ANDROID SHARE SHEET WITH FILE URI
     if (writtenUri) {
       try {
         await Share.share({
@@ -256,47 +238,14 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
           url: writtenUri,
           dialogTitle: title || 'مشاركة وحفظ المستند'
         });
-        console.log('[fileExport] Native share sheet opened for URI:', writtenUri);
         return true;
       } catch (shareErr: any) {
-        const errStr = String(shareErr?.message || shareErr || '').toLowerCase();
-        if (errStr.includes('cancel') || errStr.includes('dismiss') || errStr.includes('abort')) {
-          console.log('[fileExport] User dismissed share sheet');
-          return true;
-        }
         console.warn('[fileExport] Share plugin call error:', shareErr);
         return true;
       }
     }
   }
 
-  // 3. WEB SHARE API FALLBACK (MOBILE BROWSER / PWA)
-  if (typeof navigator !== 'undefined' && (navigator as any).canShare && (navigator as any).share) {
-    try {
-      const blob = isBase64 
-        ? base64ToBlob(cleanData, mimeType)
-        : new Blob([data], { type: mimeType });
-      
-      const file = new File([blob], fileName, { type: mimeType });
-
-      if ((navigator as any).canShare({ files: [file] })) {
-        await (navigator as any).share({
-          title: title || fileName,
-          text: text || '',
-          files: [file]
-        });
-        return true;
-      }
-    } catch (webShareErr: any) {
-      const errStr = String(webShareErr || '').toLowerCase();
-      if (errStr.includes('cancel') || errStr.includes('abort') || errStr.includes('dismiss')) {
-        return true;
-      }
-      console.warn('[fileExport] Web Share API error:', webShareErr);
-    }
-  }
-
-  // 4. STANDARD BROWSER DOWNLOAD LINK FALLBACK
   try {
     const blob = isBase64 
       ? base64ToBlob(cleanData, mimeType)
@@ -311,15 +260,13 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
     link.click();
 
     setTimeout(() => {
-      if (document.body.contains(link)) {
-        document.body.removeChild(link);
-      }
+      if (document.body.contains(link)) document.body.removeChild(link);
       URL.revokeObjectURL(blobUrl);
     }, 4000);
 
     return true;
   } catch (webLinkErr) {
-    console.warn('[fileExport] Web blob download link attempt:', webLinkErr);
+    console.warn('[fileExport] Web download error:', webLinkErr);
   }
 
   return false;
