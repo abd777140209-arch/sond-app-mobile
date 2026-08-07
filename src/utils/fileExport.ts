@@ -204,8 +204,8 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
     fileName,
     data,
     isBase64 = false,
-    mimeType = 'application/pdf',
-    title = 'تصدير سند/تقرير - تطبيق سند',
+    mimeType = 'text/csv',
+    title = 'تصدير مستند - نظام سند',
     text = 'ملف مستند من نظام سند المحاسبي',
   } = options;
 
@@ -213,39 +213,50 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
     ? data.replace(/^data:.*?;base64,/, '').replace(/\s/g, '')
     : data;
 
-  let writtenUri: string | null = null;
-
   if (Capacitor.isNativePlatform()) {
     try {
-      const cacheResult = await Filesystem.writeFile({
+      // 1. كتابة الملف في Directory.Cache
+      const fileResult = await Filesystem.writeFile({
         path: fileName,
         data: cleanData,
         directory: Directory.Cache,
         recursive: true,
         encoding: isBase64 ? undefined : Encoding.UTF8
       });
-      writtenUri = cacheResult.uri;
-      console.log('[fileExport] Saved to Cache successfully:', writtenUri);
-    } catch (cacheErr) {
-      console.warn('[fileExport] Cache write error:', cacheErr);
-    }
 
-    if (writtenUri) {
-      try {
-        await Share.share({
-          title: title || fileName,
-          text: text ? `${text}\n📄 المستند: ${fileName}` : `📄 المستند: ${fileName}`,
-          url: writtenUri,
-          dialogTitle: title || 'مشاركة وحفظ المستند'
-        });
-        return true;
-      } catch (shareErr: any) {
-        console.warn('[fileExport] Share plugin call error:', shareErr);
-        return true;
+      // 2. الحصول على URI المحول لأندرويد
+      const fileUri = fileResult.uri;
+
+      // 3. فتح شاشة المشاركة الرسمية بملف صريح
+      await Share.share({
+        title: title || fileName,
+        text: text,
+        url: fileUri,
+        dialogTitle: title || 'حفظ أو مشاركة المستند'
+      });
+
+      return true;
+    } catch (nativeErr: any) {
+      console.error('[fileExport] Native Export Error:', nativeErr);
+      
+      // Fallback: إذا فشلت مشاركة الملف كـ URI، نرسله كـ نص صريح إن كان JSON/CSV
+      if (!isBase64 && cleanData) {
+        try {
+          await Share.share({
+            title: title || fileName,
+            text: `${text}\n\n${cleanData.substring(0, 2000)}...`,
+            dialogTitle: title
+          });
+          return true;
+        } catch (textShareErr) {
+          console.error('[fileExport] Text share failed:', textShareErr);
+        }
       }
+      return false;
     }
   }
 
+  // Web Browser Fallback
   try {
     const blob = isBase64 
       ? base64ToBlob(cleanData, mimeType)
@@ -265,11 +276,10 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
     }, 4000);
 
     return true;
-  } catch (webLinkErr) {
-    console.warn('[fileExport] Web download error:', webLinkErr);
+  } catch (webErr) {
+    console.error('[fileExport] Web download error:', webErr);
+    return false;
   }
-
-  return false;
 }
 
 /**
