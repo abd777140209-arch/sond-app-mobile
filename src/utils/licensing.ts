@@ -12,7 +12,7 @@ export interface LicenseInfo {
   activatedAt: string;
   expiresAt: string;
   hwid: string;
-  subscriptionType: 'monthly' | 'yearly' | 'lifetime' | 'trial';
+  subscriptionType: 'weekly' | 'monthly' | 'yearly' | 'lifetime' | 'trial';
   customerName?: string;
   phone?: string;
 }

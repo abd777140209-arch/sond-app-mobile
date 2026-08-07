@@ -38,6 +38,7 @@ import {
   printReceiptHTML 
 } from '../services/ReceiptPrinter';
 import { saveAndShareFile } from '../utils/fileExport';
+import { openExternalUrl } from '../utils/nativeLauncher';
 import { getSafeHtml2CanvasOptions } from '../utils/pdfHelper';
 
 export interface SanadDeviceReceiptProps {
@@ -216,7 +217,7 @@ export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
       },
       settings?.currency || 'ريال'
     );
-    window.open(url, '_blank');
+    openExternalUrl(url);
   };
 
   const handleExportPDF = async () => {

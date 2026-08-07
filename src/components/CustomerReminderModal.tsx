@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Send, MessageSquare, Share2, Copy, Check, Sparkles, AlertCircle, Phone, Calendar } from 'lucide-react';
 import { Customer } from '../types';
 import { soundManager } from '../utils/sound';
+import { openWhatsApp, openSms } from '../utils/nativeLauncher';
 import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
 
@@ -57,9 +58,6 @@ export default function CustomerReminderModal({
   const finalWhatsAppPhone = cleanPhone.startsWith('77') || cleanPhone.startsWith('73') || cleanPhone.startsWith('71') || cleanPhone.startsWith('70') 
     ? '967' + cleanPhone
     : cleanPhone;
-
-  const whatsappUrl = `https://api.whatsapp.com/send?phone=${finalWhatsAppPhone}&text=${encodeURIComponent(compiledMessage)}`;
-  const smsUrl = `sms:${cleanPhone}?body=${encodeURIComponent(compiledMessage)}`;
 
   // Copy to clipboard
   const handleCopy = () => {
@@ -209,26 +207,30 @@ export default function CustomerReminderModal({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   
                   {/* 1. WhatsApp Button */}
-                  <a
-                    href={whatsappUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => soundManager.playScanBeep()}
-                    className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.playScanBeep();
+                      openWhatsApp(finalWhatsAppPhone, compiledMessage);
+                    }}
+                    className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition cursor-pointer"
                   >
                     <Send className="w-4 h-4" />
                     <span>واتساب</span>
-                  </a>
+                  </button>
 
                   {/* 2. SMS Button */}
-                  <a
-                    href={smsUrl}
-                    onClick={() => soundManager.playScanBeep()}
-                    className="py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.playScanBeep();
+                      openSms(cleanPhone, compiledMessage);
+                    }}
+                    className="py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition cursor-pointer"
                   >
                     <MessageSquare className="w-4 h-4" />
                     <span>رسالة SMS</span>
-                  </a>
+                  </button>
 
                   {/* 3. Native Phone Share */}
                   <button

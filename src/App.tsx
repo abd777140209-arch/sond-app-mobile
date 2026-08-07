@@ -27,6 +27,7 @@ import {
 
 import { Product, Customer, Invoice, Payment, Transaction, SystemSettings, MaintenanceOrder, Employee, PayrollRecord, UserAccount, AuditLog } from './types';
 import { soundManager } from './utils/sound';
+import { openWhatsApp } from './utils/nativeLauncher';
 import { 
   DEFAULT_SETTINGS, 
   SEED_PRODUCTS, 
@@ -72,7 +73,7 @@ import {
   syncStoreCollection, 
   syncStoreSettings 
 } from './utils/firebaseSync';
-import { listenToLicenseOnCloud, checkLicenseOnCloud } from './utils/firebase';
+import { listenToLicenseOnCloud, checkLicenseOnCloud, CloudLicense } from './utils/firebase';
 
 export default function App() {
   const [settings, setSettings] = useState<SystemSettings>(() => {
@@ -1501,14 +1502,13 @@ export default function App() {
             </div>
 
             <div className="flex flex-col gap-2 pt-1">
-              <a
-                href="https://wa.me/967777140209"
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                onClick={() => openWhatsApp('967777140209', 'تنبيه: تم تعليق/إلغاء الترخيص، أود التواصل للتسديد واستئناف الخدمة')}
                 className="w-full py-3.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs transition shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer"
               >
                 💬 التواصل المباشر عبر واتساب للتسديد (777140209)
-              </a>
+              </button>
               <button
                 type="button"
                 onClick={() => setShowRevokedModal(false)}

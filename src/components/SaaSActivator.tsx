@@ -17,6 +17,7 @@ import {
   Fingerprint
 } from 'lucide-react';
 import { soundManager } from '../utils/sound';
+import { openWhatsApp } from '../utils/nativeLauncher';
 import { LicenseInfo, saveLicenseLocally, generateHWID } from '../utils/licensing';
 import { isFirebaseConfigured, activateLicenseOnCloud } from '../utils/firebase';
 
@@ -213,14 +214,13 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
               <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-semibold">
                 لقد تم حذف أو تعطيل كود التفعيل المنسوب لنشاطك التجاري من قبل المطور. يرجى التواصل فوراً مع الدعم الفني لاستكمال التسديد وإعادة فتح الخدمة.
               </p>
-              <a 
-                href="https://wa.me/967777140209" 
-                target="_blank" 
-                rel="noreferrer" 
-                className="inline-flex items-center gap-1.5 mt-1 px-3.5 py-2 bg-emerald-600 text-white rounded-xl text-xs font-black hover:bg-emerald-500 transition shadow-md"
+              <button 
+                type="button"
+                onClick={() => openWhatsApp('967777140209', `طلب دعم وتفعيل تطبيق سند\nبصمة الجهاز HWID: ${license.hwid || ''}`)}
+                className="inline-flex items-center gap-1.5 mt-1 px-3.5 py-2 bg-emerald-600 text-white rounded-xl text-xs font-black hover:bg-emerald-500 transition shadow-md cursor-pointer"
               >
                 💬 التواصل المباشر عبر واتساب (777140209)
-              </a>
+              </button>
             </div>
           </div>
         )}
@@ -359,7 +359,7 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
         {/* WhatsApp Developer Contact Footnote */}
         <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-center space-y-2">
           <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-            💬 للتفعيل المباشر، انسخ بصمة جهازك وتواصل عبر واتساب: <a href="https://wa.me/967777140209" target="_blank" rel="noreferrer" className="text-sky-600 dark:text-sky-400 font-bold font-mono hover:underline">777140209</a>
+            💬 للتفعيل المباشر، انسخ بصمة جهازك وتواصل عبر واتساب: <button type="button" onClick={() => openWhatsApp('967777140209', `طلب تفعيل نظام سند المحاسبي\nبصمة جهازك HWID: ${license.hwid || ''}`)} className="text-sky-600 dark:text-sky-400 font-bold font-mono hover:underline cursor-pointer">777140209</button>
           </p>
 
           <div className="flex items-center justify-center gap-2 pt-1">
@@ -406,14 +406,13 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
             </div>
 
             <div className="flex flex-col sm:flex-row gap-2 pt-1">
-              <a
-                href="https://wa.me/967777140209"
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                onClick={() => openWhatsApp('967777140209', 'تنبيه: كود التفعيل غير مسجل، أود استكمال التفعيل لنظام سند')}
                 className="flex-1 py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
               >
                 💬 التواصل عبر واتساب (777140209)
-              </a>
+              </button>
               <button
                 type="button"
                 onClick={() => setShowInvalidKeyModal(false)}

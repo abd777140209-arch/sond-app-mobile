@@ -8,7 +8,7 @@
  * نظام التنبيهات الذكية + النسخ الاحتياطي التلقائي وسجل تدقيق المالك (Audit Trail)
  */
 
-import { getBackupTimestamp } from '../utils/fileExport';
+import { getBackupTimestamp, saveAndShareFile } from '../utils/fileExport';
 
 export interface EnterpriseAlert {
   id: string;
@@ -102,20 +102,21 @@ export const createAutoBackup = () => {
 /**
  * 3. دالة تصدير النسخة الاحتياطية كملف JSON للتنزيل أو المشاركة
  */
-export const downloadBackupFile = () => {
+export const downloadBackupFile = async () => {
   const backups = localStorage.getItem(STORAGE_BACKUP_KEY);
   if (!backups) {
     alert('لا توجد نسخ احتياطية صادرة بعد.');
     return;
   }
 
-  const blob = new Blob([backups], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `sanad_backup_${getBackupTimestamp()}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const fileName = `sanad_backup_${getBackupTimestamp()}.json`;
+  await saveAndShareFile({
+    fileName,
+    data: backups,
+    mimeType: 'application/json',
+    title: 'نسخة احتياطية - نظام سند',
+    text: `النسخة الاحتياطية لنظام سند المحاسبي بتاريخ ${getBackupTimestamp()}`
+  });
 };
 
 /**

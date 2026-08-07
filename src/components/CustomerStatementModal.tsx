@@ -11,6 +11,7 @@ import { Capacitor } from '@capacitor/core';
 import { Customer, Invoice, Payment } from '../types';
 import { soundManager } from '../utils/sound';
 import { saveAndShareFile } from '../utils/fileExport';
+import { openWhatsApp } from '../utils/nativeLauncher';
 import { getSafeHtml2CanvasOptions } from '../utils/pdfHelper';
 
 interface CustomerStatementModalProps {
@@ -302,16 +303,17 @@ export default function CustomerStatementModal({
         <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 print:hidden">
           
           <div className="flex items-center gap-2">
-            <a
-              href={whatsappUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => soundManager.playScanBeep()}
-              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition"
+            <button
+              type="button"
+              onClick={() => {
+                soundManager.playScanBeep();
+                openWhatsApp(finalWhatsAppPhone, summaryText);
+              }}
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer"
             >
               <Send className="w-4 h-4" />
               <span>إرسال عبر واتساب</span>
-            </a>
+            </button>
 
             <button
               onClick={handleNativeShare}

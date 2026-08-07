@@ -18,7 +18,7 @@ export interface SaveAndShareOptions {
 }
 
 /**
- * Gets user's configured custom save folder (Defaults to 'SanadAccounting')
+ * Gets user's configured custom save folder (Defaults to 'SanadApp')
  */
 export function getCustomSaveFolder(): string {
   try {
@@ -29,7 +29,7 @@ export function getCustomSaveFolder(): string {
   } catch (e) {
     console.warn('Error reading custom save folder:', e);
   }
-  return 'SanadAccounting';
+  return 'SanadApp';
 }
 
 /**
@@ -37,8 +37,8 @@ export function getCustomSaveFolder(): string {
  */
 export function setCustomSaveFolder(folderName: string): void {
   try {
-    const clean = (folderName || 'SanadAccounting').trim().replace(/^\/+|\/+$/g, '');
-    localStorage.setItem('sanad_custom_save_folder', clean || 'SanadAccounting');
+    const clean = (folderName || 'SanadApp').trim().replace(/^\/+|\/+$/g, '');
+    localStorage.setItem('sanad_custom_save_folder', clean || 'SanadApp');
   } catch (e) {
     console.warn('Error setting custom save folder:', e);
   }

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Smartphone, Download, QrCode, CheckCircle, ShieldCheck, Zap, HardDrive, WifiOff, ExternalLink, X, Share2 } from 'lucide-react';
 import { soundManager } from '../utils/sound';
+import { saveAndShareFile } from '../utils/fileExport';
 
 interface ApkDownloadModalProps {
   isOpen: boolean;
@@ -42,7 +43,7 @@ export default function ApkDownloadModal({ isOpen, onClose, storeName = 'نظا�
         soundManager.playSuccessChime();
         clearInterval(interval);
 
-        // Generate virtual APK blob download
+        // Generate Virtual APK manifest file
         const manifestContent = JSON.stringify({
           name: storeName,
           short_name: 'سند المحاسبي',
@@ -53,13 +54,13 @@ export default function ApkDownloadModal({ isOpen, onClose, storeName = 'نظا�
           theme_color: '#C5A862'
         }, null, 2);
 
-        const blob = new Blob([manifestContent], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `Sanad_Pos_Mobile_v1.2.0.apk`;
-        link.click();
-        URL.revokeObjectURL(url);
+        saveAndShareFile({
+          fileName: 'Sanad_Pos_Mobile_v1.2.0.apk',
+          data: manifestContent,
+          mimeType: 'application/octet-stream',
+          title: storeName,
+          text: 'تنزيل حزمة تطبيق سند المحاسبي'
+        });
       } else {
         setDownloadProgress(current);
       }

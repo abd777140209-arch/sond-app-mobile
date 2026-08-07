@@ -16,6 +16,7 @@ import { soundManager } from '../utils/sound';
 import { requestStoragePermissionOnDemand } from '../utils/androidPermissions';
 import { saveAndShareFile } from '../utils/fileExport';
 import { getSafeHtml2CanvasOptions } from '../utils/pdfHelper';
+import { openWhatsApp } from '../utils/nativeLauncher';
 
 interface InvoiceModalProps {
   invoice: Invoice | null;
@@ -299,14 +300,7 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
     text += `برمجة وتطوير م.عبدالمجيد المحواشي\n`;
     text += `شكراً لزيارتكم وتعاملكم الراقي معنا! 🌸\n`;
 
-    const encodedText = encodeURIComponent(text);
-    const whatsappUrl = `https://api.whatsapp.com/send?phone=${cleanedPhone}&text=${encodedText}`;
-    
-    if (Capacitor.isNativePlatform()) {
-      window.location.href = whatsappUrl;
-    } else {
-      window.open(whatsappUrl, '_blank');
-    }
+    openWhatsApp(cleanedPhone, text);
   };
 
   return (

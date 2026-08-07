@@ -63,7 +63,9 @@ export const generateWhatsAppReceiptLink = (
   const encodedText = encodeURIComponent(text);
   const cleanPhone = receiptData.customerPhone ? receiptData.customerPhone.replace(/[^0-9]/g, '') : '';
 
-  return `https://wa.me/${cleanPhone}?text=${encodedText}`;
+  return cleanPhone 
+    ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedText}`
+    : `https://api.whatsapp.com/send?text=${encodedText}`;
 };
 
 /**
@@ -74,12 +76,6 @@ export const printReceiptHTML = (
   receiptData: ReceiptPrintData,
   currency: string = 'ريال'
 ): void => {
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) {
-    alert('يرجى السماح بالنوافذ المنبثقة (Popups) للطباعة الحرارية.');
-    return;
-  }
-
   const ticket = receiptData.ticket_id || receiptData.ticketNumber || `SND-${Date.now().toString().slice(-6)}`;
   const imeiVal = receiptData.imei || receiptData.serialNumber || '—';
   const issue = receiptData.problemDescription || receiptData.issueDescription || 'صيانة وتفليش';
@@ -158,6 +154,33 @@ export const printReceiptHTML = (
     </body>
     </html>
   `;
+
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    // Fallback for native WebView where window.open returns null
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(htmlContent);
+      doc.close();
+      setTimeout(() => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        setTimeout(() => {
+          try { document.body.removeChild(iframe); } catch(e){}
+        }, 1000);
+      }, 300);
+    }
+    return;
+  }
 
   printWindow.document.write(htmlContent);
   printWindow.document.close();

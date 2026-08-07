@@ -29,6 +29,8 @@ import {
   Smartphone
 } from 'lucide-react';
 import { soundManager } from '../utils/sound';
+import { saveAndShareFile } from '../utils/fileExport';
+import { openWhatsApp, openPhoneCall } from '../utils/nativeLauncher';
 import { LicenseInfo, generateLicenseKey, getExpiryDate } from '../utils/licensing';
 import { isFirebaseConfigured, checkLicenseOnCloud, activateLicenseOnCloud, createLicenseOnCloud, CloudLicense, getAllLicensesFromCloud, deleteLicenseFromCloud, updateLicenseHwidOnCloud, updateLicenseHwidsOnCloud, getLicenseHwidSlots, resetCloudData, resetClientCloudData, toggleLicenseSuspendOnCloud, renewLicenseOnCloud } from '../utils/firebase';
 
@@ -450,20 +452,26 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
 
                 {/* Direct Action Contact Buttons */}
                 <div className="grid grid-cols-2 gap-2 pt-1">
-                  <a
-                    href="https://wa.me/967777140209"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="py-2.5 px-3 rounded-xl bg-emerald-600/90 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-md"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.playScanBeep();
+                      openWhatsApp('967777140209', 'مرحباً م. عبدالمجيد، أتواصل معك بخصوص نظام سند المحاسبي');
+                    }}
+                    className="py-2.5 px-3 rounded-xl bg-emerald-600/90 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
                   >
                     💬 واتساب المطور
-                  </a>
-                  <a
-                    href="tel:777140209"
-                    className="py-2.5 px-3 rounded-xl bg-sky-600/90 hover:bg-sky-500 text-white font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-md"
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundManager.playScanBeep();
+                      openPhoneCall('777140209');
+                    }}
+                    className="py-2.5 px-3 rounded-xl bg-sky-600/90 hover:bg-sky-500 text-white font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
                   >
                     📞 اتصال مباشر
-                  </a>
+                  </button>
                 </div>
               </div>
 
@@ -671,15 +679,14 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                             `3. أدخل رقم هاتفك واضغط على زر "تفعيل البرنامج وفك القفل".\n\n` +
                             `مع تحيات مبرمج النظام: م. عبدالمجيد المحواشي (هاتف: 777140209)\n`;
                           
-                          const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-                          const url = URL.createObjectURL(blob);
-                          const link = document.createElement('a');
-                          link.href = url;
-                          link.download = `ترخيص_${lastGeneratedInfo.customer.replace(/\s+/g, '_')}.txt`;
-                          document.body.appendChild(link);
-                          link.click();
-                          document.body.removeChild(link);
-                          URL.revokeObjectURL(url);
+                          const fileName = `ترخيص_${lastGeneratedInfo.customer.replace(/\s+/g, '_')}.txt`;
+                          saveAndShareFile({
+                            fileName,
+                            data: content,
+                            mimeType: 'text/plain',
+                            title: `ترخيص سند - ${lastGeneratedInfo.customer}`,
+                            text: `تفاصيل ترخيص نظام سند المحاسبي للعميل ${lastGeneratedInfo.customer}`
+                          });
                         }}
                         className="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-500 text-black font-extrabold rounded-lg text-xs cursor-pointer transition flex items-center gap-1.5"
                       >
