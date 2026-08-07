@@ -20,22 +20,24 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="سُند" />
     <meta name="application-name" content="نظام سُند الذكي" />
-    <script type="module" crossorigin src="./assets/index-CXf17viv.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-DERumLBe.css">
+    <script type="module" crossorigin src="./assets/index-w1s0PWQz.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BGiaHyMu.css">
   </head>
   <body>
     <div id="root"></div>
     
-    <!-- Register Service Worker for PWA & PWABuilder Readiness -->
+    <!-- Safe Service Worker Registration (Web/PWA Only - Skip on Native APK / file:// / capacitor://) -->
     <script>
-      if ('serviceWorker' in navigator) {
+      const isHttpProtocol = window.location.protocol.startsWith('http');
+      const isNativeApp = window.location.protocol.startsWith('file') || window.location.protocol.startsWith('capacitor');
+      if ('serviceWorker' in navigator && isHttpProtocol && !isNativeApp) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('./sw.js')
             .then((registration) => {
               console.log('سُند PWA Service Worker Registered:', registration.scope);
             })
             .catch((error) => {
-              console.error('Service Worker Registration Failed:', error);
+              console.warn('Service Worker Registration Skipped/Failed:', error);
             });
         });
       }

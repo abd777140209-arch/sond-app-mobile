@@ -200,6 +200,7 @@ export async function saveSilentBackupFile(
  * Saves a file and offers sharing / download options safely across Capacitor Native, WebViews, and Web Browsers.
  */
 export async function saveAndShareFile(options: SaveAndShareOptions): Promise<boolean> {
+  alert("اختبار: تم استدعاء دالة التحديث الجديدة بنجاح!");
   const {
     fileName,
     data,
