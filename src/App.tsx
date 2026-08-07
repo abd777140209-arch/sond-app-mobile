@@ -223,6 +223,23 @@ export default function App() {
     localStorage.setItem('smart_accounting_current_user', JSON.stringify(currentUser));
   }, [currentUser]);
 
+  // 📂 طلب أذونات التخزين في أندرويد عند بدء تشغيل التطبيق
+  useEffect(() => {
+    const checkAndRequestStoragePermission = async () => {
+      if (Capacitor.isNativePlatform()) {
+        try {
+          const status = await Filesystem.checkPermissions();
+          if (status.publicStorage !== 'granted') {
+            await Filesystem.requestPermissions();
+          }
+        } catch (err) {
+          console.warn('[Storage Permission Request Warning]:', err);
+        }
+      }
+    };
+    checkAndRequestStoragePermission();
+  }, []);
+
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
     const data = localStorage.getItem('smart_accounting_audit_logs');
     return data ? JSON.parse(data) : [
