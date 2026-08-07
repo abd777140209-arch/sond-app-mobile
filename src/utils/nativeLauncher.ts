@@ -4,60 +4,117 @@
  */
 
 import { Capacitor } from '@capacitor/core';
+import { AppLauncher } from '@capacitor/app-launcher';
 
 /**
- * Safely opens external URLs (http, https, tel, sms, whatsapp) across Web and Native Capacitor APK without freezing or crashing
+ * Safely opens external URLs (http, https, tel, sms, whatsapp) across Web and Native Capacitor APK
  */
-export function openExternalUrl(url: string): void {
-  if (!url) return;
-  try {
-    if (Capacitor.isNativePlatform()) {
-      // In Capacitor Native, window.open(url, '_system') opens via Android System Intent
-      window.open(url, '_system') || (window.location.href = url);
-    } else {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    }
-  } catch (e) {
-    console.warn('Error launching URL via native handler:', e);
+export async function openExternalUrl(url: string): Promise<boolean> {
+  if (!url) return false;
+
+  console.log('[NativeLauncher] Attempting to launch URL:', url);
+
+  if (Capacitor.isNativePlatform()) {
     try {
-      window.location.href = url;
-    } catch (err) {
-      console.error('Fallback location setting failed:', err);
+      // 1. Primary attempt via Capacitor AppLauncher plugin
+      const canOpen = await AppLauncher.canOpenUrl({ url }).catch(() => ({ value: true }));
+      if (canOpen.value) {
+        await AppLauncher.openUrl({ url });
+        return true;
+      }
+    } catch (e) {
+      console.warn('[NativeLauncher] AppLauncher error:', e);
     }
+
+    // 2. Secondary attempt via window.open / system intent
+    try {
+      window.open(url, '_system') || (window.location.href = url);
+      return true;
+    } catch (e) {
+      console.warn('[NativeLauncher] System open fallback warning:', e);
+    }
+  }
+
+  // 3. Web Browser / WebView Fallback
+  try {
+    if (url.startsWith('tel:') || url.startsWith('sms:')) {
+      window.location.href = url;
+    } else {
+      window.open(url, '_blank', 'noopener,noreferrer') || (window.location.href = url);
+    }
+    return true;
+  } catch (err) {
+    console.error('[NativeLauncher] All launch attempts failed:', err);
+    alert(`⚠️ تعذر إطلاق التطبيق المطلوب تلقائياً.\nالرابط: ${url}`);
+    return false;
   }
 }
 
 /**
  * Safely triggers WhatsApp messaging intent
  */
-export function openWhatsApp(phone: string, text: string = ''): void {
+export async function openWhatsApp(phone: string, text: string = ''): Promise<boolean> {
   const cleanPhone = phone ? phone.replace(/[^0-9]/g, '') : '';
   let finalPhone = cleanPhone;
   if (cleanPhone.startsWith('77') || cleanPhone.startsWith('73') || cleanPhone.startsWith('71') || cleanPhone.startsWith('70')) {
     finalPhone = '967' + cleanPhone;
   }
   const encodedText = encodeURIComponent(text);
-  const whatsappUrl = finalPhone 
+
+  // HTTPS Universal API Link
+  const whatsappApiUrl = finalPhone 
     ? `https://api.whatsapp.com/send?phone=${finalPhone}&text=${encodedText}`
     : `https://api.whatsapp.com/send?text=${encodedText}`;
-    
-  openExternalUrl(whatsappUrl);
+
+  // Direct App Scheme for Android Intent
+  const whatsappSchemeUrl = finalPhone
+    ? `whatsapp://send?phone=${finalPhone}&text=${encodedText}`
+    : `whatsapp://send?text=${encodedText}`;
+
+  if (Capacitor.isNativePlatform()) {
+    // A) Try Direct App Scheme
+    try {
+      const canOpenScheme = await AppLauncher.canOpenUrl({ url: whatsappSchemeUrl }).catch(() => ({ value: false }));
+      if (canOpenScheme.value) {
+        await AppLauncher.openUrl({ url: whatsappSchemeUrl });
+        return true;
+      }
+    } catch (e) {
+      console.warn('[WhatsApp] Scheme check warning:', e);
+    }
+
+    // B) Try API URL via AppLauncher
+    try {
+      await AppLauncher.openUrl({ url: whatsappApiUrl });
+      return true;
+    } catch (e) {
+      console.warn('[WhatsApp] API launch warning:', e);
+    }
+  }
+
+  return openExternalUrl(whatsappApiUrl);
 }
 
 /**
  * Safely triggers Phone Dialer intent
  */
-export function openPhoneCall(phone: string): void {
+export async function openPhoneCall(phone: string): Promise<boolean> {
   const cleanPhone = phone ? phone.replace(/[^0-9]/g, '') : '';
-  if (!cleanPhone) return;
-  openExternalUrl(`tel:${cleanPhone}`);
+  if (!cleanPhone) {
+    alert('⚠️ يرجى إدخال رقم هاتف صحيح للاتصال.');
+    return false;
+  }
+  const telUrl = `tel:${cleanPhone}`;
+  return openExternalUrl(telUrl);
 }
 
 /**
  * Safely triggers SMS intent
  */
-export function openSms(phone: string, text: string = ''): void {
+export async function openSms(phone: string, text: string = ''): Promise<boolean> {
   const cleanPhone = phone ? phone.replace(/[^0-9]/g, '') : '';
   const encodedText = encodeURIComponent(text);
-  openExternalUrl(`sms:${cleanPhone}?body=${encodedText}`);
+  const smsUrl = `sms:${cleanPhone}?body=${encodedText}`;
+  return openExternalUrl(smsUrl);
 }
+

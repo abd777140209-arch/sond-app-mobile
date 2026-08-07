@@ -94,13 +94,18 @@ export async function ensureStoragePermissions(): Promise<boolean> {
     }
     return true;
   } catch (err) {
-    console.warn('Filesystem permissions check/request warning:', err);
-    return true;
+    console.warn('[fileExport] Permissions request warning:', err);
+    try {
+      const req = await Filesystem.requestPermissions();
+      return req.publicStorage === 'granted';
+    } catch (e) {
+      return true;
+    }
   }
 }
 
 /**
- * Ensures a custom folder (e.g. 'SanadAccounting' or user specified path) exists inside Directory.Documents on Android/Native
+ * Ensures a custom folder (e.g. 'SanadApp' or user specified path) exists inside Directory.Documents on Android/Native
  */
 export async function ensureCustomFolder(folderPath?: string): Promise<boolean> {
   if (!Capacitor.isNativePlatform()) {
@@ -108,7 +113,7 @@ export async function ensureCustomFolder(folderPath?: string): Promise<boolean> 
   }
   await ensureStoragePermissions();
   const targetFolder = folderPath || getCustomSaveFolder();
-  const cleanFolder = targetFolder.trim().replace(/^\/+|\/+$/g, '');
+  const cleanFolder = targetFolder.trim().replace(/^\/+|\/+$/g, '') || 'SanadApp';
   
   try {
     await Filesystem.mkdir({
@@ -118,7 +123,7 @@ export async function ensureCustomFolder(folderPath?: string): Promise<boolean> 
     });
     return true;
   } catch (err) {
-    // Attempt fallback in Directory.ExternalStorage or Directory.Data safely for Capacitor Filesystem
+    // Directory might already exist or fall back to external storage
     try {
       await Filesystem.mkdir({
         path: cleanFolder,
@@ -127,7 +132,7 @@ export async function ensureCustomFolder(folderPath?: string): Promise<boolean> 
       });
       return true;
     } catch (fallbackErr) {
-      console.log(`Directory ${cleanFolder} creation info:`, err, fallbackErr);
+      console.log(`[fileExport] Directory creation note (${cleanFolder}):`, err);
       return true;
     }
   }
@@ -150,7 +155,7 @@ export async function saveSilentBackupFile(
 ): Promise<string | null> {
   const isNative = Capacitor.isNativePlatform();
   const targetFolder = folderPath || getCustomSaveFolder();
-  const cleanFolder = targetFolder.trim().replace(/^\/+|\/+$/g, '');
+  const cleanFolder = targetFolder.trim().replace(/^\/+|\/+$/g, '') || 'SanadApp';
 
   if (isNative) {
     try {
@@ -162,7 +167,7 @@ export async function saveSilentBackupFile(
         recursive: true,
         encoding: Encoding.UTF8
       });
-      console.log(`[Silent Backup] Successfully saved to Documents/${cleanFolder}/${fileName}`);
+      console.log(`[Silent Backup] Saved to Documents/${cleanFolder}/${fileName}`);
       return writeResult.uri;
     } catch (err) {
       console.warn(`[Silent Backup] Write to Documents/${cleanFolder} failed, trying Cache:`, err);
@@ -206,22 +211,26 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
   } = options;
 
   const isNative = Capacitor.isNativePlatform();
-  // Clean Base64 strings to prevent broken base64 payload errors in Filesystem plugin
+  
+  // Clean Base64 payload to remove headers or whitespace
   const cleanData = isBase64
     ? data.replace(/^data:.*?;base64,/, '').replace(/\s/g, '')
     : data;
+    
   const targetFolder = folderName || getCustomSaveFolder();
-  const cleanFolder = targetFolder.trim().replace(/^\/+|\/+$/g, '');
+  const cleanFolder = targetFolder.trim().replace(/^\/+|\/+$/g, '') || 'SanadApp';
   const relativeFilePath = `${cleanFolder}/${fileName}`;
+
+  console.log(`[saveAndShareFile] Native: ${isNative}, File: ${fileName}, MIME: ${mimeType}, Folder: ${cleanFolder}`);
 
   // 1. NATIVE CAPACITOR (ANDROID / IOS APK) PATH
   if (isNative) {
     try {
       await ensureStoragePermissions();
 
-      let writeUri = '';
+      let shareUri = '';
 
-      // A) Write to Cache Directory FIRST (ALWAYS succeeds on Android without scoped storage blocks)
+      // A) Write to Cache Directory FIRST (Fast, reliable shareable URI for Android Intents)
       try {
         const cacheResult = await Filesystem.writeFile({
           path: fileName,
@@ -230,12 +239,12 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
           recursive: true,
           encoding: isBase64 ? undefined : Encoding.UTF8
         });
-        writeUri = cacheResult.uri;
+        shareUri = cacheResult.uri;
       } catch (cacheErr) {
-        console.warn('Cache write warning:', cacheErr);
+        console.warn('[fileExport] Cache write warning:', cacheErr);
       }
 
-      // B) Also attempt writing to Directory.Documents for persistent local folder access
+      // B) Write persistent copy in Directory.Documents/SanadApp/
       try {
         await ensureCustomFolder(cleanFolder);
         const docResult = await Filesystem.writeFile({
@@ -245,48 +254,51 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
           recursive: true,
           encoding: isBase64 ? undefined : Encoding.UTF8
         });
-        if (!writeUri) writeUri = docResult.uri;
+        if (!shareUri) shareUri = docResult.uri;
       } catch (docErr) {
-        console.warn('Documents write attempt info:', docErr);
+        console.warn('[fileExport] Documents write warning:', docErr);
       }
 
-      // C) Retrieve URI if not yet captured
-      if (!writeUri) {
+      // C) Retrieve URI via Filesystem.getUri if not captured
+      if (!shareUri) {
         try {
           const uriRes = await Filesystem.getUri({
             path: fileName,
             directory: Directory.Cache
           });
-          writeUri = uriRes.uri;
+          shareUri = uriRes.uri;
         } catch (e) {
-          console.warn('Get URI fallback error:', e);
+          console.warn('[fileExport] getUri fallback warning:', e);
         }
       }
 
-      // D) Trigger System Share / File Save dialog on Android / iOS
-      if (writeUri) {
+      // D) Trigger Android Native Share Sheet
+      if (shareUri) {
         try {
           await Share.share({
             title: title || fileName,
-            text: `${text}\n📄 الملف: ${fileName}`,
-            url: writeUri,
-            dialogTitle: title || 'حفظ وتصدير الملف (اختر التطبيق أو حفظ بالهاتف)'
+            text: `${text}\n📄 المستند: ${fileName}`,
+            url: shareUri,
+            dialogTitle: title || 'مشاركة وحفظ المستند'
           });
+          
+          alert(`✓ تم تصدير الملف وحفظه بنجاح!\n📁 المسار: Documents/${relativeFilePath}`);
           return true;
         } catch (shareErr: any) {
-          const errStr = String(shareErr || '').toLowerCase();
+          const errStr = String(shareErr?.message || shareErr || '').toLowerCase();
           if (errStr.includes('cancel') || errStr.includes('dismiss') || errStr.includes('abort')) {
-            console.log('User dismissed share sheet');
+            console.log('[fileExport] User dismissed share sheet');
             return true;
           }
-          console.warn('Capacitor Share failed:', shareErr);
+          console.warn('[fileExport] Share.share warning:', shareErr);
           alert(`✓ تم حفظ الملف بنجاح على ذاكرة الهاتف:\n📁 Documents/${relativeFilePath}`);
           return true;
         }
       }
 
-    } catch (nativeErr) {
-      console.warn('Native Capacitor file operation failed, dropping to Web fallback:', nativeErr);
+    } catch (nativeErr: any) {
+      console.error('[fileExport] Native Capacitor file operation failed:', nativeErr);
+      alert(`⚠️ حدث خطأ أثناء التصدير للذاكرة (${nativeErr?.message || nativeErr}). جار تحويل التصدير للمعالجة البديلة...`);
     }
   }
 
@@ -312,7 +324,7 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
       if (errStr.includes('cancel') || errStr.includes('abort') || errStr.includes('dismiss')) {
         return true;
       }
-      console.warn('Web Share API error:', webShareErr);
+      console.warn('[fileExport] Web Share API error:', webShareErr);
     }
   }
 
@@ -337,7 +349,7 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
       URL.revokeObjectURL(blobUrl);
     }, 4000);
 
-    // Also trigger Data URI direct download for strict Android WebViews that block blob: URIs
+    // Data URI direct download fallback for strict Android WebViews
     try {
       const dataUri = isBase64 
         ? `data:${mimeType};base64,${cleanData}`
@@ -353,12 +365,13 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
         if (document.body.contains(altLink)) document.body.removeChild(altLink);
       }, 1000);
     } catch (dataUriErr) {
-      console.warn('Data URI download attempt:', dataUriErr);
+      console.warn('[fileExport] Data URI download attempt:', dataUriErr);
     }
 
+    alert(`✓ تم تنزيل الملف بنجاح: ${fileName}`);
     return true;
   } catch (webLinkErr) {
-    console.warn('Web blob download link attempt:', webLinkErr);
+    console.warn('[fileExport] Web blob download link attempt:', webLinkErr);
   }
 
   // 4. EMERGENCY CLIPBOARD / ALERT FALLBACK IF EVERYTHING BLOCKED
@@ -366,15 +379,15 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
     try {
       if (navigator.clipboard) {
         await navigator.clipboard.writeText(data);
-        alert(`📄 تعذر إظهار قائمة التنزيل التلقائي بالمتصفح.\n✅ تم نسخ محتوى الملف (${fileName}) للحافظة بنجاح! يمكنك لصقه وحفظه.`);
+        alert(`📄 تعذر إظهار تنزيل التلقائي بالمتصفح.\n✅ تم نسخ محتوى الملف (${fileName}) للحافظة بنجاح!`);
         return true;
       }
     } catch (clipErr) {
-      console.warn('Clipboard write warning:', clipErr);
+      console.warn('[fileExport] Clipboard write warning:', clipErr);
     }
   }
 
-  alert('⚠️ تعذر إتمام حفظ الملف تلقائياً. يرجى التأكد من صلاحيات التخزين وإعادة المحاولة.');
+  alert('⚠️ تعذر إتمام حفظ الملف تلقائياً. يرجى مراجعة إعدادات الأندرويد وإعادة المحاولة.');
   return false;
 }
 

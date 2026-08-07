@@ -3,6 +3,9 @@
  * Handles Android APK / Webview / PWA runtime permissions without affecting Desktop/JVM builds.
  */
 
+import { Filesystem } from '@capacitor/filesystem';
+import { Capacitor } from '@capacitor/core';
+
 export interface AndroidPermissionStatus {
   notificationsGranted: boolean;
   cameraGranted: boolean;
@@ -46,6 +49,15 @@ export async function requestCameraPermissionOnDemand(): Promise<boolean> {
  * Prevents app crashes during logo upload or report export.
  */
 export async function requestStoragePermissionOnDemand(): Promise<boolean> {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const req = await Filesystem.requestPermissions();
+      return req.publicStorage === 'granted';
+    } catch (e) {
+      console.warn('Capacitor storage permissions request error:', e);
+    }
+  }
+
   if (typeof window !== 'undefined' && (window as any).AndroidInterface?.requestPermissions === 'function') {
     try {
       (window as any).AndroidInterface.requestPermissions([
