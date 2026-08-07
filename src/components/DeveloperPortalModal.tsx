@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { LicenseInfo, generateLicenseKey, getExpiryDate } from '../utils/licensing';
-import { isFirebaseConfigured, checkLicenseOnCloud, activateLicenseOnCloud, createLicenseOnCloud, CloudLicense, getAllLicensesFromCloud, deleteLicenseFromCloud, updateLicenseHwidOnCloud, updateLicenseHwidsOnCloud, getLicenseHwidSlots, resetCloudData, resetClientCloudData } from '../utils/firebase';
+import { isFirebaseConfigured, checkLicenseOnCloud, activateLicenseOnCloud, createLicenseOnCloud, CloudLicense, getAllLicensesFromCloud, deleteLicenseFromCloud, updateLicenseHwidOnCloud, updateLicenseHwidsOnCloud, getLicenseHwidSlots, resetCloudData, resetClientCloudData, toggleLicenseSuspendOnCloud, renewLicenseOnCloud } from '../utils/firebase';
 
 interface DeveloperPortalModalProps {
   isOpen: boolean;
@@ -47,7 +47,8 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
   const [isCloud, setIsCloud] = useState(false);
   
   // Developer key generator states
-  const [genType, setGenType] = useState<'monthly' | 'yearly' | 'lifetime' | 'trial'>('monthly');
+  const [genType, setGenType] = useState<'weekly' | 'monthly' | 'yearly' | 'lifetime' | 'trial' | 'custom'>('monthly');
+  const [genCustomDays, setGenCustomDays] = useState<number>(30);
   const [genCustomer, setGenCustomer] = useState('');
   const [genPhone, setGenPhone] = useState('');
   const [genHwid, setGenHwid] = useState('');
@@ -56,11 +57,17 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
     key: string;
     customer: string;
     phone: string;
-    type: 'monthly' | 'yearly' | 'lifetime' | 'trial';
+    type: 'weekly' | 'monthly' | 'yearly' | 'lifetime' | 'trial' | 'custom';
     createdAt: string;
     expiresAt: string;
   } | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' | null }>({ text: '', type: null });
+
+  // License Renewal modal state
+  const [renewingLicense, setRenewingLicense] = useState<CloudLicense | null>(null);
+  const [renewType, setRenewType] = useState<'weekly' | 'monthly' | 'yearly' | 'lifetime' | 'trial' | 'custom'>('monthly');
+  const [renewCustomDays, setRenewCustomDays] = useState<number>(30);
+  const [isRenewing, setIsRenewing] = useState(false);
 
   // Update Device IDs (HWID 1 & HWID 2) modal state
   const [editingHwidLicense, setEditingHwidLicense] = useState<CloudLicense | null>(null);
@@ -136,8 +143,9 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
       return;
     }
 
-    const newKey = generateLicenseKey(genType);
-    const expiresAt = getExpiryDate(genType);
+    const resolvedType = genType === 'custom' ? 'monthly' : genType;
+    const newKey = generateLicenseKey(resolvedType);
+    const expiresAt = getExpiryDate(genType, genType === 'custom' ? genCustomDays : undefined);
     const createdAt = new Date().toISOString();
 
     const newLicense: CloudLicense = {
@@ -147,7 +155,7 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
       phone: genPhone.trim(),
       createdAt,
       expiresAt,
-      type: genType,
+      type: resolvedType as any,
       status: 'active'
     };
 
@@ -178,6 +186,60 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
       console.error(e);
       setStatusMessage({ text: `✓ تم توليد الكود محلياً (خطأ اتصال بالخادم السحابي)`, type: 'info' });
       await handleFetchCloudLicenses();
+    }
+  };
+
+  // Developer action: Toggle License Status (Active <-> Suspended)
+  const handleToggleSuspend = async (key: string, currentStatus: 'active' | 'suspended') => {
+    const targetStatus = currentStatus === 'suspended' ? 'active' : 'suspended';
+    try {
+      const success = await toggleLicenseSuspendOnCloud(key, targetStatus);
+      if (success) {
+        soundManager.playSuccessChime();
+        setStatusMessage({
+          text: targetStatus === 'suspended'
+            ? `🛑 تم إيقاف وتعليق الترخيص (${key}) بنجاح!`
+            : `🟢 تم إعادة تفعيل الترخيص (${key}) بنجاح!`,
+          type: 'success'
+        });
+        await handleFetchCloudLicenses();
+      } else {
+        soundManager.playWarningBeep();
+        setStatusMessage({ text: '❌ فشل تغيير حالة الترخيص.', type: 'error' });
+      }
+    } catch (e) {
+      console.error(e);
+      setStatusMessage({ text: '❌ حدث خطأ أثناء تغيير حالة الترخيص.', type: 'error' });
+    }
+  };
+
+  // Developer action: Perform License Renewal
+  const handlePerformRenewLicense = async () => {
+    if (!renewingLicense) return;
+    setIsRenewing(true);
+    try {
+      const res = await renewLicenseOnCloud(
+        renewingLicense.key, 
+        renewType, 
+        renewType === 'custom' ? renewCustomDays : undefined
+      );
+      if (res.success) {
+        soundManager.playSuccessChime();
+        setStatusMessage({
+          text: `🎉 ${res.message} للعميل (${renewingLicense.customerName || renewingLicense.key})!`,
+          type: 'success'
+        });
+        await handleFetchCloudLicenses();
+        setRenewingLicense(null);
+      } else {
+        soundManager.playWarningBeep();
+        setStatusMessage({ text: `❌ ${res.message}`, type: 'error' });
+      }
+    } catch (e: any) {
+      console.error(e);
+      setStatusMessage({ text: '❌ حدث خطأ غير متوقع أثناء تجديد الترخيص.', type: 'error' });
+    } finally {
+      setIsRenewing(false);
     }
   };
 
@@ -487,16 +549,35 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
 
                   <div>
                     <label className="text-[10px] text-gray-400 block mb-1">نوع وفترة صلاحية الاشتراك:</label>
-                    <select
-                      value={genType}
-                      onChange={(e) => setGenType(e.target.value as any)}
-                      className="w-full bg-[#04060b] border border-gray-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C5A862]"
-                    >
-                      <option value="trial">تجريبي (7 أيام)</option>
-                      <option value="monthly">شهري (30 يوماً)</option>
-                      <option value="yearly">سنوي (365 يوماً)</option>
-                      <option value="lifetime">رخصة دائمة (مدى الحياة)</option>
-                    </select>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <select
+                        value={genType}
+                        onChange={(e) => setGenType(e.target.value as any)}
+                        className="w-full bg-[#04060b] border border-gray-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C5A862]"
+                      >
+                        <option value="weekly">أسبوعي (7 أيام)</option>
+                        <option value="trial">تجريبي (7 أيام)</option>
+                        <option value="monthly">شهري (30 يوماً)</option>
+                        <option value="yearly">سنوي (365 يوماً)</option>
+                        <option value="lifetime">رخصة دائمة (مدى الحياة)</option>
+                        <option value="custom">تحديد عدد أيام مخصص ⚙️</option>
+                      </select>
+
+                      {genType === 'custom' && (
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="number"
+                            min={1}
+                            max={36500}
+                            value={genCustomDays}
+                            onChange={(e) => setGenCustomDays(Number(e.target.value))}
+                            placeholder="عدد الأيام"
+                            className="w-full bg-[#04060b] border border-amber-500/50 rounded-lg px-3 py-2 text-xs text-amber-300 font-mono focus:outline-none"
+                          />
+                          <span className="text-xs text-gray-400 whitespace-nowrap">يوم</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -779,13 +860,69 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                                   </div>
                                 </td>
                                 <td className="p-3 text-gray-300">
-                                  <span className="font-bold text-[10px] bg-slate-800 px-2 py-0.5 rounded mr-1">
-                                    {lk.type === 'trial' ? 'تجريبي' : lk.type === 'monthly' ? 'شهري' : lk.type === 'yearly' ? 'سنوي' : 'مدى الحياة'}
-                                  </span>
-                                  {lk.type === 'lifetime' ? 'صلاحية دائمة' : new Date(lk.expiresAt).toLocaleDateString('ar-YE')}
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      {lk.status === 'suspended' ? (
+                                        <span className="font-extrabold text-[10px] bg-rose-950/80 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                          🛑 موقوف
+                                        </span>
+                                      ) : lk.type !== 'lifetime' && lk.expiresAt && new Date(lk.expiresAt) < new Date() ? (
+                                        <span className="font-extrabold text-[10px] bg-amber-950/80 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                          ⏳ منتهي الصلاحية
+                                        </span>
+                                      ) : (
+                                        <span className="font-extrabold text-[10px] bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                          🟢 نشط ومفعل
+                                        </span>
+                                      )}
+
+                                      <span className="font-bold text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded">
+                                        {lk.type === 'weekly' ? 'أسبوعي' : lk.type === 'trial' ? 'تجريبي' : lk.type === 'monthly' ? 'شهري' : lk.type === 'yearly' ? 'سنوي' : 'مدى الحياة'}
+                                      </span>
+                                    </div>
+                                    <div className="text-[10px] font-mono text-gray-400">
+                                      {lk.type === 'lifetime' ? 'صلاحية دائمة' : `ينتهي: ${new Date(lk.expiresAt).toLocaleDateString('ar-YE')}`}
+                                    </div>
+                                  </div>
                                 </td>
                                 <td className="p-3 text-center">
                                   <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                    {/* Toggle Suspend / Active Switch */}
+                                    {lk.status === 'suspended' ? (
+                                      <button
+                                        onClick={() => handleToggleSuspend(lk.key, 'suspended')}
+                                        className="px-2 py-1 rounded bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 hover:text-white text-[10px] font-bold transition flex items-center gap-1 cursor-pointer shadow-sm"
+                                        title="إعادة تفعيل وترخيص العميل فوراً"
+                                      >
+                                        <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                                        <span>تفعيل 🟢</span>
+                                      </button>
+                                    ) : (
+                                      <button
+                                        onClick={() => handleToggleSuspend(lk.key, 'active')}
+                                        className="px-2 py-1 rounded bg-amber-950/80 hover:bg-amber-900 border border-amber-500/40 text-amber-300 hover:text-white text-[10px] font-bold transition flex items-center gap-1 cursor-pointer shadow-sm"
+                                        title="إيقاف وتعليق حساب العميل مؤقتاً بدون حذف الكود"
+                                      >
+                                        <Lock className="w-3 h-3 text-amber-400" />
+                                        <span>إيقاف 🛑</span>
+                                      </button>
+                                    )}
+
+                                    {/* Renew License Button */}
+                                    <button
+                                      onClick={() => {
+                                        soundManager.playSuccessChime();
+                                        setRenewingLicense(lk);
+                                        setRenewType('monthly');
+                                        setRenewCustomDays(30);
+                                      }}
+                                      className="px-2 py-1 rounded bg-purple-950/80 hover:bg-purple-900 border border-purple-500/40 text-purple-300 hover:text-white text-[10px] font-bold transition flex items-center gap-1 cursor-pointer shadow-sm"
+                                      title="تجديد وتمديد فترة صلاحية هذا الترخيص"
+                                    >
+                                      <CalendarClock className="w-3 h-3 text-purple-400" />
+                                      <span>تجديد 🔄</span>
+                                    </button>
+
                                     <button
                                       onClick={() => {
                                         soundManager.playSuccessChime();
@@ -798,7 +935,7 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                                       title="إدارة وتعديل معرف الجهاز الأول والثاني (HWID 1 & HWID 2)"
                                     >
                                       <Edit3 className="w-3 h-3 text-blue-400" />
-                                      <span>تعديل HWID 1 & 2</span>
+                                      <span>تعديل HWID</span>
                                     </button>
 
                                     <button
@@ -1163,6 +1300,140 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
             </div>
           </div>
         )}
+
+      {/* 🔄 Renew / Extend License Modal */}
+      {renewingLicense && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn" dir="rtl">
+          <div className="bg-[#0b101d] border border-purple-500/40 rounded-2xl p-5 max-w-md w-full space-y-4 shadow-2xl relative overflow-hidden">
+            <div className="flex justify-between items-center border-b border-gray-800 pb-3">
+              <h3 className="font-extrabold text-sm text-purple-300 flex items-center gap-2">
+                <CalendarClock className="w-4 h-4 text-purple-400" /> تجديد وتمديد صلاحية الترخيص
+              </h3>
+              <button
+                onClick={() => setRenewingLicense(null)}
+                className="text-gray-400 hover:text-white cursor-pointer"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="text-xs text-gray-300 space-y-1.5 bg-purple-950/30 p-3.5 rounded-xl border border-purple-500/20">
+              <div>العميل: <span className="text-white font-bold">{renewingLicense.customerName}</span></div>
+              <div>رقم الهاتف: <span className="text-cyan-400 font-mono font-bold">{renewingLicense.phone || 'غير مدخل'}</span></div>
+              <div>كود الترخيص: <span className="text-yellow-400 font-mono font-bold">{renewingLicense.key}</span></div>
+              <div>التاريخ الحالي للانتهاء: <span className="text-amber-300 font-mono font-bold">{renewingLicense.type === 'lifetime' ? 'دائم (مدى الحياة)' : new Date(renewingLicense.expiresAt).toLocaleDateString('ar-YE')}</span></div>
+            </div>
+
+            <div className="space-y-3">
+              <label className="text-xs text-purple-200 font-bold block">اختر فترة التجديد والتمديد الجديدة:</label>
+              
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setRenewType('weekly')}
+                  className={`p-2.5 rounded-xl border font-bold text-center transition cursor-pointer ${
+                    renewType === 'weekly' 
+                      ? 'bg-purple-600 text-white border-purple-400 shadow-md' 
+                      : 'bg-slate-900/80 text-gray-300 border-gray-800 hover:border-purple-500/50'
+                  }`}
+                >
+                  ⚡ أسبوع (7 أيام)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setRenewType('monthly')}
+                  className={`p-2.5 rounded-xl border font-bold text-center transition cursor-pointer ${
+                    renewType === 'monthly' 
+                      ? 'bg-purple-600 text-white border-purple-400 shadow-md' 
+                      : 'bg-slate-900/80 text-gray-300 border-gray-800 hover:border-purple-500/50'
+                  }`}
+                >
+                  ⚡ شهر (30 يوماً)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setRenewType('yearly')}
+                  className={`p-2.5 rounded-xl border font-bold text-center transition cursor-pointer ${
+                    renewType === 'yearly' 
+                      ? 'bg-purple-600 text-white border-purple-400 shadow-md' 
+                      : 'bg-slate-900/80 text-gray-300 border-gray-800 hover:border-purple-500/50'
+                  }`}
+                >
+                  ⚡ سنة (365 يوماً)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setRenewType('lifetime')}
+                  className={`p-2.5 rounded-xl border font-bold text-center transition cursor-pointer ${
+                    renewType === 'lifetime' 
+                      ? 'bg-purple-600 text-white border-purple-400 shadow-md' 
+                      : 'bg-slate-900/80 text-gray-300 border-gray-800 hover:border-purple-500/50'
+                  }`}
+                >
+                  ⚡ رخصة دائمة (مدى الحياة)
+                </button>
+              </div>
+
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setRenewType('custom')}
+                  className={`w-full p-2.5 rounded-xl border font-bold text-xs text-center transition cursor-pointer ${
+                    renewType === 'custom' 
+                      ? 'bg-amber-600 text-black border-amber-400 shadow-md' 
+                      : 'bg-slate-900/80 text-amber-300 border-gray-800 hover:border-amber-500/50'
+                  }`}
+                >
+                  ⚙️ تحديد عدد أيام مخصص للتجديد
+                </button>
+
+                {renewType === 'custom' && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={36500}
+                      value={renewCustomDays}
+                      onChange={(e) => setRenewCustomDays(Number(e.target.value))}
+                      placeholder="أدخل عدد الأيام"
+                      className="w-full bg-[#04060b] border border-amber-500/50 rounded-xl px-3 py-2 text-xs text-amber-300 font-mono focus:outline-none"
+                      autoFocus
+                    />
+                    <span className="text-xs text-gray-300 font-bold whitespace-nowrap">يوم</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-2 justify-end pt-3 border-t border-gray-800">
+              <button
+                disabled={isRenewing}
+                onClick={handlePerformRenewLicense}
+                className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-extrabold rounded-xl cursor-pointer transition text-xs flex items-center justify-center gap-2 shadow-lg shadow-purple-900/40"
+              >
+                {isRenewing ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" /> جاري التجديد والحفظ...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 text-amber-300" /> تأكيد التجديد وتمديد الترخيص 🚀
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => setRenewingLicense(null)}
+                className="px-4 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-xl cursor-pointer transition text-xs"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       </div>
     </div>

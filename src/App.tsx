@@ -346,7 +346,7 @@ export default function App() {
   }, []);
 
   const [license, setLicense] = useState<LicenseInfo>(() => loadLicenseLocally());
-  const isActivated = license.status === 'active' || license.status === 'trial' || isDevAdminRoute;
+  const isActivated = license.status === 'active' || license.status === 'trial';
   const [showRevokedModal, setShowRevokedModal] = useState<boolean>(false);
 
   // 🔒 Real-time Firestore License Enforcement (Auto-Locks immediately if Developer deletes or suspends license)
@@ -358,18 +358,22 @@ export default function App() {
     const currentKey = license.licenseKey;
     const currentHwid = license.hwid || generateHWID();
 
-    const handleLicenseRevoked = (reason: string) => {
-      console.warn(`[License Security] License key ${currentKey} was ${reason} on Cloud! Revoking access...`);
+    const handleLicenseRevoked = (reason: string, cloudData?: CloudLicense) => {
+      console.warn(`[License Security] License key ${currentKey} was ${reason} on Cloud!`);
       soundManager.playWarningBeep();
 
+      const isExpired = reason === 'KEY_EXPIRED' || reason === 'expired';
+      const isSuspended = reason === 'KEY_SUSPENDED' || reason === 'suspended';
+
       const revokedLicense: LicenseInfo = {
-        licenseKey: '',
-        status: 'unlicensed',
-        activatedAt: '',
-        expiresAt: '',
+        licenseKey: currentKey, // Keep licenseKey intact so real-time listener stays active for auto-restoration upon cloud renewal
+        status: isExpired ? 'expired' : 'unlicensed',
+        activatedAt: license.activatedAt,
+        expiresAt: cloudData?.expiresAt || license.expiresAt,
         hwid: currentHwid,
-        subscriptionType: 'trial',
-        customerName: 'حساب موقوف / ترخيص ملغى'
+        subscriptionType: cloudData?.type || license.subscriptionType || 'trial',
+        customerName: cloudData?.customerName || license.customerName || (isSuspended ? 'حساب موقوف' : isExpired ? 'اشتراك منتهي' : 'ترخيص ملغى'),
+        phone: cloudData?.phone || license.phone || ''
       };
 
       saveLicenseLocally(revokedLicense);
@@ -378,20 +382,54 @@ export default function App() {
     };
 
     // 1. Attach Real-Time Firestore Snapshot Listener
-    const unsubRealtime = listenToLicenseOnCloud(currentKey, (status) => {
-      if (status === 'deleted' || status === 'suspended' || status === 'expired' || status === 'not_found') {
-        handleLicenseRevoked(status);
+    const unsubRealtime = listenToLicenseOnCloud(currentKey, (status, cloudData) => {
+      if (status === 'deleted' || status === 'suspended' || status === 'expired') {
+        handleLicenseRevoked(status, cloudData);
+      } else if (status === 'active' && cloudData) {
+        // If license was previously revoked/expired and developer renewed/activated it on Cloud:
+        if (license.status === 'expired' || license.status === 'unlicensed') {
+          const activeLic: LicenseInfo = {
+            licenseKey: cloudData.key,
+            status: 'active',
+            activatedAt: cloudData.createdAt || new Date().toISOString(),
+            expiresAt: cloudData.expiresAt,
+            hwid: currentHwid,
+            subscriptionType: cloudData.type,
+            customerName: cloudData.customerName || license.customerName || 'عميل سند',
+            phone: cloudData.phone || license.phone || ''
+          };
+          saveLicenseLocally(activeLic);
+          setLicense(activeLic);
+          setShowRevokedModal(false);
+          soundManager.playSuccessChime();
+        }
       }
     });
 
-    // 2. Periodic Active Verification Check (every 20 seconds when online)
+    // 2. Periodic Active Verification Check (every 30 seconds when online)
     const checkActiveCloudLicense = async () => {
       if (typeof navigator !== 'undefined' && !navigator.onLine) return;
       try {
         const checkRes = await checkLicenseOnCloud(currentKey, currentHwid);
-        if (!checkRes.success) {
+        if (checkRes.success && checkRes.data) {
+          if (license.status === 'expired' || license.status === 'unlicensed') {
+            const activeLic: LicenseInfo = {
+              licenseKey: checkRes.data.key,
+              status: 'active',
+              activatedAt: checkRes.data.createdAt || new Date().toISOString(),
+              expiresAt: checkRes.data.expiresAt,
+              hwid: currentHwid,
+              subscriptionType: checkRes.data.type,
+              customerName: checkRes.data.customerName || license.customerName || 'عميل سند',
+              phone: checkRes.data.phone || license.phone || ''
+            };
+            saveLicenseLocally(activeLic);
+            setLicense(activeLic);
+            setShowRevokedModal(false);
+          }
+        } else if (!checkRes.success) {
           if (checkRes.message === 'KEY_NOT_FOUND' || checkRes.message === 'KEY_SUSPENDED' || checkRes.message === 'KEY_EXPIRED') {
-            handleLicenseRevoked(checkRes.message);
+            handleLicenseRevoked(checkRes.message, checkRes.data);
           }
         }
       } catch (err) {
@@ -399,14 +437,34 @@ export default function App() {
       }
     };
 
-    // Initial check on mount
-    checkActiveCloudLicense();
+    // Initial check after short delay (1.5s) to allow network and Capacitor App Resume sync to stabilize
+    const initialTimer = setTimeout(() => {
+      checkActiveCloudLicense();
+    }, 1500);
 
-    const intervalId = setInterval(checkActiveCloudLicense, 20000);
+    const intervalId = setInterval(checkActiveCloudLicense, 30000);
+
+    // 3. Handle Capacitor App Resume (when returning from background)
+    let unsubAppResume: (() => void) | null = null;
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const handle = CapacitorApp.addListener('appStateChange', (state) => {
+          if (state.isActive) {
+            console.log('[App Resume] App returned to foreground. Waiting for server sync before re-checking...');
+            setTimeout(checkActiveCloudLicense, 2000);
+          }
+        });
+        unsubAppResume = () => { handle.then(h => h.remove()); };
+      } catch (e) {
+        console.warn('Capacitor App state change listener error:', e);
+      }
+    }
 
     return () => {
+      clearTimeout(initialTimer);
       unsubRealtime();
       clearInterval(intervalId);
+      if (unsubAppResume) unsubAppResume();
     };
   }, [license.licenseKey, license.status, isDevAdminRoute]);
   const [isBiometricLocked, setIsBiometricLocked] = useState<boolean>(() => {
@@ -946,7 +1004,6 @@ export default function App() {
           setLicense={setLicense}
           onActivationSuccess={(updatedLicense) => setLicense(updatedLicense)} 
           onOpenDevPortal={() => {
-            setIsDevAdminRoute(true);
             setShowDeveloperModal(true);
           }}
         />

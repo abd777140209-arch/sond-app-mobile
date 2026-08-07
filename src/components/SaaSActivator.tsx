@@ -367,7 +367,6 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
               type="button"
               onClick={() => {
                 if (onOpenDevPortal) onOpenDevPortal();
-                else window.location.href = '/admin';
               }}
               className="px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
             >

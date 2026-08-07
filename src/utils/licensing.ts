@@ -145,8 +145,8 @@ export const getHWID = generateHWID;
 export const getDeviceId = generateHWID;
 
 // Generate cryptographically looking license key
-export const generateLicenseKey = (type: 'monthly' | 'yearly' | 'lifetime' | 'trial'): string => {
-  const prefix = type === 'monthly' ? 'MHTM' : type === 'yearly' ? 'MHTY' : type === 'lifetime' ? 'MHTL' : 'MHTT';
+export const generateLicenseKey = (type: 'weekly' | 'monthly' | 'yearly' | 'lifetime' | 'trial'): string => {
+  const prefix = type === 'weekly' ? 'MHTW' : type === 'monthly' ? 'MHTM' : type === 'yearly' ? 'MHTY' : type === 'lifetime' ? 'MHTL' : 'MHTT';
   const segment1 = Math.floor(1000 + Math.random() * 9000).toString();
   const segment2 = Math.floor(1000 + Math.random() * 9000).toString();
   const segment3 = Math.floor(1000 + Math.random() * 9000).toString();
@@ -154,16 +154,20 @@ export const generateLicenseKey = (type: 'monthly' | 'yearly' | 'lifetime' | 'tr
 };
 
 // Calculate expiry date based on type
-export const getExpiryDate = (type: 'monthly' | 'yearly' | 'lifetime' | 'trial'): string => {
+export const getExpiryDate = (type: 'weekly' | 'monthly' | 'yearly' | 'lifetime' | 'trial', customDays?: number): string => {
   const now = new Date();
-  if (type === 'monthly') {
-    now.setMonth(now.getMonth() + 1);
+  if (type === 'weekly' || type === 'trial') {
+    now.setDate(now.getDate() + 7);
+  } else if (type === 'monthly') {
+    now.setDate(now.getDate() + 30);
   } else if (type === 'yearly') {
-    now.setFullYear(now.getFullYear() + 1);
+    now.setDate(now.getDate() + 365);
   } else if (type === 'lifetime') {
     now.setFullYear(now.getFullYear() + 100);
+  } else if (customDays && customDays > 0) {
+    now.setDate(now.getDate() + customDays);
   } else {
-    now.setDate(now.getDate() + 7);
+    now.setDate(now.getDate() + 30);
   }
   return now.toISOString();
 };

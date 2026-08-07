@@ -30,7 +30,7 @@ export interface CloudLicense {
   phone?: string;
   createdAt?: string;
   expiresAt: string;
-  type: 'monthly' | 'yearly' | 'lifetime' | 'trial';
+  type: 'weekly' | 'monthly' | 'yearly' | 'lifetime' | 'trial';
   status: 'active' | 'suspended';
 }
 
@@ -250,21 +250,25 @@ export function getBoundHwids(license: CloudLicense): string[] {
 
 // Check license key on Cloud / Local Database
 export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ success: boolean; message: string; data?: CloudLicense }> {
-  try {
-    const cleanKey = key.trim().toUpperCase();
-    if (!cleanKey) return { success: false, message: 'KEY_EMPTY' };
+  const cleanKey = key ? key.trim().toUpperCase() : '';
+  if (!cleanKey) return { success: false, message: 'KEY_EMPTY' };
 
+  try {
     const db = getFirestoreDb();
     const normCurrent = normalizeHWID(hwid);
 
     if (db) {
       try {
-        let docSnap = await withTimeout(getDoc(doc(db, 'licenses', cleanKey)), 2500);
+        let docSnap: any = await withTimeout(getDoc(doc(db, 'licenses', cleanKey)), 3500);
         
         if (!docSnap.exists()) {
-          const allDocs = await withTimeout(getDocs(collection(db, 'licenses')), 2500);
-          const matchedDoc = allDocs.docs.find(d => d.id.trim().toUpperCase() === cleanKey);
-          if (matchedDoc) docSnap = matchedDoc as any;
+          try {
+            const allDocs = await withTimeout(getDocs(collection(db, 'licenses')), 3500);
+            const matchedDoc = allDocs.docs.find(d => d.id.trim().toUpperCase() === cleanKey);
+            if (matchedDoc) docSnap = matchedDoc as any;
+          } catch (colErr) {
+            console.warn('Collection search fallback error:', colErr);
+          }
         }
 
         if (docSnap.exists()) {
@@ -272,9 +276,11 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
           if (license.status === 'suspended') {
             return { success: false, message: 'KEY_SUSPENDED', data: license };
           }
-          const expiry = new Date(license.expiresAt);
-          if (expiry < new Date()) {
-            return { success: false, message: 'KEY_EXPIRED', data: license };
+          if (license.expiresAt && license.type !== 'lifetime') {
+            const expiry = new Date(license.expiresAt);
+            if (expiry < new Date()) {
+              return { success: false, message: 'KEY_EXPIRED', data: license };
+            }
           }
 
           const { hwid1, hwid2 } = getLicenseHwidSlots(license);
@@ -295,10 +301,29 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
           return { success: true, message: 'VALID', data: license };
         } else {
           // Document explicitly deleted or does not exist on Firestore Cloud!
+          // Only trust this if confirmed directly from server (!fromCache).
+          const isFromCache = Boolean(docSnap?.metadata?.fromCache);
+          if (isFromCache) {
+            console.warn(`[checkLicenseOnCloud] Document ${cleanKey} not found in local cache (offline/resume). Trusting local active status.`);
+            return { success: true, message: 'OFFLINE_CACHE_VALID' };
+          }
           return { success: false, message: 'KEY_NOT_FOUND' };
         }
       } catch (cloudErr) {
         console.warn('Firestore cloud check fallback to local database:', cloudErr);
+        if (typeof localStorage !== 'undefined') {
+          const rawLocal = localStorage.getItem('smart_accounting_license_v1');
+          if (rawLocal && rawLocal.includes(cleanKey) && !rawLocal.includes('"status":"unlicensed"')) {
+            return { success: true, message: 'OFFLINE_CACHE_VALID' };
+          }
+        }
+      }
+    }
+
+    if (typeof localStorage !== 'undefined') {
+      const rawLocal = localStorage.getItem('smart_accounting_license_v1');
+      if (rawLocal && rawLocal.includes(cleanKey) && !rawLocal.includes('"status":"unlicensed"')) {
+        return { success: true, message: 'OFFLINE_CACHE_VALID' };
       }
     }
 
@@ -319,11 +344,17 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
     return { success: false, message: 'KEY_NOT_FOUND' };
   } catch (error) {
     console.warn('SaaS Verification fallback check:', error);
+    if (typeof localStorage !== 'undefined') {
+      const rawLocal = localStorage.getItem('smart_accounting_license_v1');
+      if (rawLocal && rawLocal.includes(cleanKey) && !rawLocal.includes('"status":"unlicensed"')) {
+        return { success: true, message: 'OFFLINE_CACHE_VALID' };
+      }
+    }
     return { success: false, message: 'SERVER_ERROR' };
   }
 }
 
-// Listen to Real-Time License changes on Firestore Cloud (Auto-Lock when Deleted/Suspended)
+// Listen to Real-Time License changes on Firestore Cloud (Auto-Lock when DELETED or SUSPENDED on Server)
 export function listenToLicenseOnCloud(
   key: string,
   onStatusChange: (status: 'active' | 'suspended' | 'deleted' | 'expired' | 'not_found', data?: CloudLicense) => void
@@ -336,16 +367,23 @@ export function listenToLicenseOnCloud(
 
   try {
     const docRef = doc(db, 'licenses', cleanKey);
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+    const unsubscribe = onSnapshot(docRef, { includeMetadataChanges: true }, (docSnap) => {
+      const isFromCache = docSnap.metadata.fromCache;
+
       if (!docSnap.exists()) {
-        // License key was deleted by developer/admin in Firestore!
-        console.warn(`[License Realtime] Document ${cleanKey} deleted on Cloud! Locking system...`);
-        onStatusChange('deleted');
+        // 🔒 CRITICAL: Only trigger 'deleted' if the server explicitly confirms document deletion (!isFromCache).
+        // If snapshot is from local cache before server sync, DO NOT revoke license.
+        if (!isFromCache) {
+          console.warn(`[License Realtime] Document ${cleanKey} confirmed DELETED on Cloud Server! Locking system...`);
+          onStatusChange('deleted');
+        } else {
+          console.log(`[License Realtime] Document ${cleanKey} not in local cache yet (offline/resume). Keeping local active license.`);
+        }
       } else {
         const data = docSnap.data() as CloudLicense;
         if (data.status === 'suspended') {
           onStatusChange('suspended', data);
-        } else if (data.expiresAt && new Date(data.expiresAt) < new Date()) {
+        } else if (data.expiresAt && data.type !== 'lifetime' && new Date(data.expiresAt) < new Date()) {
           onStatusChange('expired', data);
         } else {
           onStatusChange('active', data);
@@ -618,6 +656,137 @@ export async function updateLicenseHwidsOnCloud(key: string, newHwid1: string, n
 export async function updateLicenseHwidOnCloud(key: string, newHwid: string): Promise<boolean> {
   const parts = newHwid.split(',').map(s => s.trim());
   return updateLicenseHwidsOnCloud(key, parts[0] || '', parts[1] || '');
+}
+
+// Developer Action: Toggle License Status (Active <-> Suspended)
+export async function toggleLicenseSuspendOnCloud(key: string, newStatus: 'active' | 'suspended'): Promise<boolean> {
+  try {
+    const cleanKey = key.trim().toUpperCase();
+    const db = getFirestoreDb();
+    if (db) {
+      try {
+        const docRef = doc(db, 'licenses', cleanKey);
+        const docSnap = await withTimeout(getDoc(docRef), 2000);
+        if (docSnap.exists()) {
+          const current = docSnap.data() as CloudLicense;
+          await withTimeout(setDoc(docRef, { 
+            ...current, 
+            status: newStatus 
+          }), 2000);
+          return true;
+        }
+      } catch (cloudErr) {
+        console.warn('Firestore toggle suspend error, updating local DB:', cloudErr);
+      }
+    }
+
+    const localDb = getMockDb();
+    if (localDb[cleanKey]) {
+      localDb[cleanKey].status = newStatus;
+      saveMockDb(localDb);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.warn('SaaS suspend toggle fallback error:', error);
+    return false;
+  }
+}
+
+// Developer Action: Renew / Extend License Expiry Date
+export async function renewLicenseOnCloud(
+  key: string, 
+  extensionType: 'weekly' | 'monthly' | 'yearly' | 'lifetime' | 'trial' | 'custom', 
+  customDays?: number
+): Promise<{ success: boolean; newExpiry?: string; message: string }> {
+  try {
+    const cleanKey = key.trim().toUpperCase();
+    const db = getFirestoreDb();
+    
+    let currentLicense: CloudLicense | null = null;
+    let docRef: any = null;
+
+    if (db) {
+      try {
+        docRef = doc(db, 'licenses', cleanKey);
+        const docSnap = await withTimeout(getDoc(docRef), 2000);
+        if (docSnap.exists()) {
+          currentLicense = docSnap.data() as CloudLicense;
+        }
+      } catch (e) {
+        console.warn('Firestore fetch current license error on renew:', e);
+      }
+    }
+
+    if (!currentLicense) {
+      const localDb = getMockDb();
+      currentLicense = localDb[cleanKey] || null;
+    }
+
+    if (!currentLicense) {
+      return { success: false, message: 'الترخيص غير موجود في قاعدة البيانات' };
+    }
+
+    // Calculate base date: if current expiration is in the future, extend from that future date!
+    // Otherwise extend from today (now).
+    const now = new Date();
+    let baseDate = now;
+    if (currentLicense.expiresAt && currentLicense.type !== 'lifetime') {
+      const currentExp = new Date(currentLicense.expiresAt);
+      if (currentExp > now) {
+        baseDate = currentExp;
+      }
+    }
+
+    const newExpDate = new Date(baseDate);
+    let resolvedType: 'weekly' | 'monthly' | 'yearly' | 'lifetime' | 'trial' = currentLicense.type || 'monthly';
+
+    if (extensionType === 'weekly' || extensionType === 'trial') {
+      newExpDate.setDate(newExpDate.getDate() + 7);
+      resolvedType = extensionType === 'trial' ? 'trial' : 'weekly';
+    } else if (extensionType === 'monthly') {
+      newExpDate.setDate(newExpDate.getDate() + 30);
+      resolvedType = 'monthly';
+    } else if (extensionType === 'yearly') {
+      newExpDate.setDate(newExpDate.getDate() + 365);
+      resolvedType = 'yearly';
+    } else if (extensionType === 'lifetime') {
+      newExpDate.setFullYear(newExpDate.getFullYear() + 100);
+      resolvedType = 'lifetime';
+    } else if (extensionType === 'custom' && customDays && customDays > 0) {
+      newExpDate.setDate(newExpDate.getDate() + customDays);
+    }
+
+    const newExpiryIso = newExpDate.toISOString();
+
+    const updated: CloudLicense = {
+      ...currentLicense,
+      status: 'active',
+      expiresAt: newExpiryIso,
+      type: resolvedType
+    };
+
+    if (db && docRef) {
+      try {
+        await withTimeout(setDoc(docRef, updated), 2000);
+      } catch (cloudErr) {
+        console.warn('Firestore setDoc error on renew:', cloudErr);
+      }
+    }
+
+    const localDb = getMockDb();
+    localDb[cleanKey] = updated;
+    saveMockDb(localDb);
+
+    return { 
+      success: true, 
+      newExpiry: newExpiryIso, 
+      message: `تم تجديد الترخيص بنجاح حتى تاريخ ${newExpDate.toLocaleDateString('ar-YE')}` 
+    };
+  } catch (error: any) {
+    console.error('SaaS license renew error:', error);
+    return { success: false, message: error.message || 'حدث خطأ أثناء تجديد الترخيص' };
+  }
 }
 
 // Find license by hardware fingerprint (HWID)
