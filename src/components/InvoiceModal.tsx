@@ -76,28 +76,27 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
         const origElements = Array.from(origCard.querySelectorAll('*'));
         const clonedElements = Array.from(clonedCard.querySelectorAll('*'));
 
+        const cleanColor = (str: string, fallback: string) => {
+          if (!str || /(oklch|color-mix|light-dark)/i.test(str)) {
+            return fallback;
+          }
+          return str;
+        };
+
         const cardComputed = window.getComputedStyle(origCard);
-        clonedCard.style.color = cardComputed.color.includes('oklch') ? '#1e293b' : cardComputed.color;
-        clonedCard.style.backgroundColor = cardComputed.backgroundColor.includes('oklch') ? '#ffffff' : cardComputed.backgroundColor;
+        clonedCard.style.color = cleanColor(cardComputed.color, '#1e293b');
+        clonedCard.style.backgroundColor = cleanColor(cardComputed.backgroundColor, '#ffffff');
 
         origElements.forEach((origEl, idx) => {
           const clonedEl = clonedElements[idx] as HTMLElement;
           if (clonedEl) {
             const computed = window.getComputedStyle(origEl);
-            if (computed.color && !computed.color.includes('oklch')) {
-              clonedEl.style.color = computed.color;
-            } else if (computed.color && computed.color.includes('oklch')) {
-              clonedEl.style.color = '#1e293b';
+            clonedEl.style.color = cleanColor(computed.color, '#1e293b');
+            if (computed.backgroundColor && computed.backgroundColor !== 'rgba(0, 0, 0, 0)') {
+              clonedEl.style.backgroundColor = cleanColor(computed.backgroundColor, '#ffffff');
             }
-            if (computed.backgroundColor && !computed.backgroundColor.includes('oklch') && computed.backgroundColor !== 'rgba(0, 0, 0, 0)') {
-              clonedEl.style.backgroundColor = computed.backgroundColor;
-            } else if (computed.backgroundColor && computed.backgroundColor.includes('oklch')) {
-              clonedEl.style.backgroundColor = '#ffffff';
-            }
-            if (computed.borderColor && !computed.borderColor.includes('oklch')) {
-              clonedEl.style.borderColor = computed.borderColor;
-            } else if (computed.borderColor && computed.borderColor.includes('oklch')) {
-              clonedEl.style.borderColor = '#e2e8f0';
+            if (computed.borderColor) {
+              clonedEl.style.borderColor = cleanColor(computed.borderColor, '#e2e8f0');
             }
           }
         });
