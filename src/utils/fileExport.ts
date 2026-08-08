@@ -7,15 +7,17 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
 
-export interface SaveAndShareOptions {
+export interface FileExportOptions {
   fileName: string;
-  data: string; // Base64 or plain string
+  data: string;
+  mimeType?: string;
   isBase64?: boolean;
-  mimeType?: string; // e.g. 'application/pdf', 'text/csv', 'application/json'
   title?: string;
   text?: string;
-  folderName?: string; // If omitted, uses getCustomSaveFolder()
+  folderName?: string;
 }
+
+export type SaveAndShareOptions = FileExportOptions;
 
 /**
  * Gets user's configured custom save folder (Defaults to 'SanadAccounting')
@@ -199,81 +201,64 @@ export async function saveSilentBackupFile(
 /**
  * Saves a file and offers sharing / download options safely across Capacitor Native, WebViews, and Web Browsers.
  */
-export async function saveAndShareFile(options: SaveAndShareOptions): Promise<boolean> {
-  const {
-    fileName,
-    data,
-    isBase64 = false,
-    mimeType = 'application/json',
-    folderName
-  } = options;
+export const saveAndShareFile = async ({
+  fileName,
+  data,
+  mimeType = 'application/json',
+  isBase64 = false,
+  title = 'تصدير ملف - نظام سند',
+  text = 'ملف صادر من نظام سند المحاسبي'
+}: FileExportOptions): Promise<boolean> => {
+  try {
+    // 1. التشغيل على تطبيق الأندرويد (Capacitor Native)
+    if (Capacitor.isNativePlatform()) {
+      let base64Content = data;
+      if (!isBase64) {
+        // تحويل النص العربي و JSON إلى Base64 آمن
+        base64Content = btoa(unescape(encodeURIComponent(data)));
+      } else {
+        base64Content = data.replace(/^data:.*?;base64,/, '').replace(/\s/g, '');
+      }
 
-  const cleanData = isBase64
-    ? data.replace(/^data:.*?;base64,/, '').replace(/\s/g, '')
-    : data;
-
-  const targetFolder = folderName || 'SanadAccounting';
-
-  // 1. الحفظ المباشر بداخل أندرويد (Directory.Documents / Cache)
-  if (Capacitor.isNativePlatform()) {
-    try {
-      // محاولة الكتابة المباشرة بداخل مجلد المستندات/التحميلات
-      const fileResult = await Filesystem.writeFile({
-        path: `${targetFolder}/${fileName}`,
-        data: cleanData,
-        directory: Directory.Documents,
-        recursive: true,
-        encoding: isBase64 ? undefined : Encoding.UTF8
+      // كتابة الملف بذاكرة الهاتف الداخلية
+      const savedFile = await Filesystem.writeFile({
+        path: fileName,
+        data: base64Content,
+        directory: Directory.Cache
       });
 
-      alert(`✅ تم حفظ الملف بنجاح بداخل مجلد:\nDocuments/${targetFolder}/${fileName}`);
+      // فتح نافذة مشاركة وتنزيل الملف للجوال فوراً
+      await Share.share({
+        title,
+        text,
+        url: savedFile.uri,
+        dialogTitle: title
+      });
+
       return true;
-    } catch (docErr) {
-      console.warn('[fileExport] Documents write failed, writing to Cache fallback:', docErr);
-      try {
-        const cacheResult = await Filesystem.writeFile({
-          path: fileName,
-          data: cleanData,
-          directory: Directory.Cache,
-          recursive: true,
-          encoding: isBase64 ? undefined : Encoding.UTF8
-        });
-
-        alert(`✅ تم حفظ الملف بنجاح بداخل ذاكرة التطبيق:\n${fileName}`);
-        return true;
-      } catch (cacheErr) {
-        console.error('[fileExport] Native Save Failed:', cacheErr);
-        alert('❌ تعذر حفظ الملف على الجوال، يرجى التحقق من مساحة التخزين.');
-        return false;
-      }
     }
-  }
 
-  // 2. الحفظ بداخل متصفح الويب (Web Download Link)
-  try {
-    const blob = isBase64 
+    // 2. البيئة العادية (متصفح الويب)
+    const cleanData = isBase64 ? data.replace(/^data:.*?;base64,/, '').replace(/\s/g, '') : data;
+    const blob = isBase64
       ? base64ToBlob(cleanData, mimeType)
-      : new Blob([data], { type: mimeType });
+      : new Blob([data], { type: `${mimeType};charset=utf-8` });
 
-    const blobUrl = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = blobUrl;
+    link.href = url;
     link.download = fileName;
-    link.style.display = 'none';
     document.body.appendChild(link);
     link.click();
-
-    setTimeout(() => {
-      if (document.body.contains(link)) document.body.removeChild(link);
-      URL.revokeObjectURL(blobUrl);
-    }, 4000);
-
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     return true;
-  } catch (webErr) {
-    console.error('[fileExport] Web Download Error:', webErr);
+  } catch (err) {
+    console.error('File export error:', err);
+    alert('❌ تعذر حفظ أو مشاركة الملف على الهاتف.');
     return false;
   }
-}
+};
 
 /**
  * Triggers Google Drive upload / export dialog for a backup or document
@@ -304,22 +289,14 @@ export async function uploadToGoogleDrive(
   return true;
 }
 
-/**
- * Converts a Base64 string to Blob for Web browser download
- */
 export function base64ToBlob(base64Data: string, contentType: string = 'application/pdf'): Blob {
   const cleanBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
   const sanitized = cleanBase64.replace(/\s/g, '');
   const byteCharacters = atob(sanitized);
-  const byteArrays = [];
-  for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-    const slice = byteCharacters.slice(offset, offset + 512);
-    const byteNumbers = new Array(slice.length);
-    for (let i = 0; i < slice.length; i++) {
-      byteNumbers[i] = slice.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
-    byteArrays.push(byteArray);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
   }
-  return new Blob(byteArrays, { type: contentType });
+  const byteArray = new Uint8Array(byteNumbers);
+  return new Blob([byteArray], { type: contentType });
 }
