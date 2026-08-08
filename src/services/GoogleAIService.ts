@@ -10,18 +10,13 @@ import { GoogleGenAI } from '@google/genai';
  * خدمة الذكاء الاصطناعي من جوجل لتشخيص أعطال الهواتف والمساعد الصوتي مع دعم الاستجابة أوفلاين
  */
 
-// Initialize Gemini Client safely across Vite/Capacitor Native environments
+// Initialize Gemini Client safely
 const getGeminiClient = () => {
+  const apiKey = typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '';
+  if (!apiKey) {
+    return null;
+  }
   try {
-    // دعم آمن لمفاتيح البيئة بداخل Vite و Capacitor
-    const apiKey = 
-      (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) ||
-      (typeof process !== 'undefined' && process.env && process.env.GEMINI_API_KEY) || 
-      '';
-
-    if (!apiKey) {
-      return null;
-    }
     return new GoogleGenAI({ apiKey });
   } catch (err) {
     console.warn('GoogleGenAI initialization warning:', err);
@@ -53,36 +48,30 @@ export async function diagnosePhoneIssue(symptoms: string): Promise<PhoneDiagnos
 "${symptoms}"
 
 قم بإرجاع رد باللغة العربية بأسلوب فني منظم ودقيق يتضمن:
-1. المشكلة الرئيسية بالتفصيل.
-2. الأدوات الاحترافية الموصى بها.
+1. المشكلة الرئيسية بالتفصيل (مثل: عطل آيسي الشحن Hydra/Tristar، سحب عالي بالباور سبلاي، شورت صريح، كراش بالروم، خروج تلقائي من وضع الداونلود، تخطي حساب FRP، عطل UFS/eMMC).
+2. الأدوات الاحترافية الموصى بها (مثل: Pandora Box, Chimera Tool, Z3X, UnlockTool, JCID, Power Supply, Multimeter, Hot Air Station).
 3. القطع المطلوب استبدالها (إن وجدت).
 4. خطوات الصيانة والإصلاح الفنية بالترتيب.
+
+اجعل الإجابة واضحة ومباشرة ومهنية.
       `.trim();
 
-      // إضافة مهلة أمان (Timeout) 4 ثواني، إن لم يستجب السيرفر يتم الانتقال فوراً للوضع الأوفلاين
-      const apiPromise = ai.models.generateContent({
+      const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt
       });
 
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Network Timeout')), 4000)
-      );
+      const text = response.text || '';
 
-      const response: any = await Promise.race([apiPromise, timeoutPromise]);
-      const text = response?.text || '';
-
-      if (text) {
-        return {
-          success: true,
-          problem: 'تشخيص فني بواسطة ذكاء جوجل (Gemini)',
-          category: symptoms.includes('تفليش') || symptoms.includes('رمز') || symptoms.includes('FRP') ? 'software' : 'hardware',
-          parts_needed: ['قطع غيار مخصصة للموديل'],
-          tools_recommended: ['Pandora', 'UnlockTool', 'Power Supply', 'Multimeter'],
-          steps: ['فحص خطوط VBUS و VBAT', 'قياس المكونات الكبيرة', 'تنفيذ خطوات التفليش أو الاستبدال'],
-          response: text
-        };
-      }
+      return {
+        success: true,
+        problem: 'تشخيص فني بواسطة ذكاء جوجل (Gemini)',
+        category: symptoms.includes('تفليش') || symptoms.includes('رمز') || symptoms.includes('FRP') ? 'software' : 'hardware',
+        parts_needed: ['قطع غيار مخصصة للموديل'],
+        tools_recommended: ['Pandora', 'UnlockTool', 'Power Supply', 'Multimeter'],
+        steps: ['فحص خطوط VBUS و VBAT', 'قياس المكونات الكبيرة', 'تنفيذ خطوات التفليش أو الاستبدال'],
+        response: text
+      };
     } catch (err) {
       console.warn('Gemini API diagnosis fallback engaged:', err);
     }
@@ -153,7 +142,7 @@ export async function diagnosePhoneIssue(symptoms: string): Promise<PhoneDiagnos
         steps,
         response
       });
-    }, 200);
+    }, 500);
   });
 }
 
@@ -165,7 +154,7 @@ export async function processVoiceAssistantQuery(query: string): Promise<string>
 
   if (ai) {
     try {
-      const apiPromise = ai.models.generateContent({
+      const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: `
 أنت المساعد الصوتي والذكي لتطبيق "سند" لإدارة ورش صيانة وتفليش الهواتف والمحاسبة.
@@ -174,13 +163,7 @@ export async function processVoiceAssistantQuery(query: string): Promise<string>
         `.trim()
       });
 
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Network Timeout')), 3000)
-      );
-
-      const response: any = await Promise.race([apiPromise, timeoutPromise]);
-
-      if (response?.text) {
+      if (response.text) {
         return response.text;
       }
     } catch (err) {
