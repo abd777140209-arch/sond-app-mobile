@@ -196,17 +196,6 @@ export async function saveSilentBackupFile(
   }
 }
 
-function isShareCancelError(err: any): boolean {
-  if (!err) return false;
-  const msg = (typeof err === 'string' ? err : err.message || String(err)).toLowerCase();
-  return (
-    msg.includes('cancel') ||
-    msg.includes('dismiss') ||
-    msg.includes('abort') ||
-    msg.includes('gesture')
-  );
-}
-
 /**
  * Saves a file and offers sharing / download options safely across Capacitor Native, WebViews, and Web Browsers.
  */
@@ -215,79 +204,52 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
     fileName,
     data,
     isBase64 = false,
-    mimeType = 'text/csv',
-    title = 'تصدير مستند - نظام سند',
-    text = 'ملف مستند من نظام سند المحاسبي',
+    mimeType = 'application/json',
+    folderName
   } = options;
 
   const cleanData = isBase64
     ? data.replace(/^data:.*?;base64,/, '').replace(/\s/g, '')
     : data;
 
-  const isNative = Capacitor.isNativePlatform() || 
-                   Capacitor.getPlatform() === 'android' || 
-                   Capacitor.getPlatform() === 'ios' || 
-                   Capacitor.getPlatform() !== 'web' ||
-                   Capacitor.isPluginAvailable('Filesystem') ||
-                   Capacitor.isPluginAvailable('Share');
+  const targetFolder = folderName || 'SanadAccounting';
 
-  if (isNative) {
+  // 1. الحفظ المباشر بداخل أندرويد (Directory.Documents / Cache)
+  if (Capacitor.isNativePlatform()) {
     try {
-      // 1. كتابة الملف في Directory.Cache
+      // محاولة الكتابة المباشرة بداخل مجلد المستندات/التحميلات
       const fileResult = await Filesystem.writeFile({
-        path: fileName,
+        path: `${targetFolder}/${fileName}`,
         data: cleanData,
-        directory: Directory.Cache,
+        directory: Directory.Documents,
         recursive: true,
         encoding: isBase64 ? undefined : Encoding.UTF8
       });
 
-      // 2. الحصول على URI المحول لأندرويد
-      const fileUri = fileResult.uri;
-
-      // 3. فتح شاشة المشاركة الرسمية بملف صريح مباشرة
+      alert(`✅ تم حفظ الملف بنجاح بداخل مجلد:\nDocuments/${targetFolder}/${fileName}`);
+      return true;
+    } catch (docErr) {
+      console.warn('[fileExport] Documents write failed, writing to Cache fallback:', docErr);
       try {
-        await Share.share({
-          title: title || fileName,
-          text: text,
-          url: fileUri,
-          dialogTitle: title || 'حفظ أو مشاركة المستند'
+        const cacheResult = await Filesystem.writeFile({
+          path: fileName,
+          data: cleanData,
+          directory: Directory.Cache,
+          recursive: true,
+          encoding: isBase64 ? undefined : Encoding.UTF8
         });
-        return true;
-      } catch (shareErr: any) {
-        if (isShareCancelError(shareErr)) {
-          console.log('[fileExport] Share canceled by user:', shareErr?.message || shareErr);
-          return true;
-        }
 
-        console.warn('[fileExport] File Share failed, attempting text share fallback:', shareErr);
-
-        // Fallback: إذا فشلت مشاركة الملف كـ URI لسبب تقني آخر غير الإلغاء، نرسله كـ نص إن كان غير base64
-        if (!isBase64 && cleanData) {
-          try {
-            await Share.share({
-              title: title || fileName,
-              text: `${text}\n\n${cleanData.substring(0, 2000)}...`,
-              dialogTitle: title
-            });
-            return true;
-          } catch (textShareErr: any) {
-            if (isShareCancelError(textShareErr)) {
-              console.log('[fileExport] Text share canceled by user');
-              return true;
-            }
-            console.warn('[fileExport] Text share failed:', textShareErr?.message || textShareErr);
-          }
-        }
+        alert(`✅ تم حفظ الملف بنجاح بداخل ذاكرة التطبيق:\n${fileName}`);
         return true;
+      } catch (cacheErr) {
+        console.error('[fileExport] Native Save Failed:', cacheErr);
+        alert('❌ تعذر حفظ الملف على الجوال، يرجى التحقق من مساحة التخزين.');
+        return false;
       }
-    } catch (fsErr: any) {
-      console.warn('[fileExport] Filesystem write error:', fsErr);
-      // Fall through to Web Browser Fallback if file system write failed
     }
   }
 
-  // Web Browser Fallback
+  // 2. الحفظ بداخل متصفح الويب (Web Download Link)
   try {
     const blob = isBase64 
       ? base64ToBlob(cleanData, mimeType)
@@ -308,7 +270,7 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
 
     return true;
   } catch (webErr) {
-    console.error('[fileExport] Web download error:', webErr);
+    console.error('[fileExport] Web Download Error:', webErr);
     return false;
   }
 }
