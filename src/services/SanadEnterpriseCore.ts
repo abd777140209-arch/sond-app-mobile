@@ -3,11 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/**
- * 🛡️ Sanad Enterprise Core Services
- * نظام التنبيهات الذكية + النسخ الاحتياطي التلقائي وسجل تدقيق المالك (Audit Trail)
- */
-
 import { getBackupTimestamp, saveAndShareFile } from '../utils/fileExport';
 
 export interface EnterpriseAlert {
@@ -39,7 +34,6 @@ export const checkEnterpriseAlerts = (
   const alerts: EnterpriseAlert[] = [];
   const now = new Date();
 
-  // أ) فحص الأجهزة المتأخرة بداخل الورشة (أكثر من 3 أيام)
   pendingDevices.forEach((device) => {
     const createdDate = new Date(device.created_at || device.createdAt || Date.now());
     const diffTime = Math.abs(now.getTime() - createdDate.getTime());
@@ -56,7 +50,6 @@ export const checkEnterpriseAlerts = (
     }
   });
 
-  // ب) فحص نقص قطع الغيار بداخل المخزون (أقل من أو يساوي 2 شاشة/قطعة)
   inventoryParts.forEach((part) => {
     const qty = Number(part.quantity ?? part.stock ?? 0);
     if (qty <= 2) {
@@ -78,21 +71,23 @@ export const checkEnterpriseAlerts = (
  */
 export const createAutoBackup = () => {
   try {
-    const backupData = {
+    const fullSystemData = {
       timestamp: new Date().toISOString(),
       version: '5.0-Enterprise',
       pendingDevices: JSON.parse(localStorage.getItem('sanad_pending_devices_offline') || '[]'),
+      customers: JSON.parse(localStorage.getItem('sanad_customers') || '[]'),
+      vouchers: JSON.parse(localStorage.getItem('sanad_vouchers') || '[]'),
+      invoices: JSON.parse(localStorage.getItem('sanad_invoices') || '[]'),
       auditLogs: JSON.parse(localStorage.getItem(STORAGE_AUDIT_KEY) || '[]')
     };
 
     const backupsHistory = JSON.parse(localStorage.getItem(STORAGE_BACKUP_KEY) || '[]');
-    // الاحتفاظ بآخر 5 نسخ احتياطية تلقائية
-    backupsHistory.unshift(backupData);
+    backupsHistory.unshift(fullSystemData);
     if (backupsHistory.length > 5) backupsHistory.pop();
 
     localStorage.setItem(STORAGE_BACKUP_KEY, JSON.stringify(backupsHistory));
 
-    return { success: true, count: backupsHistory.length, lastBackup: backupData.timestamp };
+    return { success: true, count: backupsHistory.length, lastBackup: fullSystemData.timestamp };
   } catch (error: any) {
     console.error('Auto Backup Error:', error);
     return { success: false, error: error?.message || 'خطأ أثناء النسخ' };
@@ -100,23 +95,37 @@ export const createAutoBackup = () => {
 };
 
 /**
- * 3. دالة تصدير النسخة الاحتياطية كملف JSON للتنزيل أو المشاركة
+ * 3. دالة تصدير النسخة الاحتياطية الشاملة كملف JSON لتأمين بيانات الورشة والحسابات
  */
 export const downloadBackupFile = async () => {
-  const backups = localStorage.getItem(STORAGE_BACKUP_KEY);
-  if (!backups) {
-    alert('لا توجد نسخ احتياطية صادرة بعد.');
-    return;
-  }
+  try {
+    // تجميع كافة بيانات النظام المحاسبي لضمان عدم ضياع أي سجل
+    const fullExportData = {
+      appName: 'Sanad Accounting System',
+      exportDate: new Date().toISOString(),
+      version: '5.0-Enterprise',
+      devices: JSON.parse(localStorage.getItem('sanad_pending_devices_offline') || '[]'),
+      customers: JSON.parse(localStorage.getItem('sanad_customers') || '[]'),
+      vouchers: JSON.parse(localStorage.getItem('sanad_vouchers') || '[]'),
+      invoices: JSON.parse(localStorage.getItem('sanad_invoices') || '[]'),
+      auditLogs: JSON.parse(localStorage.getItem(STORAGE_AUDIT_KEY) || '[]'),
+      autoBackups: JSON.parse(localStorage.getItem(STORAGE_BACKUP_KEY) || '[]')
+    };
 
-  const fileName = `sanad_backup_${getBackupTimestamp()}.json`;
-  await saveAndShareFile({
-    fileName,
-    data: backups,
-    mimeType: 'application/json',
-    title: 'نسخة احتياطية - نظام سند',
-    text: `النسخة الاحتياطية لنظام سند المحاسبي بتاريخ ${getBackupTimestamp()}`
-  });
+    const jsonString = JSON.stringify(fullExportData, null, 2);
+    const fileName = `sanad_full_backup_${getBackupTimestamp()}.json`;
+
+    await saveAndShareFile({
+      fileName,
+      data: jsonString,
+      mimeType: 'application/json',
+      title: 'نسخة احتياطية شاملة - نظام سند',
+      text: `نسخة احتياطية شاملة لنظام سند المحاسبي بتاريخ ${getBackupTimestamp()}`
+    });
+  } catch (err: any) {
+    console.error('Download Backup File Error:', err);
+    alert('❌ حدث خطأ أثناء تجميع بيانات النسخة الاحتياطية.');
+  }
 };
 
 /**
@@ -127,18 +136,22 @@ export const logOwnerAuditAction = (
   details: string, 
   performedBy: string = 'System/User'
 ) => {
-  const logs: AuditLogItem[] = JSON.parse(localStorage.getItem(STORAGE_AUDIT_KEY) || '[]');
-  const newLog: AuditLogItem = {
-    id: `log-${Date.now()}`,
-    timestamp: new Date().toISOString(),
-    actionType,
-    details,
-    performedBy
-  };
+  try {
+    const logs: AuditLogItem[] = JSON.parse(localStorage.getItem(STORAGE_AUDIT_KEY) || '[]');
+    const newLog: AuditLogItem = {
+      id: `log-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      actionType,
+      details,
+      performedBy
+    };
 
-  logs.unshift(newLog);
-  // الاحتفاظ بآخر 100 حركة تدقيق
-  if (logs.length > 100) logs.pop();
+    logs.unshift(newLog);
+    if (logs.length > 100) logs.pop();
 
-  localStorage.setItem(STORAGE_AUDIT_KEY, JSON.stringify(logs));
+    localStorage.setItem(STORAGE_AUDIT_KEY, JSON.stringify(logs));
+  } catch (e) {
+    console.warn('Audit log write error:', e);
+  }
 };
+

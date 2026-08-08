@@ -30,7 +30,15 @@ const STORAGE_KEY_PENDING_DEVICES = 'sanad_pending_devices_offline';
 export const saveDeviceReceiptOffline = (deviceData: Omit<OfflineDeviceRecord, 'local_id' | 'created_at' | 'synced'>) => {
   try {
     const existingStr = localStorage.getItem(STORAGE_KEY_PENDING_DEVICES);
-    const existing: OfflineDeviceRecord[] = existingStr ? JSON.parse(existingStr) : [];
+    let existing: OfflineDeviceRecord[] = [];
+    
+    if (existingStr) {
+      try {
+        existing = JSON.parse(existingStr);
+      } catch (e) {
+        existing = [];
+      }
+    }
 
     const offlineRecord: OfflineDeviceRecord = {
       ...deviceData,
@@ -73,7 +81,7 @@ export const getPendingOfflineRecords = (): OfflineDeviceRecord[] => {
 };
 
 /**
- * 3. مزامنة البيانات المخزنة أوفلاين مع السيرفر تلقائياً عند عودة الإنترنت
+ * 3. مزامنة البيانات المخزنة أوفلاين مع السيرفر تلقائياً عند عودة الإنترنت بدون تعليق الواجهة
  */
 export const syncOfflineDataWithServer = async (
   apiBaseUrl: string, 
@@ -97,14 +105,21 @@ export const syncOfflineDataWithServer = async (
 
   for (const record of pendingRecords) {
     try {
+      // إدخال مهلة زمنية (Timeout 3 ثوانٍ) لمنع تجمد التطبيق عند بطء الشبكة
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+
       const response = await fetch(`${apiBaseUrl}/api/service/create-device`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': token ? `Bearer ${token}` : ''
         },
-        body: JSON.stringify(record)
+        body: JSON.stringify(record),
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         syncedCount++;
@@ -112,7 +127,7 @@ export const syncOfflineDataWithServer = async (
         remainingRecords.push(record);
       }
     } catch (error) {
-      console.warn('فشلت المزامنة للكارت:', record.local_id, error);
+      console.warn('فشلت المزامنة للكارت، وسيستمر التخزين المحلي:', record.local_id);
       remainingRecords.push(record);
     }
   }
@@ -124,7 +139,7 @@ export const syncOfflineDataWithServer = async (
 };
 
 /**
- * 4. مسح السجلات المعلقة يدوياً (إن لزم الأمر)
+ * 4. مسح السجلات المعلقة يدوياً
  */
 export const clearPendingRecords = (): void => {
   localStorage.removeItem(STORAGE_KEY_PENDING_DEVICES);
