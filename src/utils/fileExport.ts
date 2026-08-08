@@ -196,6 +196,17 @@ export async function saveSilentBackupFile(
   }
 }
 
+function isShareCancelError(err: any): boolean {
+  if (!err) return false;
+  const msg = (typeof err === 'string' ? err : err.message || String(err)).toLowerCase();
+  return (
+    msg.includes('cancel') ||
+    msg.includes('dismiss') ||
+    msg.includes('abort') ||
+    msg.includes('gesture')
+  );
+}
+
 /**
  * Saves a file and offers sharing / download options safely across Capacitor Native, WebViews, and Web Browsers.
  */
@@ -235,31 +246,44 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
       const fileUri = fileResult.uri;
 
       // 3. فتح شاشة المشاركة الرسمية بملف صريح مباشرة
-      await Share.share({
-        title: title || fileName,
-        text: text,
-        url: fileUri,
-        dialogTitle: title || 'حفظ أو مشاركة المستند'
-      });
-
-      return true;
-    } catch (nativeErr: any) {
-      console.error('[fileExport] Native Export Error:', nativeErr);
-      
-      // Fallback: إذا فشلت مشاركة الملف كـ URI، نرسله كـ نص صريح إن كان JSON/CSV
-      if (!isBase64 && cleanData) {
-        try {
-          await Share.share({
-            title: title || fileName,
-            text: `${text}\n\n${cleanData.substring(0, 2000)}...`,
-            dialogTitle: title
-          });
+      try {
+        await Share.share({
+          title: title || fileName,
+          text: text,
+          url: fileUri,
+          dialogTitle: title || 'حفظ أو مشاركة المستند'
+        });
+        return true;
+      } catch (shareErr: any) {
+        if (isShareCancelError(shareErr)) {
+          console.log('[fileExport] Share canceled by user:', shareErr?.message || shareErr);
           return true;
-        } catch (textShareErr) {
-          console.error('[fileExport] Text share failed:', textShareErr);
         }
+
+        console.warn('[fileExport] File Share failed, attempting text share fallback:', shareErr);
+
+        // Fallback: إذا فشلت مشاركة الملف كـ URI لسبب تقني آخر غير الإلغاء، نرسله كـ نص إن كان غير base64
+        if (!isBase64 && cleanData) {
+          try {
+            await Share.share({
+              title: title || fileName,
+              text: `${text}\n\n${cleanData.substring(0, 2000)}...`,
+              dialogTitle: title
+            });
+            return true;
+          } catch (textShareErr: any) {
+            if (isShareCancelError(textShareErr)) {
+              console.log('[fileExport] Text share canceled by user');
+              return true;
+            }
+            console.warn('[fileExport] Text share failed:', textShareErr?.message || textShareErr);
+          }
+        }
+        return true;
       }
-      // If native sharing fails completely, allow falling through to web download fallback
+    } catch (fsErr: any) {
+      console.warn('[fileExport] Filesystem write error:', fsErr);
+      // Fall through to Web Browser Fallback if file system write failed
     }
   }
 
