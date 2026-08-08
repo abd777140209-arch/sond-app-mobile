@@ -102,20 +102,19 @@ export const getSafeHtml2CanvasOptions = (customOptions: any = {}): any => {
     logging: false,
     backgroundColor: '#ffffff',
     onclone: (clonedDoc: Document) => {
-      // إزالة واستبدال أي ألوان oklab/oklch غير مدعومة بداخل العنصر المصور لتفادي انهيار html2canvas
-      const allElements = clonedDoc.querySelectorAll('*');
-      allElements.forEach((el: any) => {
+      // تنظيف شامل لأي ألوان oklch/oklab في العناصر المصورة لتفادي انهيار html2canvas
+      const elements = clonedDoc.querySelectorAll('*');
+      elements.forEach((el: any) => {
         if (el.style) {
-          try {
-            const computedStyle = window.getComputedStyle(el);
-            if (computedStyle.color && (computedStyle.color.includes('oklab') || computedStyle.color.includes('oklch'))) {
-              el.style.color = '#000000';
-            }
-            if (computedStyle.backgroundColor && (computedStyle.backgroundColor.includes('oklab') || computedStyle.backgroundColor.includes('oklch'))) {
-              el.style.backgroundColor = '#ffffff';
-            }
-          } catch (e) {}
-
+          if (el.style.color) {
+            el.style.color = el.style.color.replace(/oklch\([^)]+\)/g, '#000000').replace(/oklab\([^)]+\)/g, '#000000');
+          }
+          if (el.style.backgroundColor) {
+            el.style.backgroundColor = el.style.backgroundColor.replace(/oklch\([^)]+\)/g, '#ffffff').replace(/oklab\([^)]+\)/g, '#ffffff');
+          }
+          if (el.style.borderColor) {
+            el.style.borderColor = el.style.borderColor.replace(/oklch\([^)]+\)/g, '#cbd5e1').replace(/oklab\([^)]+\)/g, '#cbd5e1');
+          }
           try {
             sanitizeElementStyles(el, clonedDoc);
           } catch (e) {}

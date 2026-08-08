@@ -91,11 +91,21 @@ export default function CustomerStatementModal({
 
     try {
       const element = statementRef.current;
-      const canvas = await html2canvas(element, getSafeHtml2CanvasOptions());
+      const canvas = await html2canvas(element, getSafeHtml2CanvasOptions({
+        onclone: (clonedDoc: Document) => {
+          const elements = clonedDoc.querySelectorAll('*');
+          elements.forEach((el: any) => {
+            if (el.style) {
+              el.style.color = el.style.color?.replace(/oklch\([^)]+\)/g, '#000000').replace(/oklab\([^)]+\)/g, '#000000');
+              el.style.backgroundColor = el.style.backgroundColor?.replace(/oklch\([^)]+\)/g, '#ffffff').replace(/oklab\([^)]+\)/g, '#ffffff');
+              el.style.borderColor = el.style.borderColor?.replace(/oklch\([^)]+\)/g, '#cbd5e1').replace(/oklab\([^)]+\)/g, '#cbd5e1');
+            }
+          });
+        }
+      }));
 
       const imgData = canvas.toDataURL('image/png');
       const imgWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
       const pdf = new jsPDF('p', 'mm', 'a4');
@@ -113,7 +123,64 @@ export default function CustomerStatementModal({
         text: `كشف حساب العميل ${customer.name} - إجمالي المديونية: ${customer.totalDebt.toLocaleString()} ${currency}`
       });
     } catch (err) {
-      console.error('Customer statement PDF generation error:', err);
+      console.error('Customer statement PDF generation error, falling back to HTML export:', err);
+      try {
+        const fileName = `كشف_حساب_${customer.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.html`;
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html dir="rtl" lang="ar">
+          <head>
+            <meta charset="UTF-8"/>
+            <title>كشف حساب - ${customer.name}</title>
+            <style>
+              body { font-family: sans-serif; padding: 20px; color: #1e293b; background: #fff; }
+              h2 { color: #0f172a; border-bottom: 2px solid #0284c7; padding-bottom: 8px; }
+              table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }
+              th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: right; }
+              th { background: #f1f5f9; }
+              .total { font-weight: bold; margin-top: 16px; font-size: 15px; color: #0284c7; }
+            </style>
+          </head>
+          <body>
+            <h2>كشف حساب العميل: ${customer.name}</h2>
+            <p><b>رقم الهاتف:</b> ${customer.phone || 'غير محدد'}</p>
+            <p><b>التاريخ:</b> ${new Date().toLocaleDateString('ar-YE')}</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>التاريخ</th>
+                  <th>الوصف / البيان</th>
+                  <th>مدين (له)</th>
+                  <th>دائن (عليه)</th>
+                  <th>الرصيد المتبقي</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${ledgerWithBalance.map(s => `
+                  <tr>
+                    <td>${s.date}</td>
+                    <td>${s.description}</td>
+                    <td>${s.debit ? s.debit.toLocaleString() + ' ' + currency : '—'}</td>
+                    <td>${s.credit ? s.credit.toLocaleString() + ' ' + currency : '—'}</td>
+                    <td>${s.balance.toLocaleString()} ${currency}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            <div class="total">إجمالي المديونية المتبقية: ${customer.totalDebt.toLocaleString()} ${currency}</div>
+          </body>
+          </html>
+        `;
+        await saveAndShareFile({
+          fileName,
+          data: htmlContent,
+          mimeType: 'text/html',
+          title: `كشف حساب - ${customer.name}`,
+          text: `كشف حساب العميل ${customer.name}`
+        });
+      } catch (fallbackErr) {
+        console.error('HTML statement export fallback error:', fallbackErr);
+      }
     } finally {
       setIsGeneratingPDF(false);
     }
