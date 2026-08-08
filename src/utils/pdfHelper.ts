@@ -4,6 +4,10 @@
  */
 
 import { Options } from 'html2canvas';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import { saveAndShareFile } from './fileExport';
+import { Capacitor } from '@capacitor/core';
 
 /**
  * Robustly removes oklch, color-mix, and light-dark functions from CSS text,
@@ -202,4 +206,97 @@ export function getSafeHtml2CanvasOptions(customOptions: Partial<Options> = {}):
   };
 }
 
+/**
+ * 📄 تصدير كائن jsPDF وحفظه/مشاركته بشكل آمن عبر Base64 بدون استخدام window.print() أو window.open()
+ */
+export async function saveJsPDFFile(pdf: jsPDF, fileName: string, title: string = 'مستند PDF'): Promise<boolean> {
+  try {
+    const dataUri = pdf.output('datauristring');
+    return await saveAndShareFile({
+      fileName: fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`,
+      data: dataUri,
+      isBase64: true,
+      mimeType: 'application/pdf',
+      title,
+      text: title
+    });
+  } catch (err) {
+    console.error('Error saving jsPDF file:', err);
+    return false;
+  }
+}
 
+/**
+ * 🖨️ تحويل عنصر HTML إلى PDF وتصديره/حفظه مباشرة متوافقاً مع Android WebView
+ */
+export async function exportElementToPDF(
+  element: HTMLElement | null,
+  fileName: string,
+  title: string = 'تصدير PDF'
+): Promise<boolean> {
+  if (!element) {
+    console.warn('exportElementToPDF: element is null');
+    return false;
+  }
+
+  try {
+    const safeOptions = getSafeHtml2CanvasOptions();
+    const canvas = await html2canvas(element, safeOptions as Options);
+    const imgData = canvas.toDataURL('image/png');
+
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+
+    return await saveJsPDFFile(pdf, fileName, title);
+  } catch (err) {
+    console.error('Error exporting element to PDF:', err);
+    return false;
+  }
+}
+
+/**
+ * 📱 طباعة وتصدير مستند HTML بتحويله إلى ملف محلي أو Base64 يمر مباشرة عبر saveAndShareFile
+ */
+export async function printOrSavePDFHTML(
+  htmlContent: string,
+  fileName: string,
+  title: string = 'طباعة مستند'
+): Promise<boolean> {
+  const isNative = Capacitor.isNativePlatform();
+
+  if (isNative) {
+    return await saveAndShareFile({
+      fileName: fileName.endsWith('.html') || fileName.endsWith('.pdf') ? fileName : `${fileName}.html`,
+      data: htmlContent,
+      mimeType: fileName.endsWith('.pdf') ? 'application/pdf' : 'text/html',
+      title,
+      text: title
+    });
+  }
+
+  try {
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+      }, 300);
+      return true;
+    }
+  } catch (e) {
+    console.warn('Window print fallback engaged:', e);
+  }
+
+  return await saveAndShareFile({
+    fileName: fileName.endsWith('.html') ? fileName : `${fileName}.html`,
+    data: htmlContent,
+    mimeType: 'text/html',
+    title,
+    text: title
+  });
+}
