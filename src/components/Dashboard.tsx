@@ -28,10 +28,12 @@ import {
   Briefcase,
   ClipboardCheck,
   History,
+  Download,
   Settings as SettingsIcon
 } from 'lucide-react';
 import { Product, Customer, Invoice, Payment, Transaction, SystemSettings, Employee } from '../types';
 import { soundManager } from '../utils/sound';
+import { downloadBackupFile } from '../services/SanadEnterpriseCore';
 
 interface DashboardProps {
   products: Product[];
@@ -80,12 +82,13 @@ export default function Dashboard({
   // Speech synthesis audio summary
   const handleSpeakSummary = () => {
     setShowZaraModal(true);
+    soundManager.playSuccessChime();
     if (typeof window === 'undefined' || !('speechSynthesis' in window) || !window.speechSynthesis) {
       return;
     }
     try {
       window.speechSynthesis.cancel();
-      const text = `أهلاً بك! أنا زارا، المساعد المحاسبي الذكي لنظام سند في نشاطك التجاري ${settings.storeName || 'سند'}. إليك التقرير المالي الصوتي المباشر: إجمالي المبيعات بلغ ${totalSales.toLocaleString()} ${settings.currency}. إجمالي ديون العملاء المتبقية ${totalDebts.toLocaleString()} ${settings.currency}. عدد الأصناف بالمخزن ${activeProducts.length} صنف بقيمة أرباح متوقعة قدرها ${expectedProfit.toLocaleString()} ${settings.currency}. شكراً لاستخدامك نظام سند المحاسبي.`;
+      const text = `أهلاً بك! أنا زارا، المساعد المحاسبي الذكي لنظام سند في نشاطك التجاري ${settings.storeName || 'سند'}. إجمالي المبيعات بلغ ${totalSales.toLocaleString()} ${settings.currency}. إجمالي ديون العملاء المتبقية ${totalDebts.toLocaleString()} ${settings.currency}. شكراً لاستخدامك نظام سند المحاسبي.`;
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'ar-SA';
       utterance.rate = 0.95;
@@ -230,6 +233,22 @@ export default function Dashboard({
             <div className="text-right">
               <div className="text-white">التقرير الصوتي</div>
               <div className="text-[9px] text-blue-200">قراءة صوتية ذكية</div>
+            </div>
+          </button>
+
+          {/* Instant Backup Export Button */}
+          <button
+            onClick={async () => {
+              soundManager.playSuccessChime();
+              await downloadBackupFile();
+            }}
+            className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-700 hover:from-purple-500 hover:to-indigo-600 text-white px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl sm:rounded-2xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-purple-500/20 active:scale-95"
+            title="تصدير نسخة احتياطية شاملة للجوال"
+          >
+            <Download className="w-4 h-4 text-purple-200" />
+            <div className="text-right">
+              <div className="text-white">نسخة احتياطية</div>
+              <div className="text-[9px] text-purple-200">حفظ وحماية البيانات</div>
             </div>
           </button>
 
