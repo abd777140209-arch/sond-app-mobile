@@ -282,8 +282,10 @@ export async function uploadToGoogleDrive(
     text: `نسخة احتياطية / مستند لنظام سند ${driveAccount ? `- الحساب: ${driveAccount}` : ''}`
   });
 
-  if (!isNative) {
-    window.open('https://drive.google.com/drive/my-drive', '_blank');
+  if (!isNative && typeof navigator !== 'undefined' && navigator.onLine) {
+    try {
+      window.open('https://drive.google.com/drive/my-drive', '_blank');
+    } catch (e) {}
   }
 
   return true;

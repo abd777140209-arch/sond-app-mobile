@@ -25,6 +25,13 @@ export interface OfflineDeviceRecord {
 const STORAGE_KEY_PENDING_DEVICES = 'sanad_pending_devices_offline';
 
 /**
+ * 0. التحقق السريع من توفر الاتصال بالإنترنت
+ */
+export const isOnline = (): boolean => {
+  return typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+};
+
+/**
  * 1. حفظ كارت استلام جهاز محلياً عند عدم توفر اتصال بالشبكة
  */
 export const saveDeviceReceiptOffline = (deviceData: Omit<OfflineDeviceRecord, 'local_id' | 'created_at' | 'synced'>) => {
@@ -93,6 +100,12 @@ export const syncOfflineDataWithServer = async (
     return { syncedCount: 0, remainingCount: 0 };
   }
 
+  // إذا كان الجهاز يعمل أوفلاين، عدم إجراء أي طلبات شبكة لمنع أخطاء ERR_INTERNET_DISCONNECTED
+  if (!isOnline()) {
+    console.log('📱 الوضع الحالي أوفلاين (بدون إنترنت) - تم تأجيل المزامنة والحفاظ على البيانات محلياً.');
+    return { syncedCount: 0, remainingCount: pendingRecords.length };
+  }
+
   if (!apiBaseUrl) {
     console.log('ملاحظة: السيرفر غير معرف، البيانات محفوظة محلياً بنجاح.');
     return { syncedCount: 0, remainingCount: pendingRecords.length };
@@ -104,6 +117,11 @@ export const syncOfflineDataWithServer = async (
   const remainingRecords: OfflineDeviceRecord[] = [];
 
   for (const record of pendingRecords) {
+    if (!isOnline()) {
+      remainingRecords.push(record);
+      continue;
+    }
+
     try {
       // إدخال مهلة زمنية (Timeout 3 ثوانٍ) لمنع تجمد التطبيق عند بطء الشبكة
       const controller = new AbortController();
