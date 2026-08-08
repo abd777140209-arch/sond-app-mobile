@@ -213,7 +213,14 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
     ? data.replace(/^data:.*?;base64,/, '').replace(/\s/g, '')
     : data;
 
-  if (Capacitor.isNativePlatform()) {
+  const isNative = Capacitor.isNativePlatform() || 
+                   Capacitor.getPlatform() === 'android' || 
+                   Capacitor.getPlatform() === 'ios' || 
+                   Capacitor.getPlatform() !== 'web' ||
+                   Capacitor.isPluginAvailable('Filesystem') ||
+                   Capacitor.isPluginAvailable('Share');
+
+  if (isNative) {
     try {
       // 1. كتابة الملف في Directory.Cache
       const fileResult = await Filesystem.writeFile({
@@ -227,7 +234,7 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
       // 2. الحصول على URI المحول لأندرويد
       const fileUri = fileResult.uri;
 
-      // 3. فتح شاشة المشاركة الرسمية بملف صريح
+      // 3. فتح شاشة المشاركة الرسمية بملف صريح مباشرة
       await Share.share({
         title: title || fileName,
         text: text,
@@ -252,7 +259,7 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
           console.error('[fileExport] Text share failed:', textShareErr);
         }
       }
-      return false;
+      // If native sharing fails completely, allow falling through to web download fallback
     }
   }
 
