@@ -57,5 +57,5 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Sanad-Accounting-APK-v2
+          name: SanadAccounting-debug.apk
           path: android/app/build/outputs/apk/debug/app-debug.apk

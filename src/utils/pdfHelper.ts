@@ -63,47 +63,103 @@ function sanitizeElementStyles(el: HTMLElement, doc: Document) {
 }
 
 export const getSafeHtml2CanvasOptions = (customOptions: any = {}): any => {
+  const { onclone: customOnclone, ...otherCustomOptions } = customOptions;
+
   return {
     scale: 2,
     useCORS: true,
     allowTaint: true,
     logging: false,
     backgroundColor: '#ffffff',
+    ...otherCustomOptions,
     onclone: (clonedDoc: Document) => {
-      // 1. تنظيف استدعاءات الخطوط والأوراق النمطية الخارجية لمنع أخطاء الأوفلاين
+      // 1. تنظيف استدعاءات الخطوط والأوراق النمطية (CSS Style Tags) لمنع أخطاء oklch الأوفلاين
       try {
         const styleElements = clonedDoc.querySelectorAll('style');
         styleElements.forEach((styleEl) => {
           if (styleEl.textContent) {
-            styleEl.textContent = replaceColorFunctions(styleEl.textContent);
+            styleEl.textContent = replaceColorFunctions(styleEl.textContent, '#1e293b');
           }
         });
       } catch (e) {}
 
-      // 2. تنظيف شامل لكل ألوان oklch/oklab بالقص والعناصر المصورة لمنع انهيار html2canvas
-      const elements = clonedDoc.querySelectorAll('*');
-      elements.forEach((el: any) => {
-        if (el.style) {
-          if (el.style.color && /(oklch|oklab)/i.test(el.style.color)) {
-            el.style.color = el.style.color.replace(/oklch\([^)]+\)/gi, '#0f172a').replace(/oklab\([^)]+\)/gi, '#0f172a');
-          }
-          if (el.style.backgroundColor && /(oklch|oklab)/i.test(el.style.backgroundColor)) {
-            el.style.backgroundColor = el.style.backgroundColor.replace(/oklch\([^)]+\)/gi, '#ffffff').replace(/oklab\([^)]+\)/gi, '#ffffff');
-          }
-          if (el.style.borderColor && /(oklch|oklab)/i.test(el.style.borderColor)) {
-            el.style.borderColor = el.style.borderColor.replace(/oklch\([^)]+\)/gi, '#cbd5e1').replace(/oklab\([^)]+\)/gi, '#cbd5e1');
-          }
+      // 2. تنظيف مباشر لكل قواعد الأوراق النمطية (CSS Rules)
+      try {
+        const styleSheets = Array.from(clonedDoc.styleSheets || []);
+        styleSheets.forEach((sheet: any) => {
           try {
-            sanitizeElementStyles(el, clonedDoc);
+            const rules = sheet.cssRules || sheet.rules;
+            if (rules) {
+              for (let i = 0; i < rules.length; i++) {
+                if (rules[i].style && rules[i].cssText) {
+                  const css = rules[i].cssText;
+                  if (/(oklch|oklab|color-mix|light-dark)/i.test(css)) {
+                    if (rules[i].style.color) rules[i].style.color = replaceColorFunctions(rules[i].style.color, '#0f172a');
+                    if (rules[i].style.backgroundColor) rules[i].style.backgroundColor = replaceColorFunctions(rules[i].style.backgroundColor, '#ffffff');
+                    if (rules[i].style.borderColor) rules[i].style.borderColor = replaceColorFunctions(rules[i].style.borderColor, '#cbd5e1');
+                  }
+                }
+              }
+            }
+          } catch (e) {}
+        });
+      } catch (e) {}
+
+      // 3. تنظيف شامل ومباشر لجميع عناصر الـ DOM بالخاصية المحسوبة computedStyle والخاصية المباشرة style
+      const elements = clonedDoc.querySelectorAll('*');
+      const docView = clonedDoc.defaultView || window;
+      elements.forEach((el: any) => {
+        if (el instanceof docView.HTMLElement || el instanceof HTMLElement) {
+          // تنظيف سمة style المباشرة
+          const rawStyle = el.getAttribute('style');
+          if (rawStyle && /(oklab|oklch|color-mix|light-dark)/i.test(rawStyle)) {
+            el.setAttribute('style', replaceColorFunctions(rawStyle, '#0f172a'));
+          }
+
+          // تنظيف الألوان المحسوبة بالـ Computed Style وقسر تحويلها لـ Hex ناصع
+          try {
+            const computed = docView.getComputedStyle(el);
+            if (computed) {
+              if (computed.color && /(oklab|oklch|color-mix|light-dark)/i.test(computed.color)) {
+                el.style.color = '#0f172a';
+              }
+              if (computed.backgroundColor && /(oklab|oklch|color-mix|light-dark)/i.test(computed.backgroundColor)) {
+                el.style.backgroundColor = '#ffffff';
+              }
+              if (computed.borderColor && /(oklab|oklch|color-mix|light-dark)/i.test(computed.borderColor)) {
+                el.style.borderColor = '#cbd5e1';
+              }
+              if (computed.fill && /(oklab|oklch|color-mix|light-dark)/i.test(computed.fill)) {
+                el.style.fill = '#0f172a';
+              }
+              if (computed.stroke && /(oklab|oklch|color-mix|light-dark)/i.test(computed.stroke)) {
+                el.style.stroke = '#cbd5e1';
+              }
+            }
+          } catch (e) {}
+
+          // فحص خصائص الأنماط الفردية المباشرة
+          try {
+            for (let i = el.style.length - 1; i >= 0; i--) {
+              const propName = el.style[i];
+              const propVal = el.style.getPropertyValue(propName);
+              if (propVal && /(oklab|oklch|color-mix|light-dark)/i.test(propVal)) {
+                el.style.setProperty(propName, replaceColorFunctions(propVal, '#0f172a'));
+              }
+            }
           } catch (e) {}
         }
       });
 
-      if (customOptions.onclone) {
-        customOptions.onclone(clonedDoc);
+      // 4. استدعاء الدالة المخصصة إن وجدت بعد تطبيق التنقية الحتمية
+      if (typeof customOnclone === 'function') {
+        try {
+          customOnclone(clonedDoc);
+        } catch (e) {
+          console.warn('customOnclone execution warning:', e);
+        }
       }
-    },
-    ...customOptions
+    }
   };
 };
 

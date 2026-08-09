@@ -91,18 +91,7 @@ export default function CustomerStatementModal({
 
     try {
       const element = statementRef.current;
-      const canvas = await html2canvas(element, getSafeHtml2CanvasOptions({
-        onclone: (clonedDoc: Document) => {
-          const elements = clonedDoc.querySelectorAll('*');
-          elements.forEach((el: any) => {
-            if (el.style) {
-              el.style.color = el.style.color?.replace(/oklch\([^)]+\)/g, '#000000').replace(/oklab\([^)]+\)/g, '#000000');
-              el.style.backgroundColor = el.style.backgroundColor?.replace(/oklch\([^)]+\)/g, '#ffffff').replace(/oklab\([^)]+\)/g, '#ffffff');
-              el.style.borderColor = el.style.borderColor?.replace(/oklch\([^)]+\)/g, '#cbd5e1').replace(/oklab\([^)]+\)/g, '#cbd5e1');
-            }
-          });
-        }
-      }));
+      const canvas = await html2canvas(element, getSafeHtml2CanvasOptions());
 
       const imgData = canvas.toDataURL('image/png');
       const imgWidth = 210; // A4 width in mm
