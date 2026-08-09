@@ -5,6 +5,7 @@
 
 import { Capacitor } from '@capacitor/core';
 import { saveAndShareFile } from '../utils/fileExport';
+import { openWhatsApp } from '../utils/nativeLauncher';
 
 export interface ReceiptPrintData {
   ticket_id?: string;
@@ -65,12 +66,8 @@ export const generateWhatsAppReceiptLink = (
     ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedText}`
     : `https://api.whatsapp.com/send?text=${encodedText}`;
 
-  // فتح الواتساب مباشرة بداخل الجوال
-  try {
-    window.location.href = waUrl;
-  } catch (e) {
-    console.warn('WhatsApp direct navigation fallback:', e);
-  }
+  // فتح الواتساب مباشرة بداخل الجوال عبر Capacitor AppLauncher والـ Intent
+  openWhatsApp(cleanPhone, text);
 
   return waUrl;
 };

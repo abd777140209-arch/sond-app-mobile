@@ -91,7 +91,18 @@ export default function CustomerStatementModal({
 
     try {
       const element = statementRef.current;
-      const canvas = await html2canvas(element, getSafeHtml2CanvasOptions());
+      const canvas = await html2canvas(element, getSafeHtml2CanvasOptions({
+        onclone: (clonedDoc: Document) => {
+          const els = clonedDoc.querySelectorAll('*');
+          els.forEach((el: any) => {
+            if (el.style) {
+              if (el.style.color && /(oklch|oklab)/i.test(el.style.color)) el.style.color = '#0f172a';
+              if (el.style.backgroundColor && /(oklch|oklab)/i.test(el.style.backgroundColor)) el.style.backgroundColor = '#ffffff';
+              if (el.style.borderColor && /(oklch|oklab)/i.test(el.style.borderColor)) el.style.borderColor = '#cbd5e1';
+            }
+          });
+        }
+      }));
 
       const imgData = canvas.toDataURL('image/png');
       const imgWidth = 210; // A4 width in mm

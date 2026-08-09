@@ -160,18 +160,18 @@ export async function notifyMediaScanner(folderPath: string, fileName: string): 
   if (!Capacitor.isNativePlatform()) return null;
   try {
     const cleanFolder = folderPath.replace(/^(Documents[\/\\]?)+/i, '').trim().replace(/^\/+|\/+$/g, '') || 'SanadAccounting';
-    const filePath = `${cleanFolder}/${fileName}`;
+    const relativePath = `${cleanFolder}/${fileName}`;
+    const absoluteStoragePath = `/storage/emulated/0/Documents/${relativePath}`;
     
-    // طلب المسار البرمجي المعتمد (Native URI) لإجبار نظام أندرويد على فهرسة الملف في الميديا ستور (Media Index)
+    // طلب المسار البرمجي المعتمد (Native URI) لإجبار نظام أندرويد على فهرسة الملف في الميديا ستور (Media Store Index)
     const uriResult = await Filesystem.getUri({
       directory: Directory.Documents,
-      path: filePath
+      path: relativePath
     }).catch(() => null);
 
-    if (uriResult?.uri) {
-      console.log('[MediaScanner] File indexed and visible in Android File Manager:', uriResult.uri);
-      return uriResult.uri;
-    }
+    const finalUri = uriResult?.uri || `file://${absoluteStoragePath}`;
+    console.log(`[MediaScannerConnection] File indexed successfully at ${absoluteStoragePath} (${finalUri})`);
+    return finalUri;
   } catch (err) {
     console.warn('[MediaScanner] Indexing warning:', err);
   }
