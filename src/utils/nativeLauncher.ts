@@ -5,6 +5,7 @@
 
 import { Capacitor } from '@capacitor/core';
 import { AppLauncher } from '@capacitor/app-launcher';
+import { Share } from '@capacitor/share';
 
 /**
  * Safely opens external URLs (http, https, tel, sms, whatsapp) across Web and Native Capacitor APK
@@ -26,9 +27,9 @@ export async function openExternalUrl(url: string): Promise<boolean> {
       console.warn('[NativeLauncher] AppLauncher error:', e);
     }
 
-    // 2. Secondary attempt via window.open / system intent
+    // 2. Secondary attempt via window.location / system intent
     try {
-      window.open(url, '_system') || (window.location.href = url);
+      window.location.href = url;
       return true;
     } catch (e) {
       console.warn('[NativeLauncher] System open fallback warning:', e);
@@ -48,6 +49,49 @@ export async function openExternalUrl(url: string): Promise<boolean> {
     alert(`⚠️ تعذر إطلاق التطبيق المطلوب تلقائياً.\nالرابط: ${url}`);
     return false;
   }
+}
+
+/**
+ * Safely triggers Native Share dialog or falls back to navigator.share / clipboard
+ */
+export async function nativeShareText(title: string, text: string, url?: string): Promise<boolean> {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await Share.share({
+        title,
+        text,
+        url,
+        dialogTitle: title
+      });
+      return true;
+    } catch (err: any) {
+      const errStr = String(err?.message || err || '').toLowerCase();
+      if (errStr.includes('cancel') || errStr.includes('dismiss') || errStr.includes('user_canceled')) {
+        return true;
+      }
+      console.warn('[NativeLauncher] Share error:', err);
+    }
+  }
+
+  if (typeof navigator !== 'undefined' && navigator.share) {
+    try {
+      await navigator.share({ title, text, url });
+      return true;
+    } catch (e) {
+      console.warn('[NativeLauncher] Navigator share error:', e);
+    }
+  }
+
+  // Clipboard fallback
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      await navigator.clipboard.writeText(`${title}\n${text} ${url || ''}`);
+      alert('📋 تم نسخ النص بنجاح إلى الحافظة!');
+      return true;
+    }
+  } catch (e) {}
+
+  return false;
 }
 
 /**
@@ -109,12 +153,27 @@ export async function openPhoneCall(phone: string): Promise<boolean> {
 }
 
 /**
- * Safely triggers SMS intent
+ * Safely triggers SMS intent directly via native Android app launcher or system intent
  */
 export async function openSms(phone: string, text: string = ''): Promise<boolean> {
   const cleanPhone = phone ? phone.replace(/[^0-9]/g, '') : '';
   const encodedText = encodeURIComponent(text);
-  const smsUrl = `sms:${cleanPhone}?body=${encodedText}`;
+  const smsUrl = cleanPhone 
+    ? `sms:${cleanPhone}?body=${encodedText}`
+    : `sms:?body=${encodedText}`;
+
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const canOpen = await AppLauncher.canOpenUrl({ url: smsUrl }).catch(() => ({ value: true }));
+      if (canOpen.value) {
+        await AppLauncher.openUrl({ url: smsUrl });
+        return true;
+      }
+    } catch (e) {
+      console.warn('[NativeLauncher] AppLauncher SMS launch error:', e);
+    }
+  }
+
   return openExternalUrl(smsUrl);
 }
 

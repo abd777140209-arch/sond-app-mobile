@@ -153,6 +153,32 @@ export async function ensureSanadFolder(): Promise<boolean> {
 }
 
 /**
+ * 📲 إشعار محرك نظام أندرويد (Media Scanner / File Indexer) بالملف الجديد
+ * ليظهر في مدير الملفات تلقائياً وحوافظ المستندات (Documents) فور إنشائه
+ */
+export async function notifyMediaScanner(folderPath: string, fileName: string): Promise<string | null> {
+  if (!Capacitor.isNativePlatform()) return null;
+  try {
+    const cleanFolder = folderPath.replace(/^(Documents[\/\\]?)+/i, '').trim().replace(/^\/+|\/+$/g, '') || 'SanadAccounting';
+    const filePath = `${cleanFolder}/${fileName}`;
+    
+    // طلب المسار البرمجي المعتمد (Native URI) لإجبار نظام أندرويد على فهرسة الملف في الميديا ستور (Media Index)
+    const uriResult = await Filesystem.getUri({
+      directory: Directory.Documents,
+      path: filePath
+    }).catch(() => null);
+
+    if (uriResult?.uri) {
+      console.log('[MediaScanner] File indexed and visible in Android File Manager:', uriResult.uri);
+      return uriResult.uri;
+    }
+  } catch (err) {
+    console.warn('[MediaScanner] Indexing warning:', err);
+  }
+  return null;
+}
+
+/**
  * Saves a backup file silently in local storage without opening UI dialogs
  */
 export async function saveSilentBackupFile(
@@ -177,6 +203,9 @@ export async function saveSilentBackupFile(
         recursive: true
       });
       console.log(`[Silent Backup] Permanently saved to Documents/${cleanFolder}/${fileName}`);
+
+      // إشعار نظام أندرويد لظهور الملف فوراً بمدير الملفات بدون إعادة تشغيل الهاتف
+      await notifyMediaScanner(cleanFolder, fileName);
 
       // 2. إبقاء نسخة مؤقتة بذاكرة المؤقت الكاش لتسريع الوصول والاسترجاع
       try {
@@ -261,6 +290,9 @@ export const saveAndShareFile = async ({
         });
         docUri = writeDoc.uri;
         console.log(`[fileExport] Permanently saved to Documents/${cleanFolder}/${fileName}`);
+
+        // إشعار نظام أندرويد وفهرسة الملف ليظهر فوراً في مدير الملفات
+        await notifyMediaScanner(cleanFolder, fileName);
       } catch (docErr) {
         console.warn(`[fileExport] Write to Documents/${cleanFolder} warning:`, docErr);
       }

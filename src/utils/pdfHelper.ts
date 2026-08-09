@@ -12,55 +12,19 @@ import { Capacitor } from '@capacitor/core';
 /**
  * Robustly removes oklab, oklch, color-mix, and light-dark functions from CSS text
  */
-export function replaceColorFunctions(cssText: string, fallback = 'rgb(30, 41, 59)'): string {
+export function replaceColorFunctions(cssText: string, fallback = '#1e293b'): string {
   if (!cssText || typeof cssText !== 'string') return cssText;
   if (!/(oklab|oklch|color-mix|light-dark)/i.test(cssText)) return cssText;
 
-  let text = cssText.replace(/in\s+(oklch|oklab)/gi, 'in srgb');
+  let text = cssText
+    .replace(/@import\s+url\([^)]+\);?/gi, '')
+    .replace(/in\s+(oklch|oklab)/gi, 'in srgb')
+    .replace(/oklch\([^)]+\)/gi, fallback)
+    .replace(/oklab\([^)]+\)/gi, fallback)
+    .replace(/color-mix\([^)]+\)/gi, fallback)
+    .replace(/light-dark\([^)]+\)/gi, fallback);
 
-  const targets = ['oklab(', 'oklch(', 'color-mix(', 'light-dark('];
-  let hasMore = true;
-  let safetyCounter = 0;
-
-  while (hasMore && safetyCounter < 2000) {
-    safetyCounter++;
-    let foundIndex = -1;
-    let foundTarget = '';
-
-    for (const target of targets) {
-      const idx = text.toLowerCase().indexOf(target);
-      if (idx !== -1 && (foundIndex === -1 || idx < foundIndex)) {
-        foundIndex = idx;
-        foundTarget = target;
-      }
-    }
-
-    if (foundIndex === -1) {
-      hasMore = false;
-      break;
-    }
-
-    let parenDepth = 0;
-    let endIdx = -1;
-    for (let i = foundIndex + foundTarget.length - 1; i < text.length; i++) {
-      if (text[i] === '(') parenDepth++;
-      else if (text[i] === ')') {
-        parenDepth--;
-        if (parenDepth === 0) {
-          endIdx = i;
-          break;
-        }
-      }
-    }
-
-    if (endIdx !== -1) {
-      text = text.substring(0, foundIndex) + fallback + text.substring(endIdx + 1);
-    } else {
-      text = text.substring(0, foundIndex) + fallback + text.substring(foundIndex + foundTarget.length);
-    }
-  }
-
-  return text.replace(/(oklab|oklch)/gi, fallback);
+  return text;
 }
 
 function sanitizeElementStyles(el: HTMLElement, doc: Document) {
@@ -72,23 +36,26 @@ function sanitizeElementStyles(el: HTMLElement, doc: Document) {
   }
 
   try {
-    for (let i = el.style.length - 1; i >= 0; i--) {
-      const propName = el.style[i];
-      const propVal = el.style.getPropertyValue(propName);
-      if (propVal && /(oklab|oklch|color-mix|light-dark)/i.test(propVal)) {
-        el.style.setProperty(propName, replaceColorFunctions(propVal));
+    const computed = doc.defaultView?.getComputedStyle(el) || window.getComputedStyle(el);
+    if (computed) {
+      if (computed.color && /(oklab|oklch)/i.test(computed.color)) {
+        el.style.color = '#0f172a';
+      }
+      if (computed.backgroundColor && /(oklab|oklch)/i.test(computed.backgroundColor)) {
+        el.style.backgroundColor = '#ffffff';
+      }
+      if (computed.borderColor && /(oklab|oklch)/i.test(computed.borderColor)) {
+        el.style.borderColor = '#cbd5e1';
       }
     }
   } catch (e) {}
 
   try {
-    const computed = doc.defaultView?.getComputedStyle(el) || window.getComputedStyle(el);
-    if (computed) {
-      if (computed.color && (computed.color.includes('oklab') || computed.color.includes('oklch'))) {
-        el.style.color = '#000000';
-      }
-      if (computed.backgroundColor && (computed.backgroundColor.includes('oklab') || computed.backgroundColor.includes('oklch'))) {
-        el.style.backgroundColor = '#ffffff';
+    for (let i = el.style.length - 1; i >= 0; i--) {
+      const propName = el.style[i];
+      const propVal = el.style.getPropertyValue(propName);
+      if (propVal && /(oklab|oklch|color-mix|light-dark)/i.test(propVal)) {
+        el.style.setProperty(propName, replaceColorFunctions(propVal));
       }
     }
   } catch (e) {}
@@ -102,25 +69,7 @@ export const getSafeHtml2CanvasOptions = (customOptions: any = {}): any => {
     logging: false,
     backgroundColor: '#ffffff',
     onclone: (clonedDoc: Document) => {
-      // تنظيف شامل لأي ألوان oklch/oklab في العناصر المصورة لتفادي انهيار html2canvas
-      const elements = clonedDoc.querySelectorAll('*');
-      elements.forEach((el: any) => {
-        if (el.style) {
-          if (el.style.color) {
-            el.style.color = el.style.color.replace(/oklch\([^)]+\)/g, '#000000').replace(/oklab\([^)]+\)/g, '#000000');
-          }
-          if (el.style.backgroundColor) {
-            el.style.backgroundColor = el.style.backgroundColor.replace(/oklch\([^)]+\)/g, '#ffffff').replace(/oklab\([^)]+\)/g, '#ffffff');
-          }
-          if (el.style.borderColor) {
-            el.style.borderColor = el.style.borderColor.replace(/oklch\([^)]+\)/g, '#cbd5e1').replace(/oklab\([^)]+\)/g, '#cbd5e1');
-          }
-          try {
-            sanitizeElementStyles(el, clonedDoc);
-          } catch (e) {}
-        }
-      });
-
+      // 1. تنظيف استدعاءات الخطوط والأوراق النمطية الخارجية لمنع أخطاء الأوفلاين
       try {
         const styleElements = clonedDoc.querySelectorAll('style');
         styleElements.forEach((styleEl) => {
@@ -129,6 +78,25 @@ export const getSafeHtml2CanvasOptions = (customOptions: any = {}): any => {
           }
         });
       } catch (e) {}
+
+      // 2. تنظيف شامل لكل ألوان oklch/oklab بالقص والعناصر المصورة لمنع انهيار html2canvas
+      const elements = clonedDoc.querySelectorAll('*');
+      elements.forEach((el: any) => {
+        if (el.style) {
+          if (el.style.color && /(oklch|oklab)/i.test(el.style.color)) {
+            el.style.color = el.style.color.replace(/oklch\([^)]+\)/gi, '#0f172a').replace(/oklab\([^)]+\)/gi, '#0f172a');
+          }
+          if (el.style.backgroundColor && /(oklch|oklab)/i.test(el.style.backgroundColor)) {
+            el.style.backgroundColor = el.style.backgroundColor.replace(/oklch\([^)]+\)/gi, '#ffffff').replace(/oklab\([^)]+\)/gi, '#ffffff');
+          }
+          if (el.style.borderColor && /(oklch|oklab)/i.test(el.style.borderColor)) {
+            el.style.borderColor = el.style.borderColor.replace(/oklch\([^)]+\)/gi, '#cbd5e1').replace(/oklab\([^)]+\)/gi, '#cbd5e1');
+          }
+          try {
+            sanitizeElementStyles(el, clonedDoc);
+          } catch (e) {}
+        }
+      });
 
       if (customOptions.onclone) {
         customOptions.onclone(clonedDoc);
