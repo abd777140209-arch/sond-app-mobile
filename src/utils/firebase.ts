@@ -108,6 +108,11 @@ export async function withTimeout<T>(promise: Promise<T>, timeoutMs = 2500): Pro
 let firestoreDb: any = null;
 
 export function getFirestoreDb() {
+  // 🚫 حظر جميع طلبات الشبكة لـ Firestore عند انقطاع الاتصال لتفادي أخطاء GET firestore.googleapis.com
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return null;
+  }
+
   if (!isFirebaseConfigured()) {
     return null;
   }

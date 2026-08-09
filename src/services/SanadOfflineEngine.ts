@@ -35,7 +35,18 @@ export const isOnline = (): boolean => {
 };
 
 /**
- * 0.1 الاستماع لتغيرات حالة شبكة الاتصال وتنبيه المكونات
+ * 0.1 حظر كافة الطلبات المباشرة لـ Firestore أوفلاين لمنع ظهور أخطاء GET firestore.googleapis.com
+ */
+export const isFirestoreNetworkAllowed = (): boolean => {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    console.log('[OfflineEngine] Firestore network request blocked because device is offline (navigator.onLine === false)');
+    return false;
+  }
+  return true;
+};
+
+/**
+ * 0.2 الاستماع لتغيرات حالة شبكة الاتصال وتنبيه المكونات
  */
 export const onNetworkStatusChange = (callback: (online: boolean) => void): (() => void) => {
   if (typeof window === 'undefined') return () => {};

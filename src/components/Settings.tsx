@@ -666,8 +666,12 @@ export default function Settings({
     setCustomSaveFolder(cleanFolder);
 
     try {
+      let isSuccess = false;
       if (onBackupData) {
-        await onBackupData();
+        isSuccess = (await onBackupData()) as any;
+        if (isSuccess !== false) {
+          alert(`✅ تم حفظ النسخة الاحتياطية بنجاح بداخل ذاكرة الهاتف (Documents/${cleanFolder})`);
+        }
       } else {
         const getParsed = (key: string) => {
           try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; }
@@ -690,7 +694,7 @@ export default function Settings({
         const jsonStr = JSON.stringify(fullBackupData, null, 2);
         const fileName = `Sanad_Backup_${new Date().toISOString().slice(0, 10)}_${Date.now().toString().slice(-4)}.json`;
 
-        await saveAndShareFile({
+        const res = await saveAndShareFile({
           fileName,
           data: jsonStr,
           mimeType: 'application/json',
@@ -698,6 +702,12 @@ export default function Settings({
           text: `ملف النسخة الاحتياطية لقاعدة البيانات بتاريخ ${new Date().toLocaleDateString('ar-YE')}`,
           folderName: cleanFolder
         });
+
+        if (res) {
+          alert(`✅ تم حفظ النسخة الاحتياطية بنجاح!\nالمسار الدائم: Documents/${cleanFolder}/${fileName}`);
+        } else {
+          alert(`⚠️ تعذر حفظ النسخة الاحتياطية. يرجى التأكد من تفعيل أذونات الوصول للتخزين.`);
+        }
       }
     } catch (err) {
       console.error('Backup creation error:', err);
