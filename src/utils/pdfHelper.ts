@@ -11,6 +11,7 @@ import { Capacitor } from '@capacitor/core';
 
 /**
  * Robustly removes oklab, oklch, color-mix, and light-dark functions from CSS text
+ * Converts them to pure standard Hex colors (#ffffff / #000000 / #1e293b) to prevent html2canvas crash
  */
 export function replaceColorFunctions(cssText: string, fallback = '#1e293b'): string {
   if (!cssText || typeof cssText !== 'string') return cssText;

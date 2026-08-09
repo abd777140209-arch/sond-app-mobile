@@ -153,8 +153,8 @@ export async function ensureSanadFolder(): Promise<boolean> {
 }
 
 /**
- * 📲 إشعار محرك نظام أندرويد (Media Scanner / File Indexer) بالملف الجديد
- * ليظهر في مدير الملفات تلقائياً وحوافظ المستندات (Documents) فور إنشائه
+ * 📲 إشعار محرك نظام أندرويد (Media Scanner / File Indexer) بالملف الجديد فور كتابته
+ * ليظهر في مدير الملفات تلقائياً بمسار Documents/SanadAccounting بدون الحاجة لإعادة تشغيل الهاتف
  */
 export async function notifyMediaScanner(folderPath: string, fileName: string): Promise<string | null> {
   if (!Capacitor.isNativePlatform()) return null;
