@@ -28,7 +28,69 @@ const STORAGE_KEY_PENDING_DEVICES = 'sanad_pending_devices_offline';
  * 0. التحقق السريع من توفر الاتصال بالإنترنت
  */
 export const isOnline = (): boolean => {
-  return typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+  if (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean') {
+    return navigator.onLine;
+  }
+  return true;
+};
+
+/**
+ * 0.1 الاستماع لتغيرات حالة شبكة الاتصال وتنبيه المكونات
+ */
+export const onNetworkStatusChange = (callback: (online: boolean) => void): (() => void) => {
+  if (typeof window === 'undefined') return () => {};
+
+  const handleOnline = () => callback(true);
+  const handleOffline = () => callback(false);
+
+  window.addEventListener('online', handleOnline);
+  window.addEventListener('offline', handleOffline);
+
+  return () => {
+    window.removeEventListener('online', handleOnline);
+    window.removeEventListener('offline', handleOffline);
+  };
+};
+
+/**
+ * 0.2 تغليف آمن لطلبات الشبكة يمنع أخطاء net::ERR_INTERNET_DISCONNECTED
+ */
+export const safeOfflineFetch = async (
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<{ ok: boolean; status: number; data?: any; isOffline: boolean; error?: string }> => {
+  if (!isOnline()) {
+    console.warn('[OfflineEngine] تم إلغاء طلب الشبكة لأن الجهاز في وضع الأوفلاين (navigator.onLine = false)');
+    return {
+      ok: false,
+      status: 0,
+      isOffline: true,
+      error: 'الجهاز أوفلاين (غير متصل بالإنترنت)'
+    };
+  }
+
+  try {
+    const res = await fetch(input, init);
+    const contentType = res.headers.get('content-type');
+    let data = null;
+    if (contentType && contentType.includes('application/json')) {
+      data = await res.json();
+    }
+    return {
+      ok: res.ok,
+      status: res.status,
+      data,
+      isOffline: false
+    };
+  } catch (err: any) {
+    console.warn('[OfflineEngine] تعذر الاتصال بالشبكة:', err?.message || err);
+    return {
+      ok: false,
+      status: 0,
+      isOffline: true,
+      error: err?.message || 'فشل الاتصال بالشبكة'
+    };
+  }
 };
 
 /**

@@ -1,0 +1,6 @@
+{
+  "appId": "com.sanad.accounting",
+  "appName": "Sanad Accounting",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

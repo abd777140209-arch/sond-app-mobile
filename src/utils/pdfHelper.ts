@@ -190,6 +190,52 @@ export async function exportElementToPDF(
 }
 
 /**
+ * 📱 تحويل نصوص ومستندات HTML إلى ملف PDF حقيقي وعالي الجودة على أجهزة الهواتف والجوالات
+ */
+export async function convertHtmlStringToPDF(
+  htmlContent: string,
+  fileName: string,
+  title: string = 'مستند PDF'
+): Promise<boolean> {
+  try {
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.left = '-9999px';
+    container.style.top = '-9999px';
+    container.style.width = '800px';
+    container.style.backgroundColor = '#ffffff';
+    container.style.zIndex = '-9999';
+    container.innerHTML = htmlContent;
+    document.body.appendChild(container);
+
+    // تنظيف جميع ألوان oklch/oklab داخل عناصر الحاوية المقترحة
+    const styleEls = container.querySelectorAll('style');
+    styleEls.forEach((s) => {
+      if (s.textContent) s.textContent = replaceColorFunctions(s.textContent);
+    });
+
+    const safeOptions = getSafeHtml2CanvasOptions();
+    const canvas = await html2canvas(container, safeOptions as Options);
+    
+    if (document.body.contains(container)) {
+      document.body.removeChild(container);
+    }
+
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+
+    return await saveJsPDFFile(pdf, fileName, title);
+  } catch (err) {
+    console.error('Error converting HTML string to PDF:', err);
+    return false;
+  }
+}
+
+/**
  * 📱 طباعة وتصدير مستند HTML بتحويله إلى ملف محلي أو Base64 يمر مباشرة عبر saveAndShareFile
  */
 export async function printOrSavePDFHTML(
@@ -199,14 +245,10 @@ export async function printOrSavePDFHTML(
 ): Promise<boolean> {
   const isNative = Capacitor.isNativePlatform();
 
+  // على أجهزة الجوال APK، نقوم دائماً بتحويل الـ HTML إلى PDF حقيقي لمنع مشاكل window.open/window.print
   if (isNative) {
-    return await saveAndShareFile({
-      fileName: fileName.endsWith('.html') || fileName.endsWith('.pdf') ? fileName : `${fileName}.html`,
-      data: htmlContent,
-      mimeType: fileName.endsWith('.pdf') ? 'application/pdf' : 'text/html',
-      title,
-      text: title
-    });
+    const pdfFileName = fileName.endsWith('.pdf') ? fileName : `${fileName.replace(/\.html$/i, '')}.pdf`;
+    return await convertHtmlStringToPDF(htmlContent, pdfFileName, title);
   }
 
   try {

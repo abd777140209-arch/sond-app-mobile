@@ -18,15 +18,22 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- 4. أذونات التخزين والذاكرة الشاملة لجميع إصدارات أندرويد (Android 10 حتى Android 16) -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+    <!-- 4. أذونات التخزين والذاكرة الشاملة لجميع إصدارات أندرويد -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
-    <!-- 5. إذن الاهتزاز والتنبيهات الصوتية عند إجراء عمليات البيع أوالصيانة -->
+    <!-- 5. أذونات الاتصال بالطابعات الحرارية والأجهزة المجاورة عبر البلوتوث (Bluetooth & Thermal Printers) -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+
+    <!-- 6. إذن الاهتزاز والتنبيهات الصوتية عند إجراء عمليات البيع أوالصيانة -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- 6. إذن المايكروفون والصوتيات (للمساعد الصوتي والذكاء الاصطناعي) -->
@@ -37,7 +44,7 @@
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="نظام سُند المحاسبي"
+        android:label="Sanad Accounting - سند المحاسبي"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.SanadAccounting"
@@ -48,7 +55,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|layoutDirection"
-            android:label="سُند المحاسبي الذكي"
+            android:label="Sanad Accounting"
             android:theme="@style/Theme.SanadAccounting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -59,7 +66,7 @@
         <!-- Capacitor FileProvider for file sharing and storage access -->
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
+            android:authorities="com.sanad.accounting.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data

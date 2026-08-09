@@ -48,7 +48,7 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { SystemSettings, AppTheme, CardShape, DisplayDensity, CurrencyRate, BackupFrequency } from '../types';
-import { ensureCustomFolder, saveAndShareFile, ensureStoragePermissions } from '../utils/fileExport';
+import { ensureCustomFolder, saveAndShareFile, ensureStoragePermissions, setCustomSaveFolder, getCustomSaveFolder } from '../utils/fileExport';
 import { DEFAULT_CURRENCIES } from '../utils/seedData';
 import { soundManager } from '../utils/sound';
 import { loadLicenseLocally, saveLicenseLocally, generateHWID, LicenseInfo } from '../utils/licensing';
@@ -660,10 +660,10 @@ export default function Settings({
 
     const cleanFolder = (backupFolderPath || 'SanadAccounting')
       .trim()
-      .replace(/^Documents\//i, '')
+      .replace(/^(Documents[\/\\]?)+/i, '')
       .replace(/^\/+|\/+$/g, '') || 'SanadAccounting';
 
-    localStorage.setItem('sanad_custom_save_folder', cleanFolder);
+    setCustomSaveFolder(cleanFolder);
 
     try {
       if (onBackupData) {
@@ -734,42 +734,13 @@ export default function Settings({
       const jsonStr = JSON.stringify(fullBackupData, null, 2);
       const fileName = `Sanad_Share_Backup_${new Date().toISOString().slice(0, 10)}_${Date.now().toString().slice(-4)}.json`;
 
-      if (Capacitor.isNativePlatform()) {
-        try {
-          await ensureStoragePermissions();
-
-          const writeResult = await Filesystem.writeFile({
-            path: fileName,
-            data: jsonStr,
-            directory: Directory.Cache,
-            recursive: true,
-            encoding: Encoding.UTF8
-          });
-
-          if (writeResult && writeResult.uri) {
-            await Share.share({
-              title: 'مشاركة نسخة البيانات - نظام سند المحاسبي',
-              text: `ملف النسخة الاحتياطية الشاملة لنظام سند المحاسبي بتاريخ ${new Date().toLocaleDateString('ar-YE')}`,
-              url: writeResult.uri,
-              dialogTitle: 'اختر التطبيق لمشاركة النسخة الاحتياطية (WhatsApp, Drive, Telegram...)'
-            });
-            return;
-          }
-        } catch (nativeErr: any) {
-          const errStr = String(nativeErr || '').toLowerCase();
-          if (errStr.includes('cancel') || errStr.includes('dismiss') || errStr.includes('abort')) {
-            return;
-          }
-          console.warn('Native Share attempt error:', nativeErr);
-        }
-      }
-
       await saveAndShareFile({
         fileName,
         data: jsonStr,
         mimeType: 'application/json',
         title: 'مشاركة نسخة البيانات - نظام سند المحاسبي',
-        text: 'ملف قاعدة البيانات والنسخة الاحتياطية لنظام سند المحاسبي'
+        text: `ملف النسخة الاحتياطية الشاملة لنظام سند المحاسبي بتاريخ ${new Date().toLocaleDateString('ar-YE')}`,
+        folderName: getCustomSaveFolder()
       });
 
     } catch (err) {
@@ -1853,29 +1824,29 @@ export default function Settings({
                     type="button"
                     onClick={() => {
                       soundManager.playScanBeep();
-                      setFolderInputVal('Documents/SanadAccounting');
+                      setFolderInputVal('SanadAccounting');
                     }}
                     className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
-                      folderInputVal === 'Documents/SanadAccounting'
+                      folderInputVal === 'SanadAccounting'
                         ? 'bg-emerald-600 text-white border-emerald-600'
                         : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-200'
                     }`}
                   >
-                    مستندات التطبيق (المستحسن)
+                    مستندات سند (المستحسن)
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       soundManager.playScanBeep();
-                      setFolderInputVal('Downloads/SanadAccounting');
+                      setFolderInputVal('SanadAccounting/Invoices');
                     }}
                     className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
-                      folderInputVal === 'Downloads/SanadAccounting'
+                      folderInputVal === 'SanadAccounting/Invoices'
                         ? 'bg-emerald-600 text-white border-emerald-600'
                         : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-200'
                     }`}
                   >
-                    مجلد التنزيلات (Downloads)
+                    مجلد الفواتير (Invoices)
                   </button>
                   <button
                     type="button"
@@ -1889,7 +1860,7 @@ export default function Settings({
                         : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-200'
                     }`}
                   >
-                    الذاكرة الرئيسية (Backups)
+                    النسخ الاحتياطية (Backups)
                   </button>
                 </div>
               </div>
@@ -1911,8 +1882,9 @@ export default function Settings({
               <button
                 type="button"
                 onClick={async () => {
-                  const cleaned = folderInputVal.trim() || 'Documents/SanadAccounting';
+                  const cleaned = folderInputVal.trim() || 'SanadAccounting';
                   setBackupFolderPath(cleaned);
+                  setCustomSaveFolder(cleaned);
                   await ensureCustomFolder(cleaned);
                   setShowFolderModal(false);
                   soundManager.playSuccessChime();

@@ -26,7 +26,8 @@ export function getCustomSaveFolder(): string {
   try {
     const saved = localStorage.getItem('sanad_custom_save_folder');
     if (saved && saved.trim().length > 0) {
-      return saved.trim().replace(/^\/+|\/+$/g, '');
+      const clean = saved.trim().replace(/^(Documents[\/\\]?)+/i, '').replace(/^\/+|\/+$/g, '').trim();
+      return clean || 'SanadAccounting';
     }
   } catch (e) {
     console.warn('Error reading custom save folder:', e);
@@ -39,7 +40,11 @@ export function getCustomSaveFolder(): string {
  */
 export function setCustomSaveFolder(folderName: string): void {
   try {
-    const clean = (folderName || 'SanadAccounting').trim().replace(/^\/+|\/+$/g, '');
+    const clean = (folderName || 'SanadAccounting')
+      .trim()
+      .replace(/^(Documents[\/\\]?)+/i, '')
+      .replace(/^\/+|\/+$/g, '')
+      .trim();
     localStorage.setItem('sanad_custom_save_folder', clean || 'SanadAccounting');
   } catch (e) {
     console.warn('Error setting custom save folder:', e);
@@ -115,7 +120,7 @@ export async function ensureCustomFolder(folderPath?: string): Promise<boolean> 
   }
   await ensureStoragePermissions();
   const targetFolder = folderPath || getCustomSaveFolder();
-  const cleanFolder = targetFolder.trim().replace(/^\/+|\/+$/g, '') || 'SanadApp';
+  const cleanFolder = targetFolder.replace(/^(Documents[\/\\]?)+/i, '').trim().replace(/^\/+|\/+$/g, '') || 'SanadAccounting';
   
   try {
     await Filesystem.mkdir({
@@ -157,29 +162,44 @@ export async function saveSilentBackupFile(
 ): Promise<string | null> {
   const isNative = Capacitor.isNativePlatform();
   const targetFolder = folderPath || getCustomSaveFolder();
-  const cleanFolder = targetFolder.trim().replace(/^\/+|\/+$/g, '') || 'SanadApp';
+  const cleanFolder = targetFolder.replace(/^(Documents[\/\\]?)+/i, '').trim().replace(/^\/+|\/+$/g, '') || 'SanadAccounting';
 
   if (isNative) {
     try {
       await ensureCustomFolder(cleanFolder);
+      const base64Content = btoa(unescape(encodeURIComponent(jsonString)));
+
+      // 1. الحفظ الدائم في مجلد المستندات بالهاتف (Directory.Documents/SanadAccounting)
       const writeResult = await Filesystem.writeFile({
         path: `${cleanFolder}/${fileName}`,
-        data: jsonString,
+        data: base64Content,
         directory: Directory.Documents,
-        recursive: true,
-        encoding: Encoding.UTF8
+        recursive: true
       });
-      console.log(`[Silent Backup] Saved to Documents/${cleanFolder}/${fileName}`);
+      console.log(`[Silent Backup] Permanently saved to Documents/${cleanFolder}/${fileName}`);
+
+      // 2. إبقاء نسخة مؤقتة بذاكرة المؤقت الكاش لتسريع الوصول والاسترجاع
+      try {
+        await Filesystem.writeFile({
+          path: fileName,
+          data: base64Content,
+          directory: Directory.Cache,
+          recursive: true
+        });
+      } catch (cacheErr) {
+        console.warn('[Silent Backup] Cache temp copy warning:', cacheErr);
+      }
+
       return writeResult.uri;
     } catch (err) {
       console.warn(`[Silent Backup] Write to Documents/${cleanFolder} failed, trying Cache:`, err);
       try {
+        const base64Content = btoa(unescape(encodeURIComponent(jsonString)));
         const cacheResult = await Filesystem.writeFile({
           path: fileName,
-          data: jsonString,
+          data: base64Content,
           directory: Directory.Cache,
-          recursive: true,
-          encoding: Encoding.UTF8
+          recursive: true
         });
         return cacheResult.uri;
       } catch (cacheErr) {
@@ -207,11 +227,19 @@ export const saveAndShareFile = async ({
   mimeType = 'application/json',
   isBase64 = false,
   title = 'تصدير ملف - نظام سند',
-  text = 'ملف صادر من نظام سند المحاسبي'
-}: FileExportOptions): Promise<boolean> => {
+  text = 'ملف صادر من نظام سند المحاسبي',
+  folderName
+}: SaveAndShareOptions): Promise<boolean> => {
   try {
     // 1. التشغيل على تطبيق الأندرويد (Capacitor Native)
     if (Capacitor.isNativePlatform()) {
+      await ensureStoragePermissions();
+      const rawFolder = folderName || getCustomSaveFolder();
+      const cleanFolder = rawFolder.replace(/^(Documents[\/\\]?)+/i, '').trim().replace(/^\/+|\/+$/g, '') || 'SanadAccounting';
+
+      // التأكد من وجود مجلد النظام المخصص بداخل مستندات الهاتف (Documents/SanadAccounting)
+      await ensureCustomFolder(cleanFolder);
+
       let base64Content = data;
       if (!isBase64) {
         // تحويل النص العربي و JSON إلى Base64 آمن
@@ -220,20 +248,64 @@ export const saveAndShareFile = async ({
         base64Content = data.replace(/^data:.*?;base64,/, '').replace(/\s/g, '');
       }
 
-      // كتابة الملف بذاكرة الهاتف الداخلية
-      const savedFile = await Filesystem.writeFile({
-        path: fileName,
-        data: base64Content,
-        directory: Directory.Cache
-      });
+      let docUri = '';
+      let cacheUri = '';
 
-      // فتح نافذة مشاركة وتنزيل الملف للجوال فوراً
-      await Share.share({
-        title,
-        text,
-        url: savedFile.uri,
-        dialogTitle: title
-      });
+      // أ) حفظ الملف أولاً وبشكل دائم في Directory.Documents
+      try {
+        const writeDoc = await Filesystem.writeFile({
+          path: `${cleanFolder}/${fileName}`,
+          data: base64Content,
+          directory: Directory.Documents,
+          recursive: true
+        });
+        docUri = writeDoc.uri;
+        console.log(`[fileExport] Permanently saved to Documents/${cleanFolder}/${fileName}`);
+      } catch (docErr) {
+        console.warn(`[fileExport] Write to Documents/${cleanFolder} warning:`, docErr);
+      }
+
+      // ب) حفظ نسخة مؤقتة في ذاكرة Cache لضمان استقرار المشاركة
+      try {
+        const writeCache = await Filesystem.writeFile({
+          path: fileName,
+          data: base64Content,
+          directory: Directory.Cache,
+          recursive: true
+        });
+        cacheUri = writeCache.uri;
+      } catch (cacheErr) {
+        console.warn('[fileExport] Write to Cache warning:', cacheErr);
+      }
+
+      const shareUri = cacheUri || docUri;
+
+      // ج) فتح نافذة المشاركة المباشرة (WhatsApp, Telegram, Drive, Gmail...)
+      if (shareUri) {
+        try {
+          await Share.share({
+            title,
+            text,
+            url: shareUri,
+            dialogTitle: title
+          });
+        } catch (shareErr: any) {
+          const errStr = String(shareErr?.message || shareErr || '').toLowerCase();
+          // إغلاق أو إلغاء نافذة المشاركة يعتبر نجاحاً مؤكداً 100% لأن الملف أُحفظ مسبقاً في ذاكرة الهاتف
+          if (
+            errStr.includes('cancel') ||
+            errStr.includes('dismiss') ||
+            errStr.includes('abort') ||
+            errStr.includes('user_canceled') ||
+            errStr.includes('closed') ||
+            errStr.includes('dismissed')
+          ) {
+            console.log('[fileExport] Share sheet dismissed by user, file safely saved on device.');
+            return true;
+          }
+          console.warn('[fileExport] Share warning:', shareErr);
+        }
+      }
 
       return true;
     }
