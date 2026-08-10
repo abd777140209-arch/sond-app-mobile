@@ -38,6 +38,8 @@ import {
 } from './utils/seedData';
 
 import MobileDashboardView from './components/MobileDashboardView';
+import DesktopDashboardView from './components/DesktopDashboardView';
+import Navigation from './components/Navigation';
 import POS from './components/POS';
 import Customers from './components/Customers';
 import Inventory from './components/Inventory';
@@ -84,8 +86,46 @@ export default function App() {
     if (savedLogo && !parsed.storeLogoUrl) {
       parsed.storeLogoUrl = savedLogo;
     }
+
+    const savedLayout = (localStorage.getItem('app_layout_preference') as 'mobile' | 'desktop') ||
+                        (localStorage.getItem('app_interface_mode') as 'mobile' | 'desktop');
+    if (savedLayout === 'desktop' || savedLayout === 'mobile') {
+      parsed.deviceMode = savedLayout;
+    }
+
     return parsed;
   });
+
+  // 🖥️📱 Listener for System Interface Mode changes (Instant Application across dimensions, screens & tables)
+  useEffect(() => {
+    const applyInterfaceMode = () => {
+      const mode = (localStorage.getItem('app_layout_preference') as 'mobile' | 'desktop') ||
+                   (localStorage.getItem('app_interface_mode') as 'mobile' | 'desktop') ||
+                   settings.deviceMode || 'mobile';
+
+      setSettings(prev => ({ ...prev, deviceMode: mode }));
+
+      if (typeof document !== 'undefined') {
+        if (mode === 'desktop') {
+          document.documentElement.classList.add('mode-desktop');
+          document.documentElement.classList.remove('mode-mobile');
+        } else {
+          document.documentElement.classList.add('mode-mobile');
+          document.documentElement.classList.remove('mode-desktop');
+        }
+      }
+    };
+
+    applyInterfaceMode();
+
+    window.addEventListener('app_layout_changed', applyInterfaceMode);
+    window.addEventListener('app_interface_mode_changed', applyInterfaceMode);
+
+    return () => {
+      window.removeEventListener('app_layout_changed', applyInterfaceMode);
+      window.removeEventListener('app_interface_mode_changed', applyInterfaceMode);
+    };
+  }, []);
 
   const [products, setProducts] = useState<Product[]>(() => {
     const data = localStorage.getItem('smart_accounting_products');
@@ -222,23 +262,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('smart_accounting_current_user', JSON.stringify(currentUser));
   }, [currentUser]);
-
-  // 📂 طلب أذونات التخزين في أندرويد عند بدء تشغيل التطبيق
-  useEffect(() => {
-    const checkAndRequestStoragePermission = async () => {
-      if (Capacitor.isNativePlatform()) {
-        try {
-          const status = await Filesystem.checkPermissions();
-          if (status.publicStorage !== 'granted') {
-            await Filesystem.requestPermissions();
-          }
-        } catch (err) {
-          console.log('[Storage Permission Handled]:', err);
-        }
-      }
-    };
-    checkAndRequestStoragePermission();
-  }, []);
 
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
     const data = localStorage.getItem('smart_accounting_audit_logs');
@@ -1070,11 +1093,13 @@ export default function App() {
     }
   };
 
+  const isDesktopMode = (settings.deviceMode || 'mobile') === 'desktop';
+
   return (
-    <div className="flex flex-col h-screen w-full bg-slate-100 text-slate-900 select-none overflow-hidden font-sans dir-rtl" dir="rtl">
+    <div className={`flex flex-col h-screen w-full bg-slate-100 text-slate-900 select-none overflow-hidden font-sans dir-rtl ${isDesktopMode ? 'mode-desktop' : 'mode-mobile'}`} dir="rtl">
       
       {/* 1. TOP BAR */}
-      <header className="h-14 bg-white border-b border-slate-200 px-4 flex items-center justify-between sticky top-0 z-30 shadow-xs">
+      <header className="h-14 bg-white border-b border-slate-200 px-4 flex items-center justify-between sticky top-0 z-30 shadow-xs shrink-0">
         <div className="flex items-center gap-3">
           {activeTab !== 'dashboard' ? (
             <button 
@@ -1169,38 +1194,75 @@ export default function App() {
         </div>
       </header>
 
-      {/* 2. MAIN WORKSPACE */}
-      <main className="flex-1 overflow-y-auto p-3 sm:p-4 pb-16 bg-slate-50 relative">
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.15 }}
-            className="w-full h-full"
-          >
-            {activeTab === 'dashboard' && (
-              <MobileDashboardView
-                products={products}
-                customers={customers}
-                invoices={invoices}
-                payments={payments}
-                transactions={transactions}
-                settings={settings}
-                employees={employees}
-                activeTab={activeTab}
-                setActiveTab={handleTabSelect}
-                isPrivacyMode={isPrivacyMode}
-                setIsPrivacyMode={setIsPrivacyMode}
-                isCashierMode={isCashierMode}
-                setIsCashierMode={setIsCashierMode}
-                setShowPinCheckModal={setShowPinCheckModal}
-                setShowPrivacyPinModal={setShowPrivacyPinModal}
-                onBackupData={handleBackupData}
-                onRestoreData={handleRestoreData}
-              />
-            )}
+      {/* 2. MAIN WORKSPACE WRAPPER */}
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Desktop Sidebar Navigation Rail */}
+        {isDesktopMode && (
+          <Navigation
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            handleTabSelect={handleTabSelect}
+            settings={settings}
+            products={products}
+            maintenanceOrders={maintenanceOrders}
+            isCashierMode={isCashierMode}
+            setIsCashierMode={setIsCashierMode}
+            isPrivacyMode={isPrivacyMode}
+            setIsPrivacyMode={setIsPrivacyMode}
+            setShowPinCheckModal={setShowPinCheckModal}
+            setShowPrivacyPinModal={setShowPrivacyPinModal}
+            handleLogout={handleLogout}
+            currentUser={currentUser}
+            users={users}
+            setCurrentUser={setCurrentUser}
+          />
+        )}
+
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 pb-16 bg-slate-50 relative screen-content-wrapper">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.15 }}
+              className="w-full h-full"
+            >
+              {activeTab === 'dashboard' && (
+                isDesktopMode ? (
+                  <DesktopDashboardView
+                    products={products}
+                    customers={customers}
+                    invoices={invoices}
+                    payments={payments}
+                    transactions={transactions}
+                    settings={settings}
+                    employees={employees}
+                    setActiveTab={handleTabSelect}
+                    isPrivacyMode={isPrivacyMode}
+                  />
+                ) : (
+                  <MobileDashboardView
+                    products={products}
+                    customers={customers}
+                    invoices={invoices}
+                    payments={payments}
+                    transactions={transactions}
+                    settings={settings}
+                    employees={employees}
+                    activeTab={activeTab}
+                    setActiveTab={handleTabSelect}
+                    isPrivacyMode={isPrivacyMode}
+                    setIsPrivacyMode={setIsPrivacyMode}
+                    isCashierMode={isCashierMode}
+                    setIsCashierMode={setIsCashierMode}
+                    setShowPinCheckModal={setShowPinCheckModal}
+                    setShowPrivacyPinModal={setShowPrivacyPinModal}
+                    onBackupData={handleBackupData}
+                    onRestoreData={handleRestoreData}
+                  />
+                )
+              )}
 
             {activeTab === 'pos' && (
               <POS
@@ -1379,38 +1441,41 @@ export default function App() {
           </motion.div>
         </AnimatePresence>
       </main>
+    </div>
 
-      {/* 3. COMPACT BOTTOM NAVBAR (تم تصغير ارتفاعها إلى 12 / 48px لتصبح أصغر وأنيقة) */}
-      <nav className="h-12 bg-white border-t border-slate-200 fixed bottom-0 left-0 right-0 z-30 flex items-center justify-around px-1 shadow-sm">
-        {androidNavItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = activeTab === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => handleTabSelect(item.id)}
-              className="flex flex-col items-center justify-center flex-1 h-full py-0.5 group cursor-pointer"
-            >
-              <div
-                className={`px-3 py-0.5 rounded-full transition-all duration-200 ${
-                  isActive
-                    ? 'bg-blue-100 text-blue-700 font-bold'
-                    : 'text-slate-500 group-active:scale-90'
-                }`}
+      {/* 3. COMPACT BOTTOM NAVBAR (For Mobile/Responsive Mode) */}
+      {!isDesktopMode && (
+        <nav className="h-12 bg-white border-t border-slate-200 fixed bottom-0 left-0 right-0 z-30 flex items-center justify-around px-1 shadow-sm">
+          {androidNavItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleTabSelect(item.id)}
+                className="flex flex-col items-center justify-center flex-1 h-full py-0.5 group cursor-pointer"
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
-              </div>
-              <span
-                className={`text-[10px] mt-0.5 transition-colors ${
-                  isActive ? 'text-blue-700 font-bold' : 'text-slate-500'
-                }`}
-              >
-                {item.label}
-              </span>
-            </button>
-          );
-        })}
-      </nav>
+                <div
+                  className={`px-3 py-0.5 rounded-full transition-all duration-200 ${
+                    isActive
+                      ? 'bg-blue-100 text-blue-700 font-bold'
+                      : 'text-slate-500 group-active:scale-90'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 ${isActive ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
+                </div>
+                <span
+                  className={`text-[10px] mt-0.5 transition-colors ${
+                    isActive ? 'text-blue-700 font-bold' : 'text-slate-500'
+                  }`}
+                >
+                  {item.label}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+      )}
 
       {/* Modals & Tools */}
       {activeInvoice && (

@@ -40,7 +40,10 @@ import {
   UserCheck,
   CheckCircle2,
   FolderTree,
-  Share2
+  Share2,
+  Monitor,
+  Smartphone,
+  Tablet
 } from 'lucide-react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
@@ -48,7 +51,7 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { SystemSettings, AppTheme, CardShape, DisplayDensity, CurrencyRate, BackupFrequency } from '../types';
-import { ensureCustomFolder, saveAndShareFile, ensureStoragePermissions, setCustomSaveFolder, getCustomSaveFolder } from '../utils/fileExport';
+import { ensureCustomFolder, saveAndShareFile, ensureStoragePermissions } from '../utils/fileExport';
 import { DEFAULT_CURRENCIES } from '../utils/seedData';
 import { soundManager } from '../utils/sound';
 import { loadLicenseLocally, saveLicenseLocally, generateHWID, LicenseInfo } from '../utils/licensing';
@@ -107,8 +110,29 @@ export default function Settings({
     soundManager.playScanBeep();
     setLayoutPreference(mode);
     setDeviceMode(mode);
+    
+    // Save preference to localStorage
     localStorage.setItem('app_layout_preference', mode);
+    localStorage.setItem('app_interface_mode', mode);
+    
+    // Immediately toggle HTML class
+    if (typeof document !== 'undefined') {
+      if (mode === 'desktop') {
+        document.documentElement.classList.add('mode-desktop');
+        document.documentElement.classList.remove('mode-mobile');
+      } else {
+        document.documentElement.classList.add('mode-mobile');
+        document.documentElement.classList.remove('mode-desktop');
+      }
+    }
+
+    // Fire event listeners
     window.dispatchEvent(new Event('app_layout_changed'));
+    window.dispatchEvent(new CustomEvent('app_interface_mode_changed', { detail: mode }));
+
+    // Update parent settings
+    const updated = { ...settings, deviceMode: mode };
+    onSaveSettings(updated);
   };
 
   // WhatsApp-style Backup State
@@ -660,18 +684,14 @@ export default function Settings({
 
     const cleanFolder = (backupFolderPath || 'SanadAccounting')
       .trim()
-      .replace(/^(Documents[\/\\]?)+/i, '')
+      .replace(/^Documents\//i, '')
       .replace(/^\/+|\/+$/g, '') || 'SanadAccounting';
 
-    setCustomSaveFolder(cleanFolder);
+    localStorage.setItem('sanad_custom_save_folder', cleanFolder);
 
     try {
-      let isSuccess = false;
       if (onBackupData) {
-        isSuccess = (await onBackupData()) as any;
-        if (isSuccess !== false) {
-          alert(`✅ تم حفظ النسخة الاحتياطية بنجاح بداخل ذاكرة الهاتف (Documents/${cleanFolder})`);
-        }
+        await onBackupData();
       } else {
         const getParsed = (key: string) => {
           try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; }
@@ -694,7 +714,7 @@ export default function Settings({
         const jsonStr = JSON.stringify(fullBackupData, null, 2);
         const fileName = `Sanad_Backup_${new Date().toISOString().slice(0, 10)}_${Date.now().toString().slice(-4)}.json`;
 
-        const res = await saveAndShareFile({
+        await saveAndShareFile({
           fileName,
           data: jsonStr,
           mimeType: 'application/json',
@@ -702,12 +722,6 @@ export default function Settings({
           text: `ملف النسخة الاحتياطية لقاعدة البيانات بتاريخ ${new Date().toLocaleDateString('ar-YE')}`,
           folderName: cleanFolder
         });
-
-        if (res) {
-          alert(`✅ تم حفظ النسخة الاحتياطية بنجاح!\nالمسار الدائم: Documents/${cleanFolder}/${fileName}`);
-        } else {
-          alert(`⚠️ تعذر حفظ النسخة الاحتياطية. يرجى التأكد من تفعيل أذونات الوصول للتخزين.`);
-        }
       }
     } catch (err) {
       console.error('Backup creation error:', err);
@@ -744,13 +758,42 @@ export default function Settings({
       const jsonStr = JSON.stringify(fullBackupData, null, 2);
       const fileName = `Sanad_Share_Backup_${new Date().toISOString().slice(0, 10)}_${Date.now().toString().slice(-4)}.json`;
 
+      if (Capacitor.isNativePlatform()) {
+        try {
+          await ensureStoragePermissions();
+
+          const writeResult = await Filesystem.writeFile({
+            path: fileName,
+            data: jsonStr,
+            directory: Directory.Cache,
+            recursive: true,
+            encoding: Encoding.UTF8
+          });
+
+          if (writeResult && writeResult.uri) {
+            await Share.share({
+              title: 'مشاركة نسخة البيانات - نظام سند المحاسبي',
+              text: `ملف النسخة الاحتياطية الشاملة لنظام سند المحاسبي بتاريخ ${new Date().toLocaleDateString('ar-YE')}`,
+              url: writeResult.uri,
+              dialogTitle: 'اختر التطبيق لمشاركة النسخة الاحتياطية (WhatsApp, Drive, Telegram...)'
+            });
+            return;
+          }
+        } catch (nativeErr: any) {
+          const errStr = String(nativeErr || '').toLowerCase();
+          if (errStr.includes('cancel') || errStr.includes('dismiss') || errStr.includes('abort')) {
+            return;
+          }
+          console.warn('Native Share attempt error:', nativeErr);
+        }
+      }
+
       await saveAndShareFile({
         fileName,
         data: jsonStr,
         mimeType: 'application/json',
         title: 'مشاركة نسخة البيانات - نظام سند المحاسبي',
-        text: `ملف النسخة الاحتياطية الشاملة لنظام سند المحاسبي بتاريخ ${new Date().toLocaleDateString('ar-YE')}`,
-        folderName: getCustomSaveFolder()
+        text: 'ملف قاعدة البيانات والنسخة الاحتياطية لنظام سند المحاسبي'
       });
 
     } catch (err) {
@@ -1646,56 +1689,113 @@ export default function Settings({
                 </span>
               </div>
 
-              <div className="space-y-3 p-3.5 bg-sky-50/70 border border-sky-200 rounded-2xl shadow-xs">
-                <label className="text-xs font-bold text-sky-950 flex items-center gap-1.5">
-                  <LayoutGrid className="w-4 h-4 text-sky-600" />
-                  <span>معمارية الواجهات (Dual Layout Architecture):</span>
-                </label>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                  <label
-                    onClick={() => handleLayoutPreferenceChange('mobile')}
-                    className={`p-3 rounded-xl border text-right transition cursor-pointer flex items-center gap-3 select-none ${
-                      layoutPreference === 'mobile'
-                        ? 'bg-white border-sky-600 ring-2 ring-sky-500/30 text-sky-950 font-bold shadow-xs'
-                        : 'bg-white/70 border-slate-200 text-slate-700 hover:bg-white'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="app_layout_preference"
-                      value="mobile"
-                      checked={layoutPreference === 'mobile'}
-                      onChange={() => handleLayoutPreferenceChange('mobile')}
-                      className="w-4 h-4 text-sky-600 focus:ring-sky-500 cursor-pointer shrink-0"
-                    />
-                    <div>
-                      <div className="text-xs font-bold text-slate-900">واجهة الجوال المبسطة (Mobile View)</div>
-                      <div className="text-[9.5px] text-slate-500 mt-0.5">بلاطات ملونة وشريط تنقل سفلي</div>
+              <div className="space-y-3.5 p-4 bg-gradient-to-br from-sky-50 via-blue-50/50 to-indigo-50/30 border border-sky-200 rounded-2xl shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-sky-100">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2.5 bg-sky-600 text-white rounded-xl shadow-xs shrink-0">
+                      <LayoutGrid className="w-5 h-5" />
                     </div>
-                  </label>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                        <span>نمط واجهة النظام</span>
+                        <span className="text-[10px] bg-sky-100 text-sky-800 border border-sky-300 px-2 py-0.5 rounded-full font-extrabold">
+                          System Interface Mode
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        تحديد قياسات الأبعاد، أسلوب عرض الشاشات، والجداول في كامل التطبيق وحفظ الخيار في localStorage.
+                      </p>
+                    </div>
+                  </div>
 
-                  <label
+                  {/* 🔘 Switch Button (زر مفتاح التبديل) */}
+                  <div className="flex items-center justify-between sm:justify-end gap-3 bg-white px-3.5 py-2 rounded-2xl border border-sky-200 shadow-xs shrink-0">
+                    <span className={`text-xs font-extrabold transition-colors ${layoutPreference === 'mobile' ? 'text-sky-700' : 'text-slate-400'}`}>
+                      جوال / تابلت 📱
+                    </span>
+                    <button
+                      type="button"
+                      id="interface_mode_switch_toggle"
+                      onClick={() => handleLayoutPreferenceChange(layoutPreference === 'desktop' ? 'mobile' : 'desktop')}
+                      className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none cursor-pointer p-1 shadow-inner ${
+                        layoutPreference === 'desktop' ? 'bg-sky-600' : 'bg-slate-300'
+                      }`}
+                      aria-label="مفتاح تبديل نمط واجهة النظام"
+                      title="انقر للتبديل بين واجهة الكمبيوتر وواجهة الجوال"
+                    >
+                      <span
+                        className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform duration-200 shadow-md ${
+                          layoutPreference === 'desktop' ? 'translate-x-0' : 'translate-x-7'
+                        }`}
+                      />
+                    </button>
+                    <span className={`text-xs font-extrabold transition-colors ${layoutPreference === 'desktop' ? 'text-sky-700' : 'text-slate-400'}`}>
+                      سطح المكتب 💻
+                    </span>
+                  </div>
+                </div>
+                
+                {/* Visual Option Cards for Selection */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  {/* Desktop Mode Option Card */}
+                  <button
+                    type="button"
                     onClick={() => handleLayoutPreferenceChange('desktop')}
-                    className={`p-3 rounded-xl border text-right transition cursor-pointer flex items-center gap-3 select-none ${
+                    className={`p-3.5 rounded-2xl border text-right transition-all cursor-pointer flex items-start gap-3 select-none ${
                       layoutPreference === 'desktop'
-                        ? 'bg-white border-sky-600 ring-2 ring-sky-500/30 text-sky-950 font-bold shadow-xs'
-                        : 'bg-white/70 border-slate-200 text-slate-700 hover:bg-white'
+                        ? 'bg-white border-sky-600 ring-2 ring-sky-500/30 text-sky-950 font-bold shadow-md'
+                        : 'bg-white/80 border-slate-200 text-slate-700 hover:bg-white hover:border-slate-300'
                     }`}
                   >
-                    <input
-                      type="radio"
-                      name="app_layout_preference"
-                      value="desktop"
-                      checked={layoutPreference === 'desktop'}
-                      onChange={() => handleLayoutPreferenceChange('desktop')}
-                      className="w-4 h-4 text-sky-600 focus:ring-sky-500 cursor-pointer shrink-0"
-                    />
-                    <div>
-                      <div className="text-xs font-bold text-slate-900">واجهة الكمبيوتر والشاشات العريضة</div>
-                      <div className="text-[9.5px] text-slate-500 mt-0.5">قوائم جانبية وهيدر عريض</div>
+                    <div className={`p-2.5 rounded-xl shrink-0 transition-colors ${
+                      layoutPreference === 'desktop' ? 'bg-sky-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      <Monitor className="w-5 h-5" />
                     </div>
-                  </label>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900">واجهة سطح المكتب (Desktop Mode)</span>
+                        {layoutPreference === 'desktop' && (
+                          <span className="text-[9.5px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full font-bold">
+                            مُطبّق حالياً ✅
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                        تطبيق أبعاد موسعة، جداول عريضة كاملة البيانات بدون طي، وقوائم جانبية ثنائية الأبعاد للشاشات الكبيرة.
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* Mobile/Responsive Mode Option Card */}
+                  <button
+                    type="button"
+                    onClick={() => handleLayoutPreferenceChange('mobile')}
+                    className={`p-3.5 rounded-2xl border text-right transition-all cursor-pointer flex items-start gap-3 select-none ${
+                      layoutPreference === 'mobile'
+                        ? 'bg-white border-sky-600 ring-2 ring-sky-500/30 text-sky-950 font-bold shadow-md'
+                        : 'bg-white/80 border-slate-200 text-slate-700 hover:bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div className={`p-2.5 rounded-xl shrink-0 transition-colors ${
+                      layoutPreference === 'mobile' ? 'bg-sky-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      <Smartphone className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900">واجهة الجوال / التابلت (Mobile/Responsive Mode)</span>
+                        {layoutPreference === 'mobile' && (
+                          <span className="text-[9.5px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full font-bold">
+                            مُطبّق حالياً ✅
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                        قياسات أبعاد مرنة استجابية، أزرار ومفاتيح لمسية مكبّرة، شريط تنقل سفلي، وجداول قابلة للتمرير الأفقي.
+                      </p>
+                    </div>
+                  </button>
                 </div>
               </div>
 
@@ -1834,29 +1934,29 @@ export default function Settings({
                     type="button"
                     onClick={() => {
                       soundManager.playScanBeep();
-                      setFolderInputVal('SanadAccounting');
+                      setFolderInputVal('Documents/SanadAccounting');
                     }}
                     className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
-                      folderInputVal === 'SanadAccounting'
+                      folderInputVal === 'Documents/SanadAccounting'
                         ? 'bg-emerald-600 text-white border-emerald-600'
                         : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-200'
                     }`}
                   >
-                    مستندات سند (المستحسن)
+                    مستندات التطبيق (المستحسن)
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       soundManager.playScanBeep();
-                      setFolderInputVal('SanadAccounting/Invoices');
+                      setFolderInputVal('Downloads/SanadAccounting');
                     }}
                     className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
-                      folderInputVal === 'SanadAccounting/Invoices'
+                      folderInputVal === 'Downloads/SanadAccounting'
                         ? 'bg-emerald-600 text-white border-emerald-600'
                         : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-200'
                     }`}
                   >
-                    مجلد الفواتير (Invoices)
+                    مجلد التنزيلات (Downloads)
                   </button>
                   <button
                     type="button"
@@ -1870,7 +1970,7 @@ export default function Settings({
                         : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-200'
                     }`}
                   >
-                    النسخ الاحتياطية (Backups)
+                    الذاكرة الرئيسية (Backups)
                   </button>
                 </div>
               </div>
@@ -1892,9 +1992,8 @@ export default function Settings({
               <button
                 type="button"
                 onClick={async () => {
-                  const cleaned = folderInputVal.trim() || 'SanadAccounting';
+                  const cleaned = folderInputVal.trim() || 'Documents/SanadAccounting';
                   setBackupFolderPath(cleaned);
-                  setCustomSaveFolder(cleaned);
                   await ensureCustomFolder(cleaned);
                   setShowFolderModal(false);
                   soundManager.playSuccessChime();

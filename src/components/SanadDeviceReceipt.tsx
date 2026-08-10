@@ -202,8 +202,7 @@ export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
 
   const handleWhatsAppShare = () => {
     if (!savedOrder) return;
-    soundManager.playSuccessChime();
-    generateWhatsAppReceiptLink(
+    const url = generateWhatsAppReceiptLink(
       settings?.companyName || 'مركز سند لصيانة وبرمجة الهواتف',
       {
         ticketNumber: savedOrder.ticketNumber,
@@ -218,6 +217,7 @@ export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
       },
       settings?.currency || 'ريال'
     );
+    openExternalUrl(url);
   };
 
   const handleExportPDF = async () => {
@@ -226,76 +226,56 @@ export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
     setIsExportingPDF(true);
 
     try {
-      const ticket = savedOrder.ticketNumber || `SND-${Date.now().toString().slice(-6)}`;
-      const shopName = settings?.companyName || 'مركز سند لصيانة وبرمجة الهواتف';
-      const currency = settings?.currency || 'ريال';
-      const cost = savedOrder.estimatedCost || 0;
-      const advance = savedOrder.depositAmount || 0;
-      const remaining = Number(cost) - Number(advance);
+      const element = document.getElementById('receipt-printable-card');
+      if (!element) {
+        alert('⚠️ تعذر العثور على بطاقة الاستلام للتصدير.');
+        return;
+      }
 
-      const htmlContent = `
-        <!DOCTYPE html>
-        <html dir="rtl" lang="ar">
-        <head>
-          <meta charset="UTF-8" />
-          <title>كارت استلام - ${savedOrder.customerName}</title>
-          <style>
-            body { font-family: sans-serif; width: 100%; padding: 16px; margin: 0; text-align: center; color: #1e293b; background: #fff; }
-            .header { font-size: 18px; font-weight: bold; margin-bottom: 4px; color: #0f172a; }
-            .sub-header { font-size: 12px; margin-bottom: 10px; color: #64748b; }
-            .line { border-bottom: 1px dashed #cbd5e1; margin: 10px 0; }
-            .ticket-no { font-size: 16px; font-weight: bold; background: #f1f5f9; padding: 8px; margin: 8px 0; border: 1px solid #94a3b8; border-radius: 8px; }
-            .details { text-align: right; font-size: 13px; line-height: 1.8; }
-            .price-box { margin-top: 12px; padding: 10px; border: 1px solid #0284c7; background: #f0f9ff; border-radius: 8px; text-align: right; font-size: 13px; font-weight: bold; }
-            .footer { font-size: 10px; margin-top: 16px; text-align: center; line-height: 1.5; color: #475569; }
-          </style>
-        </head>
-        <body>
-          <div class="header">${shopName}</div>
-          <div class="sub-header">مركز صيانة وبرمجة الهواتف الذكية</div>
-          <div class="ticket-no">رقم السند: ${ticket}</div>
-          <div class="line"></div>
-          
-          <div class="details">
-            <b>تاريخ الاستلام:</b> ${new Date().toLocaleDateString('ar-YE')}<br/>
-            <b>اسم الزبون:</b> ${savedOrder.customerName}<br/>
-            <b>رقم الهاتف:</b> ${savedOrder.customerPhone}<br/>
-            <b>موديل الجهاز:</b> ${savedOrder.deviceModel}<br/>
-            <b>IMEI / السيريال:</b> ${savedOrder.serialNumber || '—'}<br/>
-            <b>وصف المشكلة:</b> ${savedOrder.issueDescription || 'صيانة وتفليش'}<br/>
-          </div>
+      const canvas = await html2canvas(element, getSafeHtml2CanvasOptions({
+        onclone: (clonedDoc: Document) => {
+          const origCard = document.getElementById('receipt-printable-card');
+          const clonedCard = clonedDoc.getElementById('receipt-printable-card');
+          if (origCard && clonedCard) {
+            clonedCard.style.color = '#1e293b';
+            clonedCard.style.backgroundColor = '#ffffff';
+            clonedCard.style.padding = '16px';
+            clonedCard.style.borderRadius = '12px';
+            clonedCard.style.border = '1px solid #cbd5e1';
+          }
+        }
+      }));
 
-          <div class="price-box">
-            الإجمالي التقديري: ${cost} ${currency}<br/>
-            الواصل (العربون): ${advance} ${currency}<br/>
-            المتبقي: ${remaining} ${currency}
-          </div>
+      const imgData = canvas.toDataURL('image/png');
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
 
-          <div class="line"></div>
-          
-          <div class="footer">
-            📌 <b>شروط الورشة:</b><br/>
-            1. المحل غير مسؤول عن البيانات والحسابات بداخل الجهاز.<br/>
-            2. المحل غير مسؤول عن الأجهزة التي تتأخر عن 30 يوماً.<br/>
-            3. يرجى إحضار هذا السند عند الاستلام.<br/>
-            <br/>
-            <b>شكراً لزيارتكم وجميل ثقتكم! 🌸</b>
-          </div>
-        </body>
-        </html>
-      `;
+      const pdfWidth = 80;
+      const pdfHeight = (imgHeight * pdfWidth) / imgWidth;
 
-      const fileName = `كارت_استلام_${ticket}.html`;
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [pdfWidth, pdfHeight + 2],
+      });
+
+      pdf.addImage(imgData, 'PNG', 0, 1, pdfWidth, pdfHeight);
+      const fileName = `كارت_استلام_${savedOrder.ticketNumber}.pdf`;
+      const base64Data = pdf.output('datauristring').split(',')[1];
+
       await saveAndShareFile({
         fileName,
-        data: htmlContent,
-        mimeType: 'text/html',
-        title: `كارت استلام ${ticket}`,
+        data: base64Data,
+        isBase64: true,
+        mimeType: 'application/pdf',
+        title: `كارت استلام ${savedOrder.ticketNumber}`,
         text: `كارت استلام جهاز صيانة ${savedOrder.deviceModel} للعميل ${savedOrder.customerName}`
       });
     } catch (err) {
-      console.error('فشل تصدير كارت الاستلام:', err);
-      alert('❌ تعذر تصدير الملف.');
+      console.error('فشل تصدير كارت الاستلام كـ PDF:', err);
+      if (typeof window !== 'undefined') {
+        window.print();
+      }
     } finally {
       setIsExportingPDF(false);
     }

@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Capacitor } from '@capacitor/core';
-import { saveAndShareFile } from '../utils/fileExport';
-import { openWhatsApp } from '../utils/nativeLauncher';
+/**
+ * 🖨️ Receipt & WhatsApp Utility
+ * مشاركة سند استلام جهاز صيانة/تفليش عبر الواتساب أو الطباعة الحرارية (Thermal 80mm/58mm)
+ */
 
 export interface ReceiptPrintData {
   ticket_id?: string;
@@ -25,7 +26,7 @@ export interface ReceiptPrintData {
 }
 
 /**
- * 1. توليد رابط وتوجيه واتساب مباشر لإرسال سند استلام
+ * 1. توليد رابط واتساب مباشر لإرسال سند استلام باللغة العربية
  */
 export const generateWhatsAppReceiptLink = (
   shopName: string = 'مركز سند لصيانة وبرمجة الهواتف',
@@ -62,18 +63,13 @@ export const generateWhatsAppReceiptLink = (
   const encodedText = encodeURIComponent(text);
   const cleanPhone = receiptData.customerPhone ? receiptData.customerPhone.replace(/[^0-9]/g, '') : '';
 
-  const waUrl = cleanPhone 
+  return cleanPhone 
     ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedText}`
     : `https://api.whatsapp.com/send?text=${encodedText}`;
-
-  // فتح الواتساب مباشرة بداخل الجوال عبر Capacitor AppLauncher والـ Intent
-  openWhatsApp(cleanPhone, text);
-
-  return waUrl;
 };
 
 /**
- * 2. طباعة وتصدير سند استلام حراري متوافق مع أندرويد WebView
+ * 2. طباعة سند استلام حراري (Thermal Printer 80mm) مباشرة مع شروط الورشة
  */
 export const printReceiptHTML = (
   shopName: string = 'مركز سند لصيانة وبرمجة الهواتف',
@@ -96,14 +92,23 @@ export const printReceiptHTML = (
       <meta charset="UTF-8" />
       <title>سند استلام - ${receiptData.customerName}</title>
       <style>
-        body { font-family: sans-serif; width: 100%; padding: 12px; margin: 0; text-align: center; color: #000; background: #fff; }
-        .header { font-size: 18px; font-weight: bold; margin-bottom: 4px; }
-        .sub-header { font-size: 12px; margin-bottom: 8px; color: #333; }
+        body { 
+          font-family: 'Tahoma', 'Segoe UI', monospace; 
+          width: 78mm; 
+          padding: 8px; 
+          margin: 0 auto; 
+          text-align: center;
+          color: #000;
+          background: #fff;
+        }
+        .header { font-size: 16px; font-weight: bold; margin-bottom: 4px; }
+        .sub-header { font-size: 11px; margin-bottom: 8px; color: #333; }
         .line { border-bottom: 1px dashed #000; margin: 8px 0; }
-        .ticket-no { font-size: 15px; font-weight: bold; background: #eee; padding: 6px; margin: 6px 0; border: 1px solid #000; }
-        .details { text-align: right; font-size: 13px; line-height: 1.8; }
-        .price-box { margin-top: 10px; padding: 8px; border: 1px solid #000; text-align: right; font-size: 13px; font-weight: bold; }
-        .footer { font-size: 10px; margin-top: 14px; text-align: center; line-height: 1.5; }
+        .ticket-no { font-size: 14px; font-weight: bold; background: #eee; padding: 4px; margin: 6px 0; border: 1px solid #000; }
+        .details { text-align: right; font-size: 12px; line-height: 1.6; }
+        .details b { color: #000; }
+        .price-box { margin-top: 8px; padding: 6px; border: 1px solid #000; text-align: right; font-size: 12px; font-weight: bold; }
+        .footer { font-size: 9px; margin-top: 12px; text-align: center; line-height: 1.4; }
       </style>
     </head>
     <body>
@@ -137,31 +142,46 @@ export const printReceiptHTML = (
         <br/>
         <b>شكراً لزيارتكم وجميل ثقتكم! 🌸</b>
       </div>
+
+      <script>
+        window.onload = function() { 
+          setTimeout(function() {
+            window.print(); 
+            window.close(); 
+          }, 250);
+        }
+      </script>
     </body>
     </html>
   `;
 
-  // إذا كنا على الأندرويد، نحفظ الفاتورة كملف HTML لطباعتها أو فتحها مباشرة
-  if (Capacitor.isNativePlatform()) {
-    saveAndShareFile({
-      fileName: `Receipt_${ticket}.html`,
-      data: htmlContent,
-      mimeType: 'text/html',
-      title: `سند استلام - ${receiptData.customerName}`,
-      text: `سند استلام صيانة رقم: ${ticket}`
-    });
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    // Fallback for native WebView where window.open returns null
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(htmlContent);
+      doc.close();
+      setTimeout(() => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        setTimeout(() => {
+          try { document.body.removeChild(iframe); } catch(e){}
+        }, 1000);
+      }, 300);
+    }
     return;
   }
 
-  // في البيئات العادية (الويب)
-  const printWindow = window.open('', '_blank');
-  if (printWindow) {
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    setTimeout(() => {
-      printWindow.focus();
-      printWindow.print();
-    }, 300);
-  }
+  printWindow.document.write(htmlContent);
+  printWindow.document.close();
 };
-

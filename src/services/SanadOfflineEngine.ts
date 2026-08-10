@@ -25,100 +25,12 @@ export interface OfflineDeviceRecord {
 const STORAGE_KEY_PENDING_DEVICES = 'sanad_pending_devices_offline';
 
 /**
- * 0. التحقق السريع من توفر الاتصال بالإنترنت
- */
-export const isOnline = (): boolean => {
-  if (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean') {
-    return navigator.onLine;
-  }
-  return true;
-};
-
-/**
- * 0.1 حظر كافة الطلبات المباشرة لـ Firestore أوفلاين لمنع ظهور أخطاء GET firestore.googleapis.com
- */
-export const isFirestoreNetworkAllowed = (): boolean => {
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    console.log('[OfflineEngine] Firestore network request blocked because device is offline (navigator.onLine === false)');
-    return false;
-  }
-  return true;
-};
-
-/**
- * 0.2 الاستماع لتغيرات حالة شبكة الاتصال وتنبيه المكونات
- */
-export const onNetworkStatusChange = (callback: (online: boolean) => void): (() => void) => {
-  if (typeof window === 'undefined') return () => {};
-
-  const handleOnline = () => callback(true);
-  const handleOffline = () => callback(false);
-
-  window.addEventListener('online', handleOnline);
-  window.addEventListener('offline', handleOffline);
-
-  return () => {
-    window.removeEventListener('online', handleOnline);
-    window.removeEventListener('offline', handleOffline);
-  };
-};
-
-/**
- * 0.2 تغليف آمن لطلبات الشبكة يمنع أخطاء net::ERR_INTERNET_DISCONNECTED
- */
-export const safeOfflineFetch = async (
-  input: RequestInfo | URL,
-  init?: RequestInit
-): Promise<{ ok: boolean; status: number; data?: any; isOffline: boolean; error?: string }> => {
-  if (!isOnline()) {
-    console.warn('[OfflineEngine] تم إلغاء طلب الشبكة لأن الجهاز في وضع الأوفلاين (navigator.onLine = false)');
-    return {
-      ok: false,
-      status: 0,
-      isOffline: true,
-      error: 'الجهاز أوفلاين (غير متصل بالإنترنت)'
-    };
-  }
-
-  try {
-    const res = await fetch(input, init);
-    const contentType = res.headers.get('content-type');
-    let data = null;
-    if (contentType && contentType.includes('application/json')) {
-      data = await res.json();
-    }
-    return {
-      ok: res.ok,
-      status: res.status,
-      data,
-      isOffline: false
-    };
-  } catch (err: any) {
-    console.warn('[OfflineEngine] تعذر الاتصال بالشبكة:', err?.message || err);
-    return {
-      ok: false,
-      status: 0,
-      isOffline: true,
-      error: err?.message || 'فشل الاتصال بالشبكة'
-    };
-  }
-};
-
-/**
  * 1. حفظ كارت استلام جهاز محلياً عند عدم توفر اتصال بالشبكة
  */
 export const saveDeviceReceiptOffline = (deviceData: Omit<OfflineDeviceRecord, 'local_id' | 'created_at' | 'synced'>) => {
   try {
     const existingStr = localStorage.getItem(STORAGE_KEY_PENDING_DEVICES);
-    let existing: OfflineDeviceRecord[] = [];
-    
-    if (existingStr) {
-      try {
-        existing = JSON.parse(existingStr);
-      } catch (e) {
-        existing = [];
-      }
-    }
+    const existing: OfflineDeviceRecord[] = existingStr ? JSON.parse(existingStr) : [];
 
     const offlineRecord: OfflineDeviceRecord = {
       ...deviceData,
@@ -161,7 +73,7 @@ export const getPendingOfflineRecords = (): OfflineDeviceRecord[] => {
 };
 
 /**
- * 3. مزامنة البيانات المخزنة أوفلاين مع السيرفر تلقائياً عند عودة الإنترنت بدون تعليق الواجهة
+ * 3. مزامنة البيانات المخزنة أوفلاين مع السيرفر تلقائياً عند عودة الإنترنت
  */
 export const syncOfflineDataWithServer = async (
   apiBaseUrl: string, 
@@ -171,12 +83,6 @@ export const syncOfflineDataWithServer = async (
 
   if (!pendingRecords || pendingRecords.length === 0) {
     return { syncedCount: 0, remainingCount: 0 };
-  }
-
-  // إذا كان الجهاز يعمل أوفلاين، عدم إجراء أي طلبات شبكة لمنع أخطاء ERR_INTERNET_DISCONNECTED
-  if (!isOnline()) {
-    console.log('📱 الوضع الحالي أوفلاين (بدون إنترنت) - تم تأجيل المزامنة والحفاظ على البيانات محلياً.');
-    return { syncedCount: 0, remainingCount: pendingRecords.length };
   }
 
   if (!apiBaseUrl) {
@@ -190,27 +96,15 @@ export const syncOfflineDataWithServer = async (
   const remainingRecords: OfflineDeviceRecord[] = [];
 
   for (const record of pendingRecords) {
-    if (!isOnline()) {
-      remainingRecords.push(record);
-      continue;
-    }
-
     try {
-      // إدخال مهلة زمنية (Timeout 3 ثوانٍ) لمنع تجمد التطبيق عند بطء الشبكة
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
-
       const response = await fetch(`${apiBaseUrl}/api/service/create-device`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': token ? `Bearer ${token}` : ''
         },
-        body: JSON.stringify(record),
-        signal: controller.signal
+        body: JSON.stringify(record)
       });
-
-      clearTimeout(timeoutId);
 
       if (response.ok) {
         syncedCount++;
@@ -218,7 +112,7 @@ export const syncOfflineDataWithServer = async (
         remainingRecords.push(record);
       }
     } catch (error) {
-      console.warn('فشلت المزامنة للكارت، وسيستمر التخزين المحلي:', record.local_id);
+      console.warn('فشلت المزامنة للكارت:', record.local_id, error);
       remainingRecords.push(record);
     }
   }
@@ -230,7 +124,7 @@ export const syncOfflineDataWithServer = async (
 };
 
 /**
- * 4. مسح السجلات المعلقة يدوياً
+ * 4. مسح السجلات المعلقة يدوياً (إن لزم الأمر)
  */
 export const clearPendingRecords = (): void => {
   localStorage.removeItem(STORAGE_KEY_PENDING_DEVICES);

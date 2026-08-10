@@ -110,17 +110,7 @@ export default function Maintenance({
 
       reportElement.style.display = 'block';
 
-      const canvas = await html2canvas(reportElement, getSafeHtml2CanvasOptions({
-        windowWidth: 850,
-        onclone: (clonedDoc: Document) => {
-          clonedDoc.querySelectorAll('*').forEach((el: any) => {
-            if (el.style) {
-              if (el.style.color && /(oklch|oklab)/i.test(el.style.color)) el.style.color = '#0f172a';
-              if (el.style.backgroundColor && /(oklch|oklab)/i.test(el.style.backgroundColor)) el.style.backgroundColor = '#ffffff';
-            }
-          });
-        }
-      }));
+      const canvas = await html2canvas(reportElement, getSafeHtml2CanvasOptions({ windowWidth: 850 }));
 
       reportElement.style.display = 'none';
 

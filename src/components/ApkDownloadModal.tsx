@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Smartphone, Download, QrCode, CheckCircle, ShieldCheck, Zap, HardDrive, WifiOff, ExternalLink, X, Share2 } from 'lucide-react';
 import { soundManager } from '../utils/sound';
-import { nativeShareText } from '../utils/nativeLauncher';
 import { saveAndShareFile } from '../utils/fileExport';
 
 interface ApkDownloadModalProps {
@@ -69,11 +68,17 @@ export default function ApkDownloadModal({ isOpen, onClose, storeName = 'نظا�
   };
 
   const handleShareLink = () => {
-    nativeShareText(
-      storeName,
-      'رابط تحميل نظام سند المحاسبي للهواتف الذكية',
-      currentUrl
-    );
+    if (navigator.share) {
+      navigator.share({
+        title: storeName,
+        text: 'رابط تحميل نظام سند المحاسبي للهواتف الذكية',
+        url: currentUrl
+      }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(currentUrl);
+      soundManager.playSuccessChime();
+      alert('تم نسخ رابط التطبيق بنجاح! يمكنك إرساله لواتساب أو الموبايل.');
+    }
   };
 
   return (

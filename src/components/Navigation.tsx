@@ -188,7 +188,7 @@ export default function Navigation({
     return (
       <aside 
         id="desktop_navigation_rail" 
-        className="no-print hidden md:block w-64 bg-white border-l border-slate-200 p-4 space-y-2 shrink-0 shadow-sm"
+        className="no-print w-64 bg-white border-l border-slate-200 p-4 space-y-2 shrink-0 shadow-sm overflow-y-auto"
       >
         <div className="flex items-center justify-between px-2 mb-3">
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">

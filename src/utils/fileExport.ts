@@ -7,32 +7,29 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
 
-export interface FileExportOptions {
+export interface SaveAndShareOptions {
   fileName: string;
-  data: string;
-  mimeType?: string;
+  data: string; // Base64 or plain string
   isBase64?: boolean;
+  mimeType?: string; // e.g. 'application/pdf', 'text/csv', 'application/json'
   title?: string;
   text?: string;
-  folderName?: string;
+  folderName?: string; // If omitted, uses getCustomSaveFolder()
 }
 
-export type SaveAndShareOptions = FileExportOptions;
-
 /**
- * Gets user's configured custom save folder (Defaults to 'SanadAccounting')
+ * Gets user's configured custom save folder (Defaults to 'SanadApp')
  */
 export function getCustomSaveFolder(): string {
   try {
     const saved = localStorage.getItem('sanad_custom_save_folder');
     if (saved && saved.trim().length > 0) {
-      const clean = saved.trim().replace(/^(Documents[\/\\]?)+/i, '').replace(/^\/+|\/+$/g, '').trim();
-      return clean || 'SanadAccounting';
+      return saved.trim().replace(/^\/+|\/+$/g, '');
     }
   } catch (e) {
     console.warn('Error reading custom save folder:', e);
   }
-  return 'SanadAccounting';
+  return 'SanadApp';
 }
 
 /**
@@ -40,12 +37,8 @@ export function getCustomSaveFolder(): string {
  */
 export function setCustomSaveFolder(folderName: string): void {
   try {
-    const clean = (folderName || 'SanadAccounting')
-      .trim()
-      .replace(/^(Documents[\/\\]?)+/i, '')
-      .replace(/^\/+|\/+$/g, '')
-      .trim();
-    localStorage.setItem('sanad_custom_save_folder', clean || 'SanadAccounting');
+    const clean = (folderName || 'SanadApp').trim().replace(/^\/+|\/+$/g, '');
+    localStorage.setItem('sanad_custom_save_folder', clean || 'SanadApp');
   } catch (e) {
     console.warn('Error setting custom save folder:', e);
   }
@@ -120,7 +113,7 @@ export async function ensureCustomFolder(folderPath?: string): Promise<boolean> 
   }
   await ensureStoragePermissions();
   const targetFolder = folderPath || getCustomSaveFolder();
-  const cleanFolder = targetFolder.replace(/^(Documents[\/\\]?)+/i, '').trim().replace(/^\/+|\/+$/g, '') || 'SanadAccounting';
+  const cleanFolder = targetFolder.trim().replace(/^\/+|\/+$/g, '') || 'SanadApp';
   
   try {
     await Filesystem.mkdir({
@@ -153,32 +146,6 @@ export async function ensureSanadFolder(): Promise<boolean> {
 }
 
 /**
- * 📲 إشعار محرك نظام أندرويد (Media Scanner / File Indexer) بالملف الجديد فور كتابته
- * ليظهر في مدير الملفات تلقائياً بمسار Documents/SanadAccounting بدون الحاجة لإعادة تشغيل الهاتف
- */
-export async function notifyMediaScanner(folderPath: string, fileName: string): Promise<string | null> {
-  if (!Capacitor.isNativePlatform()) return null;
-  try {
-    const cleanFolder = folderPath.replace(/^(Documents[\/\\]?)+/i, '').trim().replace(/^\/+|\/+$/g, '') || 'SanadAccounting';
-    const relativePath = `${cleanFolder}/${fileName}`;
-    const absoluteStoragePath = `/storage/emulated/0/Documents/${relativePath}`;
-    
-    // طلب المسار البرمجي المعتمد (Native URI) لإجبار نظام أندرويد على فهرسة الملف في الميديا ستور (Media Store Index)
-    const uriResult = await Filesystem.getUri({
-      directory: Directory.Documents,
-      path: relativePath
-    }).catch(() => null);
-
-    const finalUri = uriResult?.uri || `file://${absoluteStoragePath}`;
-    console.log(`[MediaScannerConnection] File indexed successfully at ${absoluteStoragePath} (${finalUri})`);
-    return finalUri;
-  } catch (err) {
-    console.warn('[MediaScanner] Indexing warning:', err);
-  }
-  return null;
-}
-
-/**
  * Saves a backup file silently in local storage without opening UI dialogs
  */
 export async function saveSilentBackupFile(
@@ -188,47 +155,29 @@ export async function saveSilentBackupFile(
 ): Promise<string | null> {
   const isNative = Capacitor.isNativePlatform();
   const targetFolder = folderPath || getCustomSaveFolder();
-  const cleanFolder = targetFolder.replace(/^(Documents[\/\\]?)+/i, '').trim().replace(/^\/+|\/+$/g, '') || 'SanadAccounting';
+  const cleanFolder = targetFolder.trim().replace(/^\/+|\/+$/g, '') || 'SanadApp';
 
   if (isNative) {
     try {
       await ensureCustomFolder(cleanFolder);
-      const base64Content = btoa(unescape(encodeURIComponent(jsonString)));
-
-      // 1. الحفظ الدائم في مجلد المستندات بالهاتف (Directory.Documents/SanadAccounting)
       const writeResult = await Filesystem.writeFile({
         path: `${cleanFolder}/${fileName}`,
-        data: base64Content,
+        data: jsonString,
         directory: Directory.Documents,
-        recursive: true
+        recursive: true,
+        encoding: Encoding.UTF8
       });
-      console.log(`[Silent Backup] Permanently saved to Documents/${cleanFolder}/${fileName}`);
-
-      // إشعار نظام أندرويد لظهور الملف فوراً بمدير الملفات بدون إعادة تشغيل الهاتف
-      await notifyMediaScanner(cleanFolder, fileName);
-
-      // 2. إبقاء نسخة مؤقتة بذاكرة المؤقت الكاش لتسريع الوصول والاسترجاع
-      try {
-        await Filesystem.writeFile({
-          path: fileName,
-          data: base64Content,
-          directory: Directory.Cache,
-          recursive: true
-        });
-      } catch (cacheErr) {
-        console.warn('[Silent Backup] Cache temp copy warning:', cacheErr);
-      }
-
+      console.log(`[Silent Backup] Saved to Documents/${cleanFolder}/${fileName}`);
       return writeResult.uri;
     } catch (err) {
       console.warn(`[Silent Backup] Write to Documents/${cleanFolder} failed, trying Cache:`, err);
       try {
-        const base64Content = btoa(unescape(encodeURIComponent(jsonString)));
         const cacheResult = await Filesystem.writeFile({
           path: fileName,
-          data: base64Content,
+          data: jsonString,
           directory: Directory.Cache,
-          recursive: true
+          recursive: true,
+          encoding: Encoding.UTF8
         });
         return cacheResult.uri;
       } catch (cacheErr) {
@@ -250,119 +199,197 @@ export async function saveSilentBackupFile(
 /**
  * Saves a file and offers sharing / download options safely across Capacitor Native, WebViews, and Web Browsers.
  */
-export const saveAndShareFile = async ({
-  fileName,
-  data,
-  mimeType = 'application/json',
-  isBase64 = false,
-  title = 'تصدير ملف - نظام سند',
-  text = 'ملف صادر من نظام سند المحاسبي',
-  folderName
-}: SaveAndShareOptions): Promise<boolean> => {
-  try {
-    // 1. التشغيل على تطبيق الأندرويد (Capacitor Native)
-    if (Capacitor.isNativePlatform()) {
+export async function saveAndShareFile(options: SaveAndShareOptions): Promise<boolean> {
+  const {
+    fileName,
+    data,
+    isBase64 = false,
+    mimeType = 'application/pdf',
+    title = 'تصدير سند/تقرير - تطبيق سند',
+    text = 'ملف مستند من نظام سند المحاسبي',
+    folderName
+  } = options;
+
+  const isNative = Capacitor.isNativePlatform();
+  
+  // Clean Base64 payload to remove headers or whitespace
+  const cleanData = isBase64
+    ? data.replace(/^data:.*?;base64,/, '').replace(/\s/g, '')
+    : data;
+    
+  const targetFolder = folderName || getCustomSaveFolder();
+  const cleanFolder = targetFolder.trim().replace(/^\/+|\/+$/g, '') || 'SanadApp';
+  const relativeFilePath = `${cleanFolder}/${fileName}`;
+
+  console.log(`[saveAndShareFile] Native: ${isNative}, File: ${fileName}, MIME: ${mimeType}, Folder: ${cleanFolder}`);
+
+  // 1. NATIVE CAPACITOR (ANDROID / IOS APK) PATH
+  if (isNative) {
+    try {
       await ensureStoragePermissions();
-      const rawFolder = folderName || getCustomSaveFolder();
-      const cleanFolder = rawFolder.replace(/^(Documents[\/\\]?)+/i, '').trim().replace(/^\/+|\/+$/g, '') || 'SanadAccounting';
 
-      // التأكد من وجود مجلد النظام المخصص بداخل مستندات الهاتف (Documents/SanadAccounting)
-      await ensureCustomFolder(cleanFolder);
+      let shareUri = '';
 
-      let base64Content = data;
-      if (!isBase64) {
-        // تحويل النص العربي و JSON إلى Base64 آمن
-        base64Content = btoa(unescape(encodeURIComponent(data)));
-      } else {
-        base64Content = data.replace(/^data:.*?;base64,/, '').replace(/\s/g, '');
-      }
-
-      let docUri = '';
-      let cacheUri = '';
-
-      // أ) حفظ الملف أولاً وبشكل دائم في Directory.Documents
+      // A) Write to Cache Directory FIRST (Fast, reliable shareable URI for Android Intents)
       try {
-        const writeDoc = await Filesystem.writeFile({
-          path: `${cleanFolder}/${fileName}`,
-          data: base64Content,
-          directory: Directory.Documents,
-          recursive: true
-        });
-        docUri = writeDoc.uri;
-        console.log(`[fileExport] Permanently saved to Documents/${cleanFolder}/${fileName}`);
-
-        // إشعار نظام أندرويد وفهرسة الملف ليظهر فوراً في مدير الملفات
-        await notifyMediaScanner(cleanFolder, fileName);
-      } catch (docErr) {
-        console.warn(`[fileExport] Write to Documents/${cleanFolder} warning:`, docErr);
-      }
-
-      // ب) حفظ نسخة مؤقتة في ذاكرة Cache لضمان استقرار المشاركة
-      try {
-        const writeCache = await Filesystem.writeFile({
+        const cacheResult = await Filesystem.writeFile({
           path: fileName,
-          data: base64Content,
+          data: cleanData,
           directory: Directory.Cache,
-          recursive: true
+          recursive: true,
+          encoding: isBase64 ? undefined : Encoding.UTF8
         });
-        cacheUri = writeCache.uri;
+        shareUri = cacheResult.uri;
       } catch (cacheErr) {
-        console.warn('[fileExport] Write to Cache warning:', cacheErr);
+        console.warn('[fileExport] Cache write warning:', cacheErr);
       }
 
-      const shareUri = cacheUri || docUri;
+      // B) Write persistent copy in Directory.Documents/SanadApp/
+      try {
+        await ensureCustomFolder(cleanFolder);
+        const docResult = await Filesystem.writeFile({
+          path: relativeFilePath,
+          data: cleanData,
+          directory: Directory.Documents,
+          recursive: true,
+          encoding: isBase64 ? undefined : Encoding.UTF8
+        });
+        if (!shareUri) shareUri = docResult.uri;
+      } catch (docErr) {
+        console.warn('[fileExport] Documents write warning:', docErr);
+      }
 
-      // ج) فتح نافذة المشاركة المباشرة (WhatsApp, Telegram, Drive, Gmail...)
-      if (shareUri) {
+      // C) Retrieve URI via Filesystem.getUri if not captured
+      if (!shareUri) {
         try {
-          await Share.share({
-            title,
-            text,
-            url: shareUri,
-            dialogTitle: title
+          const uriRes = await Filesystem.getUri({
+            path: fileName,
+            directory: Directory.Cache
           });
-        } catch (shareErr: any) {
-          const errStr = String(shareErr?.message || shareErr || '').toLowerCase();
-          // إغلاق أو إلغاء نافذة المشاركة يعتبر نجاحاً مؤكداً 100% لأن الملف أُحفظ مسبقاً في ذاكرة الهاتف
-          if (
-            errStr.includes('cancel') ||
-            errStr.includes('dismiss') ||
-            errStr.includes('abort') ||
-            errStr.includes('user_canceled') ||
-            errStr.includes('closed') ||
-            errStr.includes('dismissed')
-          ) {
-            console.log('[fileExport] Share sheet dismissed by user, file safely saved on device.');
-            return true;
-          }
-          console.warn('[fileExport] Share warning:', shareErr);
+          shareUri = uriRes.uri;
+        } catch (e) {
+          console.warn('[fileExport] getUri fallback warning:', e);
         }
       }
 
-      return true;
+      // D) Trigger Android Native Share Sheet
+      if (shareUri) {
+        try {
+          await Share.share({
+            title: title || fileName,
+            text: `${text}\n📄 المستند: ${fileName}`,
+            url: shareUri,
+            dialogTitle: title || 'مشاركة وحفظ المستند'
+          });
+          
+          alert(`✓ تم تصدير الملف وحفظه بنجاح!\n📁 المسار: Documents/${relativeFilePath}`);
+          return true;
+        } catch (shareErr: any) {
+          const errStr = String(shareErr?.message || shareErr || '').toLowerCase();
+          if (errStr.includes('cancel') || errStr.includes('dismiss') || errStr.includes('abort')) {
+            console.log('[fileExport] User dismissed share sheet');
+            return true;
+          }
+          console.warn('[fileExport] Share.share warning:', shareErr);
+          alert(`✓ تم حفظ الملف بنجاح على ذاكرة الهاتف:\n📁 Documents/${relativeFilePath}`);
+          return true;
+        }
+      }
+
+    } catch (nativeErr: any) {
+      console.error('[fileExport] Native Capacitor file operation failed:', nativeErr);
+      alert(`⚠️ حدث خطأ أثناء التصدير للذاكرة (${nativeErr?.message || nativeErr}). جار تحويل التصدير للمعالجة البديلة...`);
     }
+  }
 
-    // 2. البيئة العادية (متصفح الويب)
-    const cleanData = isBase64 ? data.replace(/^data:.*?;base64,/, '').replace(/\s/g, '') : data;
-    const blob = isBase64
+  // 2. WEB SHARE API (ANDROID MOBILE CHROME / WEBVIEW FALLBACK)
+  if (typeof navigator !== 'undefined' && (navigator as any).canShare && (navigator as any).share) {
+    try {
+      const blob = isBase64 
+        ? base64ToBlob(cleanData, mimeType)
+        : new Blob([data], { type: mimeType });
+      
+      const file = new File([blob], fileName, { type: mimeType });
+
+      if ((navigator as any).canShare({ files: [file] })) {
+        await (navigator as any).share({
+          title: title || fileName,
+          text: text || '',
+          files: [file]
+        });
+        return true;
+      }
+    } catch (webShareErr: any) {
+      const errStr = String(webShareErr || '').toLowerCase();
+      if (errStr.includes('cancel') || errStr.includes('abort') || errStr.includes('dismiss')) {
+        return true;
+      }
+      console.warn('[fileExport] Web Share API error:', webShareErr);
+    }
+  }
+
+  // 3. STANDARD BROWSER DOWNLOAD LINK (BLOB + DATA URI)
+  try {
+    const blob = isBase64 
       ? base64ToBlob(cleanData, mimeType)
-      : new Blob([data], { type: `${mimeType};charset=utf-8` });
+      : new Blob([data], { type: mimeType });
 
-    const url = URL.createObjectURL(blob);
+    const blobUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = url;
+    link.href = blobUrl;
     link.download = fileName;
+    link.style.display = 'none';
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+    setTimeout(() => {
+      if (document.body.contains(link)) {
+        document.body.removeChild(link);
+      }
+      URL.revokeObjectURL(blobUrl);
+    }, 4000);
+
+    // Data URI direct download fallback for strict Android WebViews
+    try {
+      const dataUri = isBase64 
+        ? `data:${mimeType};base64,${cleanData}`
+        : `data:${mimeType};charset=utf-8,${encodeURIComponent(data)}`;
+        
+      const altLink = document.createElement('a');
+      altLink.href = dataUri;
+      altLink.download = fileName;
+      altLink.style.display = 'none';
+      document.body.appendChild(altLink);
+      altLink.click();
+      setTimeout(() => {
+        if (document.body.contains(altLink)) document.body.removeChild(altLink);
+      }, 1000);
+    } catch (dataUriErr) {
+      console.warn('[fileExport] Data URI download attempt:', dataUriErr);
+    }
+
+    alert(`✓ تم تنزيل الملف بنجاح: ${fileName}`);
     return true;
-  } catch (err) {
-    console.error('File export error:', err);
-    alert('❌ تعذر حفظ أو مشاركة الملف على الهاتف.');
-    return false;
+  } catch (webLinkErr) {
+    console.warn('[fileExport] Web blob download link attempt:', webLinkErr);
   }
-};
+
+  // 4. EMERGENCY CLIPBOARD / ALERT FALLBACK IF EVERYTHING BLOCKED
+  if (!isBase64 && data) {
+    try {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(data);
+        alert(`📄 تعذر إظهار تنزيل التلقائي بالمتصفح.\n✅ تم نسخ محتوى الملف (${fileName}) للحافظة بنجاح!`);
+        return true;
+      }
+    } catch (clipErr) {
+      console.warn('[fileExport] Clipboard write warning:', clipErr);
+    }
+  }
+
+  alert('⚠️ تعذر إتمام حفظ الملف تلقائياً. يرجى مراجعة إعدادات الأندرويد وإعادة المحاولة.');
+  return false;
+}
 
 /**
  * Triggers Google Drive upload / export dialog for a backup or document
@@ -386,23 +413,29 @@ export async function uploadToGoogleDrive(
     text: `نسخة احتياطية / مستند لنظام سند ${driveAccount ? `- الحساب: ${driveAccount}` : ''}`
   });
 
-  if (!isNative && typeof navigator !== 'undefined' && navigator.onLine) {
-    try {
-      window.open('https://drive.google.com/drive/my-drive', '_blank');
-    } catch (e) {}
+  if (!isNative) {
+    window.open('https://drive.google.com/drive/my-drive', '_blank');
   }
 
   return true;
 }
 
+/**
+ * Converts a Base64 string to Blob for Web browser download
+ */
 export function base64ToBlob(base64Data: string, contentType: string = 'application/pdf'): Blob {
   const cleanBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
   const sanitized = cleanBase64.replace(/\s/g, '');
   const byteCharacters = atob(sanitized);
-  const byteNumbers = new Array(byteCharacters.length);
-  for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  const byteArrays = [];
+  for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+    const slice = byteCharacters.slice(offset, offset + 512);
+    const byteNumbers = new Array(slice.length);
+    for (let i = 0; i < slice.length; i++) {
+      byteNumbers[i] = slice.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    byteArrays.push(byteArray);
   }
-  const byteArray = new Uint8Array(byteNumbers);
-  return new Blob([byteArray], { type: contentType });
+  return new Blob(byteArrays, { type: contentType });
 }

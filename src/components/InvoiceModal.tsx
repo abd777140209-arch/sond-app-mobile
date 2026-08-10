@@ -72,41 +72,32 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
     onclone: (clonedDoc: Document) => {
       const origCard = document.getElementById('invoice-printable-card');
       const clonedCard = clonedDoc.getElementById('invoice-printable-card');
-
-      const elements = clonedDoc.querySelectorAll('*');
-      elements.forEach((el: any) => {
-        if (el.style) {
-          el.style.color = el.style.color?.replace(/oklch\([^)]+\)/g, '#000000').replace(/oklab\([^)]+\)/g, '#000000');
-          el.style.backgroundColor = el.style.backgroundColor?.replace(/oklch\([^)]+\)/g, '#ffffff').replace(/oklab\([^)]+\)/g, '#ffffff');
-          el.style.borderColor = el.style.borderColor?.replace(/oklch\([^)]+\)/g, '#cbd5e1').replace(/oklab\([^)]+\)/g, '#cbd5e1');
-        }
-      });
-
       if (origCard && clonedCard) {
         const origElements = Array.from(origCard.querySelectorAll('*'));
         const clonedElements = Array.from(clonedCard.querySelectorAll('*'));
 
-        const cleanColor = (str: string, fallback: string) => {
-          if (!str || /(oklch|color-mix|light-dark)/i.test(str)) {
-            return fallback;
-          }
-          return str;
-        };
-
         const cardComputed = window.getComputedStyle(origCard);
-        clonedCard.style.color = cleanColor(cardComputed.color, '#1e293b');
-        clonedCard.style.backgroundColor = cleanColor(cardComputed.backgroundColor, '#ffffff');
+        clonedCard.style.color = cardComputed.color.includes('oklch') ? '#1e293b' : cardComputed.color;
+        clonedCard.style.backgroundColor = cardComputed.backgroundColor.includes('oklch') ? '#ffffff' : cardComputed.backgroundColor;
 
         origElements.forEach((origEl, idx) => {
           const clonedEl = clonedElements[idx] as HTMLElement;
           if (clonedEl) {
             const computed = window.getComputedStyle(origEl);
-            clonedEl.style.color = cleanColor(computed.color, '#1e293b');
-            if (computed.backgroundColor && computed.backgroundColor !== 'rgba(0, 0, 0, 0)') {
-              clonedEl.style.backgroundColor = cleanColor(computed.backgroundColor, '#ffffff');
+            if (computed.color && !computed.color.includes('oklch')) {
+              clonedEl.style.color = computed.color;
+            } else if (computed.color && computed.color.includes('oklch')) {
+              clonedEl.style.color = '#1e293b';
             }
-            if (computed.borderColor) {
-              clonedEl.style.borderColor = cleanColor(computed.borderColor, '#e2e8f0');
+            if (computed.backgroundColor && !computed.backgroundColor.includes('oklch') && computed.backgroundColor !== 'rgba(0, 0, 0, 0)') {
+              clonedEl.style.backgroundColor = computed.backgroundColor;
+            } else if (computed.backgroundColor && computed.backgroundColor.includes('oklch')) {
+              clonedEl.style.backgroundColor = '#ffffff';
+            }
+            if (computed.borderColor && !computed.borderColor.includes('oklch')) {
+              clonedEl.style.borderColor = computed.borderColor;
+            } else if (computed.borderColor && computed.borderColor.includes('oklch')) {
+              clonedEl.style.borderColor = '#e2e8f0';
             }
           }
         });
@@ -223,72 +214,7 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
         text: `فاتورة مبيعات من ${settings.storeName} - رقم ${invoice.invoiceNumber}`
       });
     } catch (error) {
-      console.error('فشل تصدير الفاتورة كـ PDF، جاري التحويل لتصدير HTML:', error);
-      try {
-        const fileName = `فاتورة_${invoice.invoiceNumber}.html`;
-        const htmlContent = `
-          <!DOCTYPE html>
-          <html dir="rtl" lang="ar">
-          <head>
-            <meta charset="UTF-8" />
-            <title>فاتورة - ${invoice.invoiceNumber}</title>
-            <style>
-              body { font-family: sans-serif; padding: 16px; text-align: center; color: #1e293b; background: #fff; }
-              .header { font-size: 18px; font-weight: bold; margin-bottom: 4px; color: #0f172a; }
-              .sub-header { font-size: 12px; margin-bottom: 10px; color: #64748b; }
-              .line { border-bottom: 1px dashed #cbd5e1; margin: 10px 0; }
-              .inv-no { font-size: 16px; font-weight: bold; background: #f1f5f9; padding: 8px; margin: 8px 0; border: 1px solid #94a3b8; border-radius: 8px; }
-              table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; text-align: right; }
-              th, td { border: 1px solid #cbd5e1; padding: 6px; }
-              th { background: #f8fafc; }
-              .total-box { margin-top: 12px; padding: 10px; border: 1px solid #0284c7; background: #f0f9ff; border-radius: 8px; text-align: right; font-size: 13px; font-weight: bold; }
-              .footer { font-size: 11px; margin-top: 16px; color: #475569; }
-            </style>
-          </head>
-          <body>
-            <div class="header">${settings.storeName || 'سند المحاسبي'}</div>
-            <div class="sub-header">${settings.phone ? 'هاتف: ' + settings.phone : ''}</div>
-            <div class="inv-no">رقم الفاتورة: ${invoice.invoiceNumber}</div>
-            <p style="text-align: right; font-size: 12px;"><b>اسم العميل:</b> ${invoice.customerName || 'عميل نقدي'}<br/><b>التاريخ:</b> ${invoice.date}</p>
-            <div class="line"></div>
-            <table>
-              <thead>
-                <tr>
-                  <th>الصنف</th>
-                  <th>الكمية</th>
-                  <th>السعر</th>
-                  <th>الإجمالي</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${(invoice.items || []).map(item => `
-                  <tr>
-                    <td>${item.name}</td>
-                    <td>${item.quantity}</td>
-                    <td>${item.sellingPrice} ${settings.currency || 'ريال'}</td>
-                    <td>${item.total} ${settings.currency || 'ريال'}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-            <div class="total-box">
-              الإجمالي النهائي: ${invoice.finalAmount} ${settings.currency || 'ريال'}
-            </div>
-            <div class="line"></div>
-            <div class="footer">شكراً لتعاملكم معنا! 🌸</div>
-          </body>
-          </html>
-        `;
-        await saveAndShareFile({
-          fileName,
-          data: htmlContent,
-          mimeType: 'text/html',
-          title: `فاتورة ${invoice.invoiceNumber}`,
-          text: `فاتورة رقم ${invoice.invoiceNumber}`
-        });
-      } catch (fallbackErr) {
-        console.error('Invoice HTML fallback export failed:', fallbackErr);
-      }
+      console.error('فشل تصدير الفاتورة كـ PDF:', error);
     } finally {
       setIsExportingPDF(false);
     }

@@ -776,7 +776,7 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                         `شكراً لاهتمامكم وثقتكم بنا! 🌹\n` +
                         `م. عبدالمجيد المحواشي (هاتف: 777140209)\n`;
                       navigator.clipboard.writeText(message);
-                      openWhatsApp('', message);
+                      alert('تم نسخ رسالة الدعوة ورابط التجربة العام للواتساب بنجاح! جاهزة للإرسال.');
                     }}
                     className="px-4 py-2 bg-[#25D366]/15 hover:bg-[#25D366]/25 text-[#25D366] border border-[#25D366]/30 font-bold rounded-lg text-xs cursor-pointer transition flex items-center gap-1.5"
                   >

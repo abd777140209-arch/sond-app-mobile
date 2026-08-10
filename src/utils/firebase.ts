@@ -69,17 +69,8 @@ export interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    // تجاهل أخطاء الفايرستور تماماً عند انقطاع الاتصال لمنع ضجيج السجلات
-    return;
-  }
-  const errMessage = error instanceof Error ? error.message : String(error);
-  if (errMessage === 'OFFLINE_NO_NETWORK' || errMessage === 'FIRESTORE_TIMEOUT' || errMessage.includes('unavailable') || errMessage.includes('network')) {
-    console.log('[Firestore] Silent offline mode active:', errMessage);
-    return;
-  }
   const errInfo: FirestoreErrorInfo = {
-    error: errMessage,
+    error: error instanceof Error ? error.message : String(error),
     authInfo: {
       userId: null,
       email: null,
@@ -96,9 +87,6 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
 // Helper to race Firestore operations with a short timeout (2500ms) for instant offline fallback
 export async function withTimeout<T>(promise: Promise<T>, timeoutMs = 2500): Promise<T> {
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    return Promise.reject(new Error('OFFLINE_NO_NETWORK'));
-  }
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error('FIRESTORE_TIMEOUT'));
@@ -120,11 +108,6 @@ export async function withTimeout<T>(promise: Promise<T>, timeoutMs = 2500): Pro
 let firestoreDb: any = null;
 
 export function getFirestoreDb() {
-  // 🚫 حظر جميع طلبات الشبكة لـ Firestore عند انقطاع الاتصال لتفادي أخطاء GET firestore.googleapis.com
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    return null;
-  }
-
   if (!isFirebaseConfigured()) {
     return null;
   }

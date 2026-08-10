@@ -20,20 +20,24 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="سُند" />
     <meta name="application-name" content="نظام سُند الذكي" />
-    <script type="module" crossorigin src="./assets/index-OncKWJB2.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index--_1BHEOr.css">
+    <script type="module" crossorigin src="./assets/index-CXf17viv.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DERumLBe.css">
   </head>
   <body>
     <div id="root"></div>
     
-    <!-- Pure Native Android App Setup: Ensure no active Service Worker conflicts -->
+    <!-- Register Service Worker for PWA & PWABuilder Readiness -->
     <script>
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then((registrations) => {
-          for (let registration of registrations) {
-            registration.unregister();
-          }
-        }).catch(() => {});
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js')
+            .then((registration) => {
+              console.log('سُند PWA Service Worker Registered:', registration.scope);
+            })
+            .catch((error) => {
+              console.error('Service Worker Registration Failed:', error);
+            });
+        });
       }
     </script>
   </body>

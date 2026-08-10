@@ -135,7 +135,7 @@ export const SanadEnterpriseDashboard: React.FC<SanadEnterpriseDashboardProps> =
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold rounded-xl px-3.5 py-2.5 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
             />
             <div className="flex flex-wrap gap-1.5 pt-1">
-              {['SanadAccounting', 'SanadAccounting/Backups', 'SanadAccounting/Invoices'].map((folder) => (
+              {['SanadAccounting', 'Documents/SanadBackup', 'Download', 'Documents/MyShop'].map((folder) => (
                 <button
                   type="button"
                   key={folder}

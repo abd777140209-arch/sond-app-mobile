@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { soundManager } from './sound';
 import { normalizeHWID, isUnboundHwid } from './firebase';
 
 export interface LicenseInfo {
@@ -92,6 +93,7 @@ export const generateHWID = (): string => {
           try {
             const nativeId = getNativeId.call(androidObj);
             if (nativeId && typeof nativeId === 'string' && nativeId.trim().length > 0 && nativeId !== 'null' && nativeId !== 'undefined') {
+              // 🎯 تقليم وتنظيف معرف الجوال الطويل ليتوافق تماماً مع قواعد الفايربيس والويب
               const cleanNative = nativeId.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
               const shortNative = cleanNative.length > 12 ? cleanNative.substring(0, 12) : cleanNative;
               
@@ -144,85 +146,73 @@ export const getDeviceId = generateHWID;
 
 // Generate cryptographically looking license key
 export const generateLicenseKey = (type: 'weekly' | 'monthly' | 'yearly' | 'lifetime' | 'trial'): string => {
-  try {
-    const prefix = type === 'weekly' ? 'MHTW' : type === 'monthly' ? 'MHTM' : type === 'yearly' ? 'MHTY' : type === 'lifetime' ? 'MHTL' : 'MHTT';
-    const segment1 = Math.floor(1000 + Math.random() * 9000).toString();
-    const segment2 = Math.floor(1000 + Math.random() * 9000).toString();
-    const segment3 = Math.floor(1000 + Math.random() * 9000).toString();
-    return `${prefix}-${segment1}-${segment2}-${segment3}`;
-  } catch {
-    return 'MHTT-1000-2000-3000';
-  }
+  const prefix = type === 'weekly' ? 'MHTW' : type === 'monthly' ? 'MHTM' : type === 'yearly' ? 'MHTY' : type === 'lifetime' ? 'MHTL' : 'MHTT';
+  const segment1 = Math.floor(1000 + Math.random() * 9000).toString();
+  const segment2 = Math.floor(1000 + Math.random() * 9000).toString();
+  const segment3 = Math.floor(1000 + Math.random() * 9000).toString();
+  return `${prefix}-${segment1}-${segment2}-${segment3}`;
 };
 
 // Calculate expiry date based on type
 export const getExpiryDate = (type: 'weekly' | 'monthly' | 'yearly' | 'lifetime' | 'trial', customDays?: number): string => {
-  try {
-    const now = new Date();
-    if (type === 'weekly' || type === 'trial') {
-      now.setDate(now.getDate() + 7);
-    } else if (type === 'monthly') {
-      now.setDate(now.getDate() + 30);
-    } else if (type === 'yearly') {
-      now.setDate(now.getDate() + 365);
-    } else if (type === 'lifetime') {
-      now.setFullYear(now.getFullYear() + 100);
-    } else if (customDays && customDays > 0) {
-      now.setDate(now.getDate() + customDays);
-    } else {
-      now.setDate(now.getDate() + 30);
-    }
-    return now.toISOString();
-  } catch {
-    return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const now = new Date();
+  if (type === 'weekly' || type === 'trial') {
+    now.setDate(now.getDate() + 7);
+  } else if (type === 'monthly') {
+    now.setDate(now.getDate() + 30);
+  } else if (type === 'yearly') {
+    now.setDate(now.getDate() + 365);
+  } else if (type === 'lifetime') {
+    now.setFullYear(now.getFullYear() + 100);
+  } else if (customDays && customDays > 0) {
+    now.setDate(now.getDate() + customDays);
+  } else {
+    now.setDate(now.getDate() + 30);
   }
+  return now.toISOString();
 };
 
 const STORAGE_KEY = 'smart_accounting_license_v1';
 
 // Save license info securely
 export const saveLicenseLocally = (info: LicenseInfo) => {
-  try {
-    const jsonStr = JSON.stringify(info);
-    const secureStr = obfuscate(jsonStr);
-    localStorage.setItem(STORAGE_KEY, secureStr);
-  } catch (e) {
-    console.warn('Save license locally error:', e);
-  }
+  const jsonStr = JSON.stringify(info);
+  const secureStr = obfuscate(jsonStr);
+  localStorage.setItem(STORAGE_KEY, secureStr);
 };
 
-// Load license info safely with fast offline fallback
+// Load license info safely
 export const loadLicenseLocally = (): LicenseInfo => {
+  const secureStr = localStorage.getItem(STORAGE_KEY);
+  const hwid = generateHWID();
+
+  if (!secureStr) {
+    const unlicensedLicense: LicenseInfo = {
+      licenseKey: '',
+      status: 'unlicensed',
+      activatedAt: '',
+      expiresAt: '',
+      hwid,
+      subscriptionType: 'trial',
+      customerName: 'غير مرخص'
+    };
+    saveLicenseLocally(unlicensedLicense);
+    return unlicensedLicense;
+  }
+
+  const rawJson = deobfuscate(secureStr);
+  if (!rawJson) {
+    return {
+      licenseKey: '',
+      status: 'unlicensed',
+      activatedAt: '',
+      expiresAt: '',
+      hwid,
+      subscriptionType: 'trial'
+    };
+  }
+
   try {
-    const secureStr = localStorage.getItem(STORAGE_KEY);
-    const hwid = generateHWID();
-
-    if (!secureStr) {
-      const unlicensedLicense: LicenseInfo = {
-        licenseKey: '',
-        status: 'unlicensed',
-        activatedAt: '',
-        expiresAt: '',
-        hwid,
-        subscriptionType: 'trial',
-        customerName: 'غير مرخص'
-      };
-      saveLicenseLocally(unlicensedLicense);
-      return unlicensedLicense;
-    }
-
-    const rawJson = deobfuscate(secureStr);
-    if (!rawJson) {
-      return {
-        licenseKey: '',
-        status: 'unlicensed',
-        activatedAt: '',
-        expiresAt: '',
-        hwid,
-        subscriptionType: 'trial'
-      };
-    }
-
     const info: LicenseInfo = JSON.parse(rawJson);
     
     // Allow activation and avoid strict lock when key is newly entered or trial
@@ -252,33 +242,13 @@ export const loadLicenseLocally = (): LicenseInfo => {
     }
 
     return info;
-  } catch (e) {
-    console.warn('Error loading license locally, returning trial fallback:', e);
+  } catch {
     return {
       licenseKey: '',
       status: 'unlicensed',
       activatedAt: '',
       expiresAt: '',
-      hwid: generateHWID(),
-      subscriptionType: 'trial'
-    };
-  }
-};
-
-/**
- * 🔒 فحص الترخيص أونلاين أو أوفلاين بسرعة فائقة لمنع تجمد التطبيق
- */
-export const checkLicenseStatus = async (): Promise<LicenseInfo> => {
-  try {
-    return loadLicenseLocally();
-  } catch (e) {
-    console.warn('checkLicenseStatus error:', e);
-    return {
-      licenseKey: '',
-      status: 'unlicensed',
-      activatedAt: '',
-      expiresAt: '',
-      hwid: 'MHT-HWID-OFFLINE',
+      hwid,
       subscriptionType: 'trial'
     };
   }

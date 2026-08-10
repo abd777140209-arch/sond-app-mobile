@@ -16,23 +16,18 @@ jobs:
       - name: Setup Node.js Environment
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
 
-      - name: Install Dependencies & Capacitor CLI
+      - name: Install Dependencies & Capacitor Android
         run: |
           npm install -g @capacitor/cli
           npm install
+          npm install @capacitor/android
 
-      - name: Build Web Assets
+      - name: Build Web Assets & Set www
         run: |
           npm run build
-          rm -rf android/app/src/main/assets/public
-          mkdir -p android/app/src/main/assets/public
-          cp -r dist/* android/app/src/main/assets/public/
-
-      - name: Sync Capacitor Android
-        run: |
-          npx cap sync android || true
+          cp -r dist www
 
       - name: Setup Java JDK
         uses: actions/setup-java@v4
@@ -48,14 +43,18 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Build APK Clean (No Cache)
+      - name: Add & Sync Capacitor Android
+        run: |
+          cap add android || true
+          cap sync android
+
+      - name: Build APK via Gradle
         run: |
           cd android
-          gradle wrapper
-          gradle clean assembleDebug --no-daemon
+          gradle assembleDebug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SanadAccounting-debug.apk
+          name: Sanad-Accounting-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
