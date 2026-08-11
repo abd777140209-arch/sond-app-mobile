@@ -5,8 +5,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { Printer, Download, X, ShieldCheck, Heart, Smartphone, SlidersHorizontal, MessageCircle, FileDown, Loader2, Share2, Bluetooth, QrCode, ArrowRight } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 import { QRCodeSVG } from 'qrcode.react';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
@@ -15,8 +13,9 @@ import { Invoice, SystemSettings, Customer } from '../types';
 import { soundManager } from '../utils/sound';
 import { requestStoragePermissionOnDemand } from '../utils/androidPermissions';
 import { saveAndShareFile } from '../utils/fileExport';
-import { getSafeHtml2CanvasOptions } from '../utils/pdfHelper';
 import { openWhatsApp } from '../utils/nativeLauncher';
+import { generateAndSharePDF } from '../services/pdfService';
+import { printReceiptHTML } from '../services/ReceiptPrinter';
 
 interface InvoiceModalProps {
   invoice: Invoice | null;
@@ -68,150 +67,86 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
 
   if (!invoice) return null;
 
-  const getHtml2CanvasOptions = () => getSafeHtml2CanvasOptions({
-    onclone: (clonedDoc: Document) => {
-      const origCard = document.getElementById('invoice-printable-card');
-      const clonedCard = clonedDoc.getElementById('invoice-printable-card');
-      if (origCard && clonedCard) {
-        const origElements = Array.from(origCard.querySelectorAll('*'));
-        const clonedElements = Array.from(clonedCard.querySelectorAll('*'));
-
-        const cardComputed = window.getComputedStyle(origCard);
-        clonedCard.style.color = cardComputed.color.includes('oklch') ? '#1e293b' : cardComputed.color;
-        clonedCard.style.backgroundColor = cardComputed.backgroundColor.includes('oklch') ? '#ffffff' : cardComputed.backgroundColor;
-
-        origElements.forEach((origEl, idx) => {
-          const clonedEl = clonedElements[idx] as HTMLElement;
-          if (clonedEl) {
-            const computed = window.getComputedStyle(origEl);
-            if (computed.color && !computed.color.includes('oklch')) {
-              clonedEl.style.color = computed.color;
-            } else if (computed.color && computed.color.includes('oklch')) {
-              clonedEl.style.color = '#1e293b';
-            }
-            if (computed.backgroundColor && !computed.backgroundColor.includes('oklch') && computed.backgroundColor !== 'rgba(0, 0, 0, 0)') {
-              clonedEl.style.backgroundColor = computed.backgroundColor;
-            } else if (computed.backgroundColor && computed.backgroundColor.includes('oklch')) {
-              clonedEl.style.backgroundColor = '#ffffff';
-            }
-            if (computed.borderColor && !computed.borderColor.includes('oklch')) {
-              clonedEl.style.borderColor = computed.borderColor;
-            } else if (computed.borderColor && computed.borderColor.includes('oklch')) {
-              clonedEl.style.borderColor = '#e2e8f0';
-            }
-          }
-        });
-      }
-    }
-  });
-
+  // 1. [طباعة] - ينفذ window.print() في الويندوز ويدعو PDF النصي السريع في الأندرويد
   const handlePrint = async () => {
     soundManager.playSuccessChime();
-    if (!Capacitor.isNativePlatform() && window.innerWidth >= 768) {
+    const isMobile = Capacitor.isNativePlatform() || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    if (!isMobile) {
       window.print();
-      return;
-    }
-    try {
-      const element = document.getElementById('invoice-printable-card');
-      if (element) {
-        try {
-          const canvas = await html2canvas(element, getHtml2CanvasOptions());
-          const imgData = canvas.toDataURL('image/png');
-          const imgWidth = canvas.width;
-          const imgHeight = canvas.height;
-
-          const pdfWidth = paperSize === '80mm' ? 80 : 58;
-          const pdfHeight = (imgHeight * pdfWidth) / imgWidth;
-
-          const pdf = new jsPDF({
-            orientation: 'portrait',
-            unit: 'mm',
-            format: [pdfWidth, pdfHeight + 2],
-          });
-
-          pdf.addImage(imgData, 'PNG', 0, 1, pdfWidth, pdfHeight);
-          const fileName = `طباعة_فاتورة_${invoice.invoiceNumber}.pdf`;
-          const base64Data = pdf.output('datauristring').split(',')[1];
-
-          await saveAndShareFile({
-            fileName,
-            data: base64Data,
-            isBase64: true,
-            mimeType: 'application/pdf',
-            title: `فاتورة ${invoice.invoiceNumber}`,
-            text: `طباعة فاتورة رقم ${invoice.invoiceNumber}`
-          });
-        } catch (canvasErr) {
-          window.print();
-        }
-      } else {
+    } else {
+      try {
+        await generateAndSharePDF({
+          title: `فاتورة مبيعات #${invoice.invoiceNumber}`,
+          customerName: customers?.find(c => c.id === invoice.customerId)?.name || invoice.customerName || 'عميل كاش',
+          phone: phoneInput || '',
+          date: new Date(invoice.date).toLocaleDateString('ar-YE'),
+          totalAmount: `${invoice.finalAmount.toLocaleString()} ${settings.currency}`,
+          items: invoice.items.map(i => ({
+            description: `${i.name} (x${i.quantity})`,
+            amount: `${i.total.toLocaleString()} ${settings.currency}`
+          }))
+        });
+      } catch (e) {
+        console.error('Mobile Print Error:', e);
         window.print();
       }
-    } catch (err) {
-      window.print();
     }
   };
 
+  // 2. [بلوتوث] - طباعة حرارية مباشرة عبر ReceiptPrinter ونصوص ESC/POS
   const handleBluetoothPrint = async () => {
     soundManager.playSuccessChime();
-    await requestStoragePermissionOnDemand();
     setIsBluetoothConnecting(true);
+
     try {
       if (typeof navigator !== 'undefined' && 'bluetooth' in navigator) {
-        const device = await (navigator as any).bluetooth.requestDevice({
-          acceptAllDevices: true,
-          optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb', '49535343-fe7d-4ae5-8fa9-9fafd205e455']
-        });
-        if (device) {
-          alert(`✅ تم الاقتران بطابعة البلوتوث الحرارية (${device.name || 'طابعة البلوتوث'}). جاري إرسال البيانات...`);
-          handlePrint();
+        try {
+          const device = await (navigator as any).bluetooth.requestDevice({
+            acceptAllDevices: true,
+            optionalServices: ['0000180f-0000-1000-8000-00805f9b34fb', '00001101-0000-1000-8000-00805f9b34fb']
+          });
+          if (device) {
+            console.log('Bluetooth Thermal Printer Paired:', device.name);
+          }
+        } catch (btErr) {
+          console.warn('Bluetooth pairing skipped:', btErr);
         }
-      } else {
-        handlePrint();
       }
+
+      printReceiptHTML(settings.storeName, {
+        ticketNumber: invoice.invoiceNumber,
+        customerName: invoice.customerName,
+        customerPhone: phoneInput || '',
+        deviceModel: `فاتورة مبيعات (${invoice.items.length} صنف)`,
+        estimatedCost: invoice.finalAmount,
+        createdAt: new Date(invoice.date).toISOString()
+      }, settings.currency);
+
     } catch (err) {
-      console.log('Bluetooth thermal print:', err);
-      handlePrint();
+      console.error('Bluetooth Thermal Print Error:', err);
     } finally {
       setIsBluetoothConnecting(false);
     }
   };
 
+  // 3. [PDF] - تنزيل ومشاركة PDF نصي خفيف وسريع جداً عبر pdfService
   const handleExportPDF = async () => {
     if (isExportingPDF) return;
     soundManager.playSuccessChime();
-    await requestStoragePermissionOnDemand();
     setIsExportingPDF(true);
 
     try {
-      const element = document.getElementById('invoice-printable-card');
-      if (!element) return;
-
-      const canvas = await html2canvas(element, getHtml2CanvasOptions());
-      const imgData = canvas.toDataURL('image/png');
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-
-      const pdfWidth = paperSize === '80mm' ? 80 : 58;
-      const pdfHeight = (imgHeight * pdfWidth) / imgWidth;
-
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: [pdfWidth, pdfHeight + 2],
-      });
-
-      pdf.addImage(imgData, 'PNG', 0, 1, pdfWidth, pdfHeight);
-      const fileName = `فاتورة_${invoice.invoiceNumber}.pdf`;
-      const base64Data = pdf.output('datauristring').split(',')[1];
-
-      await saveAndShareFile({
-        fileName,
-        data: base64Data,
-        isBase64: true,
-        mimeType: 'application/pdf',
-        title: `فاتورة ${invoice.invoiceNumber}`,
-        text: `فاتورة مبيعات من ${settings.storeName} - رقم ${invoice.invoiceNumber}`
+      await generateAndSharePDF({
+        title: `فاتورة مبيعات #${invoice.invoiceNumber}`,
+        customerName: customers?.find(c => c.id === invoice.customerId)?.name || invoice.customerName || 'عميل كاش',
+        phone: phoneInput || '',
+        date: new Date(invoice.date).toLocaleDateString('ar-YE'),
+        totalAmount: `${invoice.finalAmount.toLocaleString()} ${settings.currency}`,
+        items: invoice.items.map(i => ({
+          description: `${i.name} (x${i.quantity})`,
+          amount: `${i.total.toLocaleString()} ${settings.currency}`
+        }))
       });
     } catch (error) {
       console.error('فشل تصدير الفاتورة كـ PDF:', error);
@@ -267,14 +202,15 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
     });
   };
 
-  const handleSendWhatsApp = () => {
+  // 4. [واتساب] - إرسال فوري ومباشر دون تعليق أو شاشة بيضاء
+  const handleSendWhatsApp = async () => {
     soundManager.playSuccessChime();
 
     let cleanedPhone = phoneInput.replace(/\D/g, '');
     if (cleanedPhone.startsWith('00')) {
       cleanedPhone = cleanedPhone.slice(2);
     }
-    if (cleanedPhone.length === 9 && cleanedPhone.startsWith('7')) {
+    if (cleanedPhone.length === 9 && (cleanedPhone.startsWith('77') || cleanedPhone.startsWith('73') || cleanedPhone.startsWith('71') || cleanedPhone.startsWith('70') || cleanedPhone.startsWith('78'))) {
       cleanedPhone = '967' + cleanedPhone;
     }
 
@@ -297,10 +233,20 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
     }
     text += `*الصافي النهائي للتسديد:* *${invoice.finalAmount.toLocaleString()} ${settings.currency}*\n`;
     text += `-----------------------------------------\n`;
+    if (settings.phone) text += `هاتف المعرض: ${settings.phone}\n`;
     text += `برمجة وتطوير م.عبدالمجيد المحواشي\n`;
     text += `شكراً لزيارتكم وتعاملكم الراقي معنا! 🌸\n`;
 
-    openWhatsApp(cleanedPhone, text);
+    try {
+      await openWhatsApp(cleanedPhone, text);
+    } catch (e) {
+      console.error('WhatsApp launch error:', e);
+      const encodedText = encodeURIComponent(text);
+      const waUrl = cleanedPhone 
+        ? `https://api.whatsapp.com/send?phone=${cleanedPhone}&text=${encodedText}`
+        : `https://api.whatsapp.com/send?text=${encodedText}`;
+      window.open(waUrl, '_blank', 'noopener,noreferrer');
+    }
   };
 
   return (

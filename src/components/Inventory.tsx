@@ -32,7 +32,8 @@ import {
 } from 'lucide-react';
 import { Product } from '../types';
 import { soundManager } from '../utils/sound';
-import { saveAndShareFile } from '../utils/fileExport';
+import { saveAndShareFile, exportToCSV } from '../utils/fileExport';
+import { generateAndSharePDF } from '../services/pdfService';
 import BarcodeLabelPrinterModal from './BarcodeLabelPrinterModal';
 import CameraBarcodeScannerModal from './CameraBarcodeScannerModal';
 import ManageCategoriesModal from './ManageCategoriesModal';
@@ -241,25 +242,37 @@ export default function Inventory({
   // 🎯 Export CSV / Excel Handler
   const handleExportCSV = async () => {
     soundManager.playSuccessChime();
-    let csv = `\uFEFFالاسم,الباركود,التصنيف,المخزون,الحد الأدنى,تلفة الشراء,سعر البيع\n`;
-    activeProductsList.forEach(p => {
-      csv += `"${(p.name || '').replace(/"/g, '""')}","${p.barcode}","${p.category || 'عام'}","${p.stock}","${p.minStock}","${p.costPrice}","${p.sellingPrice}"\n`;
-    });
-
+    const headers = ['الاسم', 'الباركود', 'التصنيف', 'المخزون', 'الحد الأدنى', 'تكلفة الشراء', 'سعر البيع'];
+    const rows = activeProductsList.map(p => [
+      p.name || '',
+      p.barcode || '',
+      p.category || 'عام',
+      p.stock,
+      p.minStock,
+      p.costPrice,
+      p.sellingPrice
+    ]);
     const fileName = `جرد_المستودع_${new Date().toISOString().slice(0, 10)}.csv`;
-    await saveAndShareFile({
-      fileName,
-      data: csv,
-      mimeType: 'text/csv;charset=utf-8',
-      title: 'تصدير جرد المستودع - سند',
-      text: `تقرير جرد المستودع والسلع من نظام سند (${activeProductsList.length} صنف)`
-    });
+    await exportToCSV(fileName, headers, rows);
   };
 
   // 🎯 Print Inventory Handler
-  const handlePrintInventory = () => {
+  const handlePrintInventory = async () => {
     soundManager.playSuccessChime();
-    window.print();
+    try {
+      await generateAndSharePDF({
+        title: 'تقرير جرد المستودع والمنتجات',
+        customerName: storeName || 'متجر سند',
+        date: new Date().toLocaleDateString('ar-EG'),
+        totalAmount: `إجمالي الاصناف: ${activeProductsList.length} صنف`,
+        items: activeProductsList.slice(0, 50).map(p => ({
+          description: `${p.name} (بارلود: ${p.barcode || 'لا يوجد'}) - تصنيف: ${p.category || 'عام'}`,
+          amount: `الكمية: ${p.stock} | البيع: ${p.sellingPrice} ${currency}`
+        }))
+      });
+    } catch (e) {
+      console.error('Inventory PDF Print Error:', e);
+    }
   };
 
   // 🎯 Voice Assistant Zara Speech Reading

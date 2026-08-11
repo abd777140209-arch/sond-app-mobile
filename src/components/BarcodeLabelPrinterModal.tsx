@@ -4,10 +4,11 @@
  */
 
 import React, { useState } from 'react';
-import { Barcode, Printer, Bluetooth, X, Check, Copy, Sparkles, RefreshCw, AlertCircle, FileText } from 'lucide-react';
+import { Barcode, Printer, Bluetooth, X, Check, Copy, Sparkles, RefreshCw, AlertCircle, FileText, Share2 } from 'lucide-react';
 import { Product } from '../types';
 import { soundManager } from '../utils/sound';
 import { saveAndShareFile } from '../utils/fileExport';
+import { generateAndSharePDF } from '../services/pdfService';
 
 interface BarcodeLabelPrinterModalProps {
   isOpen: boolean;
@@ -96,6 +97,25 @@ export default function BarcodeLabelPrinterModal({
         soundManager.playSuccessChime();
         setTimeout(() => setBtPrintSuccess(false), 3000);
       }, 1000);
+    }
+  };
+
+  // Export Label PDF via pdfService
+  const handlePDFExport = async () => {
+    soundManager.playScanBeep();
+    try {
+      await generateAndSharePDF({
+        title: `Barcode Label - ${customTitle}`,
+        customerName: storeName || 'Sanad Store',
+        date: new Date().toLocaleDateString('en-US'),
+        totalAmount: `${customPrice.toLocaleString()} ${currency}`,
+        items: [
+          { description: `Product: ${customTitle}`, amount: `Price: ${customPrice} ${currency}` },
+          { description: `Barcode: ${customBarcode}`, amount: `Copies: ${printCopies}` }
+        ]
+      });
+    } catch (e) {
+      console.error('PDF label export error:', e);
     }
   };
 
@@ -303,6 +323,14 @@ export default function BarcodeLabelPrinterModal({
           >
             <Bluetooth className="w-4 h-4" />
             <span>طباعة عبر طابعة البلوتوث 🖨️</span>
+          </button>
+
+          <button
+            onClick={handlePDFExport}
+            className="py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition shadow-sm active:scale-95"
+          >
+            <Share2 className="w-4 h-4 text-emerald-400" />
+            <span>تصدير PDF</span>
           </button>
 
           <button

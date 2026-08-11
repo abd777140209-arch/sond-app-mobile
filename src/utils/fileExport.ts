@@ -439,3 +439,27 @@ export function base64ToBlob(base64Data: string, contentType: string = 'applicat
   }
   return new Blob(byteArrays, { type: contentType });
 }
+
+/**
+ * تصدير البيانات إلى CSV مع دعم اللغة العربية بنسبة 100% وإضافة UTF-8 BOM (\uFEFF)
+ * لمنع تداخل الأعمدة والأسطر في Excel والجوال
+ */
+export async function exportToCSV(filename: string, headers: string[], rows: (string | number)[][]) {
+  const escapeField = (val: string | number) => {
+    const str = String(val ?? '').replace(/\r?\n/g, ' ').replace(/"/g, '""');
+    return `"${str}"`;
+  };
+
+  const csvHeader = headers.map(escapeField).join(',');
+  const csvRows = rows.map(row => row.map(escapeField).join(','));
+  const csvContent = '\uFEFF' + [csvHeader, ...csvRows].join('\r\n');
+
+  await saveAndShareFile({
+    fileName: filename.endsWith('.csv') ? filename : `${filename}.csv`,
+    data: csvContent,
+    isBase64: false,
+    mimeType: 'text/csv;charset=utf-8',
+    title: 'تصدير بيانات CSV',
+    text: `تم تصدير ملف ${filename}`
+  });
+}

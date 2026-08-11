@@ -36,7 +36,8 @@ import {
 } from 'lucide-react';
 import { Product, Invoice } from '../types';
 import { soundManager } from '../utils/sound';
-import { saveAndShareFile } from '../utils/fileExport';
+import { saveAndShareFile, exportToCSV } from '../utils/fileExport';
+import { generateAndSharePDF } from '../services/pdfService';
 
 interface ImportedAuditRow {
   productId?: string;
@@ -92,29 +93,24 @@ export default function StockAudit({
     // Export Stock Audit Sheet to CSV / Excel with guaranteed UTF-8 BOM
     const handleExportCSV = async () => {
       soundManager.playSuccessChime();
-      let csv = '\ufeff'; // UTF-8 BOM for Excel Arabic support
-      csv += 'الباركود,اسم السلعة,التصنيف,كمية النظام,الكمية الفعلية الميدانية,سعر التكلفة,سعر البيع\n';
+      const headers = ['الباركود', 'اسم السلعة', 'التصنيف', 'كمية النظام', 'الكمية الفعلية الميدانية', 'سعر التكلفة', 'سعر البيع'];
+      const rows = activeProducts.map(p => {
+        const physical = physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : p.stock;
+        return [
+          p.barcode || '',
+          p.name || '',
+          p.category || 'عام',
+          p.stock,
+          physical,
+          p.costPrice,
+          p.sellingPrice
+        ];
+      });
 
-    activeProducts.forEach(p => {
-      const physical = physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : p.stock;
-      const cleanName = p.name.replace(/"/g, '""');
-      const cleanCategory = (p.category || 'عام').replace(/"/g, '""');
-      const barcode = p.barcode ? `"${p.barcode}"` : '""';
-
-      csv += `${barcode},"${cleanName}","${cleanCategory}",${p.stock},${physical},${p.costPrice},${p.sellingPrice}\n`;
-    });
-
-    const todayStr = new Date().toISOString().split('T')[0];
-    const fileName = `كشف_جرد_المستودع_${storeName}_${todayStr}.csv`;
-
-    await saveAndShareFile({
-      fileName,
-      data: csv,
-      mimeType: 'text/csv;charset=utf-8',
-      title: 'كشف جرد المستودع - سند',
-      text: `تقرير جرد المستودع والسلع من تطبيق سند المحاسبي بتاريخ ${todayStr}`
-    });
-  };
+      const todayStr = new Date().toISOString().split('T')[0];
+      const fileName = `كشف_جرد_المستودع_${storeName}_${todayStr}.csv`;
+      await exportToCSV(fileName, headers, rows);
+    };
 
   // Helper to parse CSV line handling quotes
   const parseCSVLine = (line: string): string[] => {
@@ -454,11 +450,24 @@ export default function StockAudit({
   const handlePrintAuditSheet = async () => {
     soundManager.playSuccessChime();
     try {
-      await handleExportCSV();
+      const todayStr = new Date().toLocaleDateString('ar-EG');
+      await generateAndSharePDF({
+        title: `كشف الجرد الفعلي الميداني - ${storeName}`,
+        customerName: storeName || 'المستودع الرئيسي',
+        date: todayStr,
+        totalAmount: `إجمالي الأصناف المحصورة: ${activeProducts.length}`,
+        items: activeProducts.slice(0, 50).map(p => {
+          const physical = physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : p.stock;
+          const diff = physical - p.stock;
+          const statusStr = diff === 0 ? 'مطابق' : diff > 0 ? `زيادة (+${diff})` : `عجز (${diff})`;
+          return {
+            description: `${p.name} (بارلود: ${p.barcode || 'لا يوجد'}) - كمية النظام: ${p.stock} | الفعلي: ${physical}`,
+            amount: `الحالة: ${statusStr}`
+          };
+        })
+      });
     } catch (e) {
-      if (typeof window !== 'undefined') {
-        window.print();
-      }
+      console.error('Stock Audit PDF Error:', e);
     }
   };
 

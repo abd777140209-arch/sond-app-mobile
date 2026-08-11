@@ -24,8 +24,6 @@ import {
   FileDown,
   Loader2
 } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 import { MaintenanceOrder, UserAccount, SystemSettings } from '../types';
 import { soundManager } from '../utils/sound';
 import { 
@@ -37,9 +35,8 @@ import {
   generateWhatsAppReceiptLink, 
   printReceiptHTML 
 } from '../services/ReceiptPrinter';
-import { saveAndShareFile } from '../utils/fileExport';
 import { openExternalUrl } from '../utils/nativeLauncher';
-import { getSafeHtml2CanvasOptions } from '../utils/pdfHelper';
+import { generateAndSharePDF } from '../services/pdfService';
 
 export interface SanadDeviceReceiptProps {
   apiBaseUrl?: string;
@@ -181,23 +178,22 @@ export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
     setIsSaved(true);
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     soundManager.playScanBeep();
-    printReceiptHTML(
-      settings?.companyName || 'مركز سند لصيانة وبرمجة الهواتف',
-      {
-        ticketNumber: savedOrder?.ticketNumber,
+    try {
+      await generateAndSharePDF({
+        title: `Device Maintenance Ticket - ${savedOrder?.ticketNumber || 'Receipt'}`,
         customerName: savedOrder?.customerName || formData.customerName,
-        customerPhone: savedOrder?.customerPhone || formData.customerPhone,
-        deviceModel: savedOrder?.deviceModel || formData.deviceModel,
-        imei: savedOrder?.serialNumber || formData.imei,
-        serviceType: formData.serviceType,
-        problemDescription: savedOrder?.issueDescription || formData.problemDescription,
-        estimatedCost: savedOrder?.estimatedCost || formData.estimatedCost,
-        advancePayment: savedOrder?.depositAmount || formData.advancePayment
-      },
-      settings?.currency || 'ريال'
-    );
+        phone: savedOrder?.customerPhone || formData.customerPhone,
+        date: new Date().toLocaleDateString('en-US'),
+        totalAmount: `${savedOrder?.estimatedCost || formData.estimatedCost || 0} ${settings?.currency || 'Rial'}`,
+        items: [
+          { description: `Device: ${savedOrder?.deviceModel || formData.deviceModel}`, amount: savedOrder?.issueDescription || formData.problemDescription }
+        ]
+      });
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleWhatsAppShare = () => {
@@ -226,56 +222,18 @@ export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
     setIsExportingPDF(true);
 
     try {
-      const element = document.getElementById('receipt-printable-card');
-      if (!element) {
-        alert('⚠️ تعذر العثور على بطاقة الاستلام للتصدير.');
-        return;
-      }
-
-      const canvas = await html2canvas(element, getSafeHtml2CanvasOptions({
-        onclone: (clonedDoc: Document) => {
-          const origCard = document.getElementById('receipt-printable-card');
-          const clonedCard = clonedDoc.getElementById('receipt-printable-card');
-          if (origCard && clonedCard) {
-            clonedCard.style.color = '#1e293b';
-            clonedCard.style.backgroundColor = '#ffffff';
-            clonedCard.style.padding = '16px';
-            clonedCard.style.borderRadius = '12px';
-            clonedCard.style.border = '1px solid #cbd5e1';
-          }
-        }
-      }));
-
-      const imgData = canvas.toDataURL('image/png');
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-
-      const pdfWidth = 80;
-      const pdfHeight = (imgHeight * pdfWidth) / imgWidth;
-
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: [pdfWidth, pdfHeight + 2],
+      await generateAndSharePDF({
+        title: `Device Maintenance Ticket - ${savedOrder.ticketNumber}`,
+        customerName: savedOrder.customerName || formData.customerName,
+        phone: savedOrder.customerPhone || formData.customerPhone,
+        date: new Date().toLocaleDateString('en-US'),
+        totalAmount: `${savedOrder.estimatedCost || formData.estimatedCost || 0} ${settings?.currency || 'Rial'}`,
+        items: [
+          { description: `Device Model: ${savedOrder.deviceModel || formData.deviceModel}`, amount: savedOrder.issueDescription || formData.problemDescription }
+        ]
       });
-
-      pdf.addImage(imgData, 'PNG', 0, 1, pdfWidth, pdfHeight);
-      const fileName = `كارت_استلام_${savedOrder.ticketNumber}.pdf`;
-      const base64Data = pdf.output('datauristring').split(',')[1];
-
-      await saveAndShareFile({
-        fileName,
-        data: base64Data,
-        isBase64: true,
-        mimeType: 'application/pdf',
-        title: `كارت استلام ${savedOrder.ticketNumber}`,
-        text: `كارت استلام جهاز صيانة ${savedOrder.deviceModel} للعميل ${savedOrder.customerName}`
-      });
-    } catch (err) {
-      console.error('فشل تصدير كارت الاستلام كـ PDF:', err);
-      if (typeof window !== 'undefined') {
-        window.print();
-      }
+    } catch (error) {
+      console.error('فشل تصدير كارت الاستلام كـ PDF:', error);
     } finally {
       setIsExportingPDF(false);
     }

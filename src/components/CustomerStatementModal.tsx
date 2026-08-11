@@ -5,14 +5,11 @@
 
 import React, { useRef, useState } from 'react';
 import { X, Printer, Share2, Send, Download, FileText, Calendar, Award, User, Phone, Wallet, CheckCircle2, Loader2 } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 import { Capacitor } from '@capacitor/core';
 import { Customer, Invoice, Payment } from '../types';
 import { soundManager } from '../utils/sound';
-import { saveAndShareFile } from '../utils/fileExport';
 import { openWhatsApp } from '../utils/nativeLauncher';
-import { getSafeHtml2CanvasOptions } from '../utils/pdfHelper';
+import { generateAndSharePDF } from '../services/pdfService';
 
 interface CustomerStatementModalProps {
   isOpen: boolean;
@@ -85,32 +82,21 @@ export default function CustomerStatementModal({
   const [isGeneratingPDF, setIsGeneratingPDF] = useState<boolean>(false);
 
   const generatePDFAndShare = async () => {
-    if (isGeneratingPDF || !statementRef.current) return;
+    if (isGeneratingPDF) return;
     soundManager.playSuccessChime();
     setIsGeneratingPDF(true);
 
     try {
-      const element = statementRef.current;
-      const canvas = await html2canvas(element, getSafeHtml2CanvasOptions());
-
-      const imgData = canvas.toDataURL('image/png');
-      const imgWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-
-      const fileName = `كشف_حساب_${customer.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
-      const base64Data = pdf.output('datauristring').split(',')[1];
-
-      await saveAndShareFile({
-        fileName,
-        data: base64Data,
-        isBase64: true,
-        mimeType: 'application/pdf',
-        title: `كشف حساب - ${customer.name}`,
-        text: `كشف حساب العميل ${customer.name} - إجمالي المديونية: ${customer.totalDebt.toLocaleString()} ${currency}`
+      await generateAndSharePDF({
+        title: `Customer Statement - ${customer.name}`,
+        customerName: customer.name,
+        phone: customer.phone,
+        date: new Date().toLocaleDateString('en-US'),
+        totalAmount: `${customer.totalDebt.toLocaleString()} ${currency}`,
+        items: ledgerWithBalance.map(e => ({
+          description: `${e.description} (Balance: ${e.balance.toLocaleString()} ${currency})`,
+          amount: e.debit > 0 ? `+${e.debit}` : `-${e.credit}`
+        }))
       });
     } catch (err) {
       console.error('Customer statement PDF generation error:', err);
@@ -121,15 +107,7 @@ export default function CustomerStatementModal({
 
   const handlePrint = async () => {
     soundManager.playScanBeep();
-    if (!Capacitor.isNativePlatform()) {
-      window.print();
-      return;
-    }
-    try {
-      await generatePDFAndShare();
-    } catch (e) {
-      window.print();
-    }
+    await generatePDFAndShare();
   };
 
   // Phone clean formatting
@@ -148,17 +126,7 @@ export default function CustomerStatementModal({
 
   const handleNativeShare = async () => {
     soundManager.playScanBeep();
-    try {
-      await generatePDFAndShare();
-    } catch (e) {
-      await saveAndShareFile({
-        fileName: `كشف_حساب_${customer.name.replace(/\s+/g, '_')}.txt`,
-        data: summaryText,
-        mimeType: 'text/plain',
-        title: `كشف حساب - ${customer.name}`,
-        text: summaryText
-      });
-    }
+    await generatePDFAndShare();
   };
 
   return (

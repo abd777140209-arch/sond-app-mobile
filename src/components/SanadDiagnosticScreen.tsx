@@ -17,11 +17,13 @@ import {
   Sparkles, 
   Package, 
   ClipboardCheck,
-  ArrowLeft
+  ArrowLeft,
+  Share2
 } from 'lucide-react';
 import { Product } from '../types';
 import { diagnoseVehicleProblem, checkPartInventory, DiagnosticResult } from '../services/SanadDiagnosticService';
 import { soundManager } from '../utils/sound';
+import { generateAndSharePDF } from '../services/pdfService';
 
 export interface SanadDiagnosticScreenProps {
   apiBaseUrl?: string;
@@ -48,6 +50,27 @@ export const SanadDiagnosticScreen: React.FC<SanadDiagnosticScreenProps> = ({
   const [searchLoading, setSearchLoading] = useState(false);
   const [inventorySearchMessage, setInventorySearchMessage] = useState<string | null>(null);
   const [foundProducts, setFoundProducts] = useState<Product[]>([]);
+
+  // 📄 تصدير تقرير التشخيص PDF عبر pdfService
+  const handleExportDiagnosticPDF = async () => {
+    soundManager.playScanBeep();
+    try {
+      await generateAndSharePDF({
+        title: 'Sanad Motor Diagnostic Report',
+        customerName: 'Diagnostic Client',
+        date: new Date().toLocaleDateString('en-US'),
+        totalAmount: diagnosisResult ? diagnosisResult.issueCategory : 'Standard',
+        items: diagnosisResult ? [
+          { description: 'Likely Problem', amount: diagnosisResult.likelyCause },
+          ...diagnosisResult.suggestedParts.map(p => ({ description: `Suggested Part: ${p}`, amount: 'Recommended' }))
+        ] : [
+          { description: 'Symptoms', amount: symptoms || 'Vehicle Inspection' }
+        ]
+      });
+    } catch (e) {
+      console.error('PDF export error:', e);
+    }
+  };
 
   // 🔍 تشغيل محرك التشخيص
   const handleDiagnose = async () => {
@@ -153,6 +176,14 @@ export const SanadDiagnosticScreen: React.FC<SanadDiagnosticScreenProps> = ({
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={() => handleExportDiagnosticPDF()}
+            className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-white text-slate-900 border border-slate-200 hover:bg-slate-100 flex items-center gap-1.5 shadow-sm cursor-pointer transition"
+            title="تصدير ومشاركة تقرير التشخيص PDF"
+          >
+            <Share2 className="w-3.5 h-3.5 text-blue-600" />
+            <span>تصدير PDF</span>
+          </button>
           <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-400 text-slate-950 flex items-center gap-1 shadow-sm">
             ⚡ الإصدار 2.0 الذكي
           </span>

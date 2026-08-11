@@ -4,10 +4,8 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import { Capacitor } from '@capacitor/core';
-import { getSafeHtml2CanvasOptions } from '../utils/pdfHelper';
+import { generateAndSharePDF } from '../services/pdfService';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -126,58 +124,19 @@ export default function ProfitReports({
   const handleExportMaintenancePDF = async () => {
     try {
       setIsExportingPDF(true);
-      const reportElement = document.getElementById('maintenance-pdf-printable-report');
-      if (!reportElement) {
-        alert('عذراً، لم يتم العثور على عنصر التقرير.');
-        setIsExportingPDF(false);
-        return;
-      }
-
-      reportElement.style.display = 'block';
-
-      const canvas = await html2canvas(reportElement, getSafeHtml2CanvasOptions({ windowWidth: 850 }));
-
-      reportElement.style.display = 'none';
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'p',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
-
-      while (heightLeft >= 1) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pdfHeight;
-      }
-
-      const todayStr = new Date().toISOString().split('T')[0];
-      const fileName = `تقرير_الصيانة_الشهري_${todayStr}.pdf`;
-      const base64Data = pdf.output('datauristring').split(',')[1];
-
-      await saveAndShareFile({
-        fileName,
-        data: base64Data,
-        isBase64: true,
-        mimeType: 'application/pdf',
-        title: 'تقرير الصيانة - سند',
-        text: `تقرير الصيانة المصدّر من تطبيق سند المحاسبي بتاريخ ${todayStr}`
+      await generateAndSharePDF({
+        title: 'Monthly Maintenance Report',
+        customerName: settings?.storeName || 'Store System',
+        phone: settings?.phone || '',
+        date: new Date().toLocaleDateString('en-US'),
+        totalAmount: `${maintenanceOrders.length} Maintenance Ticket(s)`,
+        items: maintenanceOrders.slice(0, 10).map(m => ({
+          description: `Ticket #${m.orderNumber || m.id}: ${m.deviceName}`,
+          amount: `${m.cost || 0} ${currency}`
+        }))
       });
     } catch (error) {
-      console.error('Error generating PDF:', error);
+      console.error('Error generating Maintenance PDF:', error);
     } finally {
       setIsExportingPDF(false);
     }
@@ -187,55 +146,20 @@ export default function ProfitReports({
     soundManager.playSuccessChime();
     try {
       setIsExportingPDF(true);
-      const reportElement = document.getElementById('profit_reports_view');
-      if (!reportElement) {
-        window.print();
-        setIsExportingPDF(false);
-        return;
-      }
-
-      const canvas = await html2canvas(reportElement, getSafeHtml2CanvasOptions({ windowWidth: 1000 }));
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'p',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
-
-      while (heightLeft >= 1) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pdfHeight;
-      }
-
-      const todayStr = new Date().toISOString().split('T')[0];
-      const fileName = `تقرير_الأرباح_والمبيعات_${todayStr}.pdf`;
-      const base64Data = pdf.output('datauristring').split(',')[1];
-
-      await saveAndShareFile({
-        fileName,
-        data: base64Data,
-        isBase64: true,
-        mimeType: 'application/pdf',
-        title: 'تقرير الأرباح والمبيعات - سند',
-        text: `تقرير الأرباح والمبيعات المصدّر من تطبيق سند المحاسبي بتاريخ ${todayStr}`
+      await generateAndSharePDF({
+        title: 'Sales & Profit Financial Report',
+        customerName: settings?.storeName || 'Store Report',
+        phone: settings?.phone || '',
+        date: new Date().toLocaleDateString('en-US'),
+        totalAmount: `${invoices.length} Invoice(s)`,
+        items: [
+          { description: 'Period Preset', amount: period },
+          { description: 'Total Invoices Count', amount: `${invoices.length}` },
+          { description: 'Total Products Count', amount: `${products.length}` }
+        ]
       });
     } catch (error) {
       console.error('Error generating Summary PDF:', error);
-      window.print();
     } finally {
       setIsExportingPDF(false);
     }
