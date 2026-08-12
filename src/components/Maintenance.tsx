@@ -39,6 +39,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { MaintenanceOrder, DeviceChecklist, ChecklistStatus } from '../types';
 import { soundManager } from '../utils/sound';
 import { saveAndShareFile } from '../utils/fileExport';
+import { generateAndSharePDF } from '../services/pdfService';
 import MaintenanceStickerModal from './MaintenanceStickerModal';
 
 interface MaintenanceProps {
@@ -101,59 +102,21 @@ export default function Maintenance({
     soundManager.playSuccessChime();
     try {
       setIsExportingPDF(true);
-      const reportElement = document.getElementById('maintenance-tab-pdf-printable-report');
-      if (!reportElement) {
-        window.print();
-        setIsExportingPDF(false);
-        return;
-      }
+      const todayStr = new Date().toLocaleDateString('ar-YE');
+      const totalCostSum = orders.reduce((acc, o) => acc + (o.cost || 0), 0);
 
-      reportElement.style.display = 'block';
-
-      const canvas = await html2canvas(reportElement, getSafeHtml2CanvasOptions({ windowWidth: 850 }));
-
-      reportElement.style.display = 'none';
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'p',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
-
-      while (heightLeft >= 1) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pdfHeight;
-      }
-
-      const todayStr = new Date().toISOString().split('T')[0];
-      const fileName = `تقرير_الصيانة_الشهري_${todayStr}.pdf`;
-      const base64Data = pdf.output('datauristring').split(',')[1];
-
-      await saveAndShareFile({
-        fileName,
-        data: base64Data,
-        isBase64: true,
-        mimeType: 'application/pdf',
-        title: 'تقرير الصيانة الشهري - سند',
-        text: `تقرير قسم الصيانة التقنية المصدّر من تطبيق سند المحاسبي بتاريخ ${todayStr}`
+      await generateAndSharePDF({
+        title: 'تقرير قسم الصيانة التقنية الشامل',
+        customerName: 'إدارة قسم الصيانة',
+        date: todayStr,
+        items: orders.slice(0, 100).map(o => ({
+          description: `${o.deviceName || 'جهاز صيانة'} - العميل: ${o.customerName || 'غير محدد'} (${o.issueDescription || 'بدون تفاصيل'})`,
+          amount: `${(o.cost || 0).toLocaleString()} ${currency}`
+        })),
+        totalAmount: `${totalCostSum.toLocaleString()} ${currency}`
       });
     } catch (error) {
-      console.error('Error generating PDF:', error);
-      window.print();
+      console.error('Error generating Maintenance PDF:', error);
     } finally {
       setIsExportingPDF(false);
     }

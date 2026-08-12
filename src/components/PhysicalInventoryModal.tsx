@@ -97,7 +97,7 @@ export function PhysicalInventoryModal({
 
   if (!isOpen) return null;
 
-  // 🎯 Fast Text-Based PDF Generation & Print (0% html2canvas screenshots!)
+  // 🎯 Fast Text-Based PDF Generation & Print (0% html2canvas screenshots, uses generateAndSharePDF with embedded Arabic font)
   const handlePrintPDF = async () => {
     soundManager.playSuccessChime();
     setIsExportingPDF(true);

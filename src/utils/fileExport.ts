@@ -196,10 +196,22 @@ export async function saveSilentBackupFile(
   }
 }
 
+let isExportLock = false;
+
 /**
  * Saves a file and offers sharing / download options safely across Capacitor Native, WebViews, and Web Browsers.
  */
 export async function saveAndShareFile(options: SaveAndShareOptions): Promise<boolean> {
+  if (isExportLock) {
+    console.log('[saveAndShareFile] Prevented duplicate execution due to active export lock.');
+    return false;
+  }
+
+  isExportLock = true;
+  setTimeout(() => {
+    isExportLock = false;
+  }, 1200);
+
   const {
     fileName,
     data,
@@ -221,16 +233,16 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
   const cleanFolder = targetFolder.trim().replace(/^\/+|\/+$/g, '') || 'SanadApp';
   const relativeFilePath = `${cleanFolder}/${fileName}`;
 
-  console.log(`[saveAndShareFile] Native: ${isNative}, File: ${fileName}, MIME: ${mimeType}, Folder: ${cleanFolder}`);
+  console.log(`[saveAndShareFile] Platform Native: ${isNative}, File: ${fileName}, MIME: ${mimeType}`);
 
-  // 1. NATIVE CAPACITOR (ANDROID / IOS APK) PATH
+  // 1. CAPACITOR NATIVE (ANDROID / IOS APK) PATH
   if (isNative) {
     try {
       await ensureStoragePermissions();
 
       let shareUri = '';
 
-      // A) Write to Cache Directory FIRST (Fast, reliable shareable URI for Android Intents)
+      // A) Write to Cache Directory FIRST
       try {
         const cacheResult = await Filesystem.writeFile({
           path: fileName,
@@ -281,28 +293,23 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
             url: shareUri,
             dialogTitle: title || 'مشاركة وحفظ المستند'
           });
-          
-          alert(`✓ تم تصدير الملف وحفظه بنجاح!\n📁 المسار: Documents/${relativeFilePath}`);
           return true;
         } catch (shareErr: any) {
           const errStr = String(shareErr?.message || shareErr || '').toLowerCase();
           if (errStr.includes('cancel') || errStr.includes('dismiss') || errStr.includes('abort')) {
-            console.log('[fileExport] User dismissed share sheet');
             return true;
           }
           console.warn('[fileExport] Share.share warning:', shareErr);
-          alert(`✓ تم حفظ الملف بنجاح على ذاكرة الهاتف:\n📁 Documents/${relativeFilePath}`);
           return true;
         }
       }
 
     } catch (nativeErr: any) {
       console.error('[fileExport] Native Capacitor file operation failed:', nativeErr);
-      alert(`⚠️ حدث خطأ أثناء التصدير للذاكرة (${nativeErr?.message || nativeErr}). جار تحويل التصدير للمعالجة البديلة...`);
     }
   }
 
-  // 2. WEB SHARE API (ANDROID MOBILE CHROME / WEBVIEW FALLBACK)
+  // 2. WEB SHARE API (MOBILE CHROME WITH FILE SHARING SUPPORT)
   if (typeof navigator !== 'undefined' && (navigator as any).canShare && (navigator as any).share) {
     try {
       const blob = isBase64 
@@ -328,7 +335,7 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
     }
   }
 
-  // 3. STANDARD BROWSER DOWNLOAD LINK (BLOB + DATA URI)
+  // 3. DESKTOP / WINDOWS / ELECTRON / BROWSER (SINGLE FILE DOWNLOAD LINK)
   try {
     const blob = isBase64 
       ? base64ToBlob(cleanData, mimeType)
@@ -347,31 +354,12 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
         document.body.removeChild(link);
       }
       URL.revokeObjectURL(blobUrl);
-    }, 4000);
+    }, 3000);
 
-    // Data URI direct download fallback for strict Android WebViews
-    try {
-      const dataUri = isBase64 
-        ? `data:${mimeType};base64,${cleanData}`
-        : `data:${mimeType};charset=utf-8,${encodeURIComponent(data)}`;
-        
-      const altLink = document.createElement('a');
-      altLink.href = dataUri;
-      altLink.download = fileName;
-      altLink.style.display = 'none';
-      document.body.appendChild(altLink);
-      altLink.click();
-      setTimeout(() => {
-        if (document.body.contains(altLink)) document.body.removeChild(altLink);
-      }, 1000);
-    } catch (dataUriErr) {
-      console.warn('[fileExport] Data URI download attempt:', dataUriErr);
-    }
-
-    alert(`✓ تم تنزيل الملف بنجاح: ${fileName}`);
     return true;
   } catch (webLinkErr) {
-    console.warn('[fileExport] Web blob download link attempt:', webLinkErr);
+    console.warn('[fileExport] Web blob download link attempt error:', webLinkErr);
+    return false;
   }
 
   // 4. EMERGENCY CLIPBOARD / ALERT FALLBACK IF EVERYTHING BLOCKED
@@ -441,8 +429,8 @@ export function base64ToBlob(base64Data: string, contentType: string = 'applicat
 }
 
 /**
- * تصدير البيانات إلى CSV مع دعم اللغة العربية بنسبة 100% وإضافة UTF-8 BOM (\uFEFF)
- * لمنع تداخل الأعمدة والأسطر في Excel والجوال
+ * تصدير البيانات إلى ملف CSV تفاعلي مع تضمين ترميز UTF-8 BOM (\uFEFF)
+ * يضمن عرض النصوص العربية والرموز المالية دون أي تداخل في الصفوف بداخل Excel والهواتف المحمولة
  */
 export async function exportToCSV(filename: string, headers: string[], rows: (string | number)[][]) {
   const escapeField = (val: string | number) => {
