@@ -1,7 +1,7 @@
 name: Build Windows EXE
 
 on:
-  workflow_dispatch: # يتيح لك تشغيل البناء يدوياً بضغطة زر من الجوال!
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -17,10 +17,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install Dependencies
-        run: npm install
+        run: |
+          npm install
+          npm install electron electron-builder --save-dev
 
       - name: Build Web Assets
         run: npm run build
