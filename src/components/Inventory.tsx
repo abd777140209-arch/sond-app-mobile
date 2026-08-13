@@ -261,13 +261,20 @@ export default function Inventory({
     soundManager.playSuccessChime();
     try {
       await generateAndSharePDF({
-        title: 'تقرير جرد المستودع والمنتجات',
-        customerName: storeName || 'متجر سند',
-        date: new Date().toLocaleDateString('ar-EG'),
-        totalAmount: `إجمالي الاصناف: ${activeProductsList.length} صنف`,
+        title: 'تقرير جرد الكتالوج والمنتجات',
+        storeName: storeName || 'القيصر للأجهزة الذكية والصيانة والبرمجة',
+        invoiceNumber: `كتالوج-${new Date().toISOString().slice(0, 10)}`,
+        customerName: 'إدارة المخزون والمشتريات',
+        phone: '',
+        date: new Date().toLocaleDateString('ar-YE'),
+        paymentMethod: 'تقرير شامل بمنتجات الكتالوج',
+        subtotal: `${activeProductsList.length} صنف`,
+        totalAmount: `${activeProductsList.reduce((sum, p) => sum + (p.stock * p.sellingPrice), 0).toLocaleString()} ${currency}`,
         items: activeProductsList.slice(0, 50).map(p => ({
-          description: `${p.name} (بارلود: ${p.barcode || 'لا يوجد'}) - تصنيف: ${p.category || 'عام'}`,
-          amount: `الكمية: ${p.stock} | البيع: ${p.sellingPrice} ${currency}`
+          description: `${p.name} (بارلود: ${p.barcode || 'بدون'}) [تصنيف: ${p.category || 'عام'}]`,
+          quantity: p.stock,
+          unitPrice: `${p.sellingPrice.toLocaleString()} ${currency}`,
+          amount: `${(p.stock * p.sellingPrice).toLocaleString()} ${currency}`
         }))
       });
     } catch (e) {

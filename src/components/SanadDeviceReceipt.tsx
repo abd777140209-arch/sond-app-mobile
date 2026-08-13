@@ -182,13 +182,28 @@ export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
     soundManager.playScanBeep();
     try {
       await generateAndSharePDF({
-        title: `Device Maintenance Ticket - ${savedOrder?.ticketNumber || 'Receipt'}`,
-        customerName: savedOrder?.customerName || formData.customerName,
-        phone: savedOrder?.customerPhone || formData.customerPhone,
-        date: new Date().toLocaleDateString('en-US'),
-        totalAmount: `${savedOrder?.estimatedCost || formData.estimatedCost || 0} ${settings?.currency || 'Rial'}`,
+        title: 'سند استلام صيانة',
+        storeName: settings?.companyName || 'مركز سند لصيانة وبرمجة الهواتف',
+        invoiceNumber: savedOrder?.ticketNumber || 'سند صيانة',
+        customerName: savedOrder?.customerName || formData.customerName || 'عميل صيانة',
+        phone: savedOrder?.customerPhone || formData.customerPhone || '',
+        date: new Date().toLocaleDateString('ar-YE'),
+        paymentMethod: savedOrder?.depositAmount ? `العربون المدفوع: ${savedOrder.depositAmount} ${settings?.currency || 'ريال'}` : 'مستلم للصيانة',
+        subtotal: `${savedOrder?.estimatedCost || formData.estimatedCost || 0} ${settings?.currency || 'ريال'}`,
+        totalAmount: `${savedOrder?.estimatedCost || formData.estimatedCost || 0} ${settings?.currency || 'ريال'}`,
         items: [
-          { description: `Device: ${savedOrder?.deviceModel || formData.deviceModel}`, amount: savedOrder?.issueDescription || formData.problemDescription }
+          {
+            description: `موديل الجهاز: ${savedOrder?.deviceModel || formData.deviceModel || 'غير محدد'}`,
+            quantity: 1,
+            unitPrice: `${savedOrder?.estimatedCost || formData.estimatedCost || 0} ${settings?.currency || 'ريال'}`,
+            amount: `${savedOrder?.estimatedCost || formData.estimatedCost || 0} ${settings?.currency || 'ريال'}`
+          },
+          {
+            description: `العطل والملاحظات: ${savedOrder?.issueDescription || formData.problemDescription || 'صيانة عامة'}`,
+            quantity: '-',
+            unitPrice: '-',
+            amount: '-'
+          }
         ]
       });
     } catch (e) {
@@ -223,13 +238,28 @@ export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
 
     try {
       await generateAndSharePDF({
-        title: `Device Maintenance Ticket - ${savedOrder.ticketNumber}`,
-        customerName: savedOrder.customerName || formData.customerName,
-        phone: savedOrder.customerPhone || formData.customerPhone,
-        date: new Date().toLocaleDateString('en-US'),
-        totalAmount: `${savedOrder.estimatedCost || formData.estimatedCost || 0} ${settings?.currency || 'Rial'}`,
+        title: 'سند استلام صيانة',
+        storeName: settings?.companyName || 'مركز سند لصيانة وبرمجة الهواتف',
+        invoiceNumber: savedOrder.ticketNumber,
+        customerName: savedOrder.customerName || formData.customerName || 'عميل صيانة',
+        phone: savedOrder.customerPhone || formData.customerPhone || '',
+        date: new Date().toLocaleDateString('ar-YE'),
+        paymentMethod: savedOrder.depositAmount ? `العربون المدفوع: ${savedOrder.depositAmount} ${settings?.currency || 'ريال'}` : 'مستلم للصيانة',
+        subtotal: `${savedOrder.estimatedCost || formData.estimatedCost || 0} ${settings?.currency || 'ريال'}`,
+        totalAmount: `${savedOrder.estimatedCost || formData.estimatedCost || 0} ${settings?.currency || 'ريال'}`,
         items: [
-          { description: `Device Model: ${savedOrder.deviceModel || formData.deviceModel}`, amount: savedOrder.issueDescription || formData.problemDescription }
+          {
+            description: `موديل الجهاز: ${savedOrder.deviceModel || formData.deviceModel || 'غير محدد'}`,
+            quantity: 1,
+            unitPrice: `${savedOrder.estimatedCost || formData.estimatedCost || 0} ${settings?.currency || 'ريال'}`,
+            amount: `${savedOrder.estimatedCost || formData.estimatedCost || 0} ${settings?.currency || 'ريال'}`
+          },
+          {
+            description: `العطل والملاحظات: ${savedOrder.issueDescription || formData.problemDescription || 'صيانة عامة'}`,
+            quantity: '-',
+            unitPrice: '-',
+            amount: '-'
+          }
         ]
       });
     } catch (error) {

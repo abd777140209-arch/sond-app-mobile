@@ -51,6 +51,8 @@ export interface Invoice {
   discount: number;
   finalAmount: number;
   type: InvoiceType;
+  paymentMethod?: string;
+  referenceNumber?: string;
   date: string;
   status?: 'active' | 'refunded'; // supports returns
 }
@@ -62,6 +64,8 @@ export interface Payment {
   amount: number;
   date: string;
   note: string;
+  paymentMethod?: string;
+  referenceNumber?: string;
 }
 
 export type ChecklistStatus = 'intact' | 'damaged' | 'untested';
@@ -91,6 +95,8 @@ export interface MaintenanceOrder {
   dateDelivered?: string;
   notes: string;
   checklist?: DeviceChecklist;
+  paymentMethod?: string;
+  referenceNumber?: string;
 }
 
 export interface Transaction {
@@ -99,6 +105,8 @@ export interface Transaction {
   amount: number;
   date: string;
   description: string;
+  paymentMethod?: string;
+  referenceNumber?: string;
 }
 
 export type AppTheme = 'financial-blue' | 'emerald-green' | 'warm-amber' | 'dark-luxury';
@@ -130,6 +138,7 @@ export interface SystemSettings {
   isPrivacyPinEnabled?: boolean;
   storeLogoUrl?: string;
   debtReminderTemplate?: string;
+  invoiceFooterNote?: string;
   exchangeRates?: Record<string, number>;
   appTheme?: AppTheme;
   cardShape?: CardShape;

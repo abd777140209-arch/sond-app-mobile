@@ -31,12 +31,17 @@ import {
   Clock,
   X,
   Plus,
+  SlidersHorizontal,
+  FileSpreadsheet,
   ShieldCheck,
   Download
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { Customer, Payment, Invoice } from '../types';
 import { soundManager } from '../utils/sound';
 import { saveAndShareFile } from '../utils/fileExport';
+import { generateAndSharePDF } from '../services/pdfService';
+import { PAYMENT_METHODS, PaymentMethodKey } from '../utils/paymentMethods';
 import CustomerEditModal from './CustomerEditModal';
 import CustomerReminderModal from './CustomerReminderModal';
 import CustomerStatementModal from './CustomerStatementModal';
@@ -47,7 +52,7 @@ interface CustomersProps {
   invoices?: Invoice[];
   onAddCustomer: (customer: Omit<Customer, 'id' | 'createdAt'> & { totalDebt?: number }) => void;
   onUpdateCustomer?: (customer: Customer) => void;
-  onPayDebt: (customerId: string, amount: number, note: string) => void;
+  onPayDebt: (customerId: string, amount: number, note: string, paymentMethod?: string, referenceNumber?: string) => void;
   onDeleteCustomer: (customerId: string) => void;
   currency: string;
   storeName?: string;
@@ -81,6 +86,17 @@ export default function Customers({
   const [filterType, setFilterType] = useState<'all' | 'debtors' | 'overdue'>('all');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
+  // Column Visibility States for Table View
+  const [visibleColumns, setVisibleColumns] = useState({
+    name: true,
+    phone: true,
+    debtDueDate: true,
+    totalDebt: true,
+    loyaltyPoints: true,
+    actions: true,
+  });
+  const [showColumnPicker, setShowColumnPicker] = useState(false);
+
   // New Customer Form States
   const [showAddModal, setShowAddModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -96,6 +112,8 @@ export default function Customers({
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [payAmount, setPayAmount] = useState<number>(0);
   const [payNote, setPayNote] = useState('');
+  const [payPaymentMethod, setPayPaymentMethod] = useState<PaymentMethodKey>('cash');
+  const [payRefNumber, setPayRefNumber] = useState('');
   const [payError, setPayError] = useState('');
 
   // Modal States
@@ -179,10 +197,12 @@ export default function Customers({
       return;
     }
 
-    onPayDebt(selectedCustomerId, payAmount, payNote.trim() || 'دفعة نقدية لتسديد الحساب');
+    onPayDebt(selectedCustomerId, payAmount, payNote.trim() || 'دفعة لتسديد الحساب', payPaymentMethod, payRefNumber.trim() || undefined);
 
     setPayAmount(0);
     setPayNote('');
+    setPayPaymentMethod('cash');
+    setPayRefNumber('');
     setSelectedCustomerId('');
     setPayError('');
     setShowPaymentModal(false);
@@ -227,6 +247,88 @@ export default function Customers({
       title: 'قائمة العملاء والديون',
       text: 'تصدير قائمة العملاء والديون من تطبيق سند المحاسبي'
     });
+  };
+
+  // Export Customers & Debts to Excel (.xlsx)
+  const handleExportCustomersExcel = async () => {
+    soundManager.playSuccessChime();
+    const listToExport = filteredCustomers.length > 0 ? filteredCustomers : activeCustomers;
+
+    const data = listToExport.map((c, index) => ({
+      '#': index + 1,
+      'اسم العميل': c.name || '',
+      'رقم الهاتف': c.phone || '',
+      'إجمالي المديونية': c.totalDebt || 0,
+      'سقف الائتمان': c.creditLimit || 0,
+      'تاريخ الاستحقاق': c.debtDueDate ? new Date(c.debtDueDate).toLocaleDateString('ar-YE') : '-',
+      'نقاط الولاء': c.loyaltyPoints || 0,
+      'الملاحظات': c.notes || ''
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+
+    // Set column widths
+    worksheet['!cols'] = [
+      { wch: 5 },  // #
+      { wch: 25 }, // اسم العميل
+      { wch: 16 }, // رقم الهاتف
+      { wch: 18 }, // إجمالي المديونية
+      { wch: 16 }, // سقف الائتمان
+      { wch: 16 }, // تاريخ الاستحقاق
+      { wch: 12 }, // نقاط الولاء
+      { wch: 30 }  // الملاحظات
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'مديونيات العملاء');
+
+    const excelBase64 = XLSX.write(workbook, { bookType: 'xlsx', type: 'base64' });
+    const fileName = `تقرير_مديونيات_العملاء_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    await saveAndShareFile({
+      fileName,
+      data: excelBase64,
+      isBase64: true,
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      title: 'تقرير مديونيات العملاء Excel',
+      text: 'كشف تفصيلي بمديونيات وحسابات العملاء من تطبيق سند المحاسبي'
+    });
+  };
+
+  // Export Customers & Debts to PDF
+  const handleExportCustomersPDF = async () => {
+    soundManager.playScanBeep();
+
+    const listToExport = filteredCustomers.length > 0 ? filteredCustomers : activeCustomers;
+    const totalDebtSum = listToExport.reduce((acc, c) => acc + (c.totalDebt || 0), 0);
+
+    const pdfItems = listToExport.map((c) => ({
+      description: `${c.name} ${c.phone ? ' - 📱 ' + c.phone : ''}${c.notes ? ' (' + c.notes + ')' : ''}`,
+      quantity: c.loyaltyPoints ? `${c.loyaltyPoints} نقطة` : '1',
+      unitPrice: c.debtDueDate ? `استحقاق: ${c.debtDueDate}` : 'آجل',
+      amount: `${(c.totalDebt || 0).toLocaleString()} ${currency}`
+    }));
+
+    try {
+      await generateAndSharePDF({
+        title: 'كشف مديونيات وحسابات العملاء',
+        storeName: storeName || 'سند المحاسبي',
+        invoiceNumber: `ديون-${new Date().toISOString().slice(0, 10)}`,
+        customerName: 'تقرير المديونيات العامة والتفصيلية للعملاء',
+        phone: '',
+        date: new Date().toLocaleDateString('ar-YE'),
+        paymentMethod: `إجمالي العملاء: ${listToExport.length} عميل`,
+        subtotal: `إجمالي الديون: ${totalDebtSum.toLocaleString()} ${currency}`,
+        discount: '0',
+        totalAmount: `${totalDebtSum.toLocaleString()} ${currency}`,
+        notes: `كشف مديونيات معتمد رسمي موثق بحسابات العملاء حتى تاريخ ${new Date().toLocaleDateString('ar-YE')}.`,
+        items: pdfItems.length > 0 ? pdfItems : [
+          { description: 'لا يوجد عملاء مدينون حالياً في السجل', quantity: 0, unitPrice: '-', amount: '0' }
+        ]
+      });
+    } catch (e) {
+      console.error('Customer PDF Export Failed:', e);
+    }
   };
 
   return (
@@ -331,6 +433,25 @@ export default function Customers({
                 <span>سند قبض تسديد</span>
               </button>
 
+              {/* Export Buttons Group: PDF, Excel, CSV */}
+              <button
+                onClick={handleExportCustomersPDF}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-500/20 transition flex items-center gap-1.5 cursor-pointer"
+                title="تصدير طباعة كشف مديونية العملاء PDF"
+              >
+                <FileText className="w-4 h-4 text-white" />
+                <span>تصدير PDF</span>
+              </button>
+
+              <button
+                onClick={handleExportCustomersExcel}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white shadow-md shadow-emerald-700/20 transition flex items-center gap-1.5 cursor-pointer"
+                title="تصدير جدول مديونية العملاء Excel"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
+                <span>تصدير Excel</span>
+              </button>
+
               <button
                 onClick={handleExportCustomersCSV}
                 className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer"
@@ -367,23 +488,73 @@ export default function Customers({
                 </button>
               </div>
 
-              <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold">
-                <button
-                  onClick={() => setViewMode('cards')}
-                  className={`px-2.5 py-1 rounded-lg transition ${
-                    viewMode === 'cards' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500'
-                  }`}
-                >
-                  كروت 📇
-                </button>
-                <button
-                  onClick={() => setViewMode('table')}
-                  className={`px-2.5 py-1 rounded-lg transition ${
-                    viewMode === 'table' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500'
-                  }`}
-                >
-                  جدول 📋
-                </button>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold">
+                  <button
+                    onClick={() => setViewMode('cards')}
+                    className={`px-2.5 py-1 rounded-lg transition ${
+                      viewMode === 'cards' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500'
+                    }`}
+                  >
+                    كروت 📇
+                  </button>
+                  <button
+                    onClick={() => setViewMode('table')}
+                    className={`px-2.5 py-1 rounded-lg transition ${
+                      viewMode === 'table' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500'
+                    }`}
+                  >
+                    جدول 📋
+                  </button>
+                </div>
+
+                {/* Column Picker Button for Table View */}
+                {viewMode === 'table' && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowColumnPicker(!showColumnPicker)}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1.5 transition cursor-pointer"
+                      title="تحديد وإخفاء/إظهار أعمدة الجدول"
+                    >
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600" />
+                      <span>الأعمدة ⚙️</span>
+                    </button>
+
+                    {showColumnPicker && (
+                      <div className="absolute left-0 mt-2 w-52 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 z-30 text-xs space-y-2">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                          <span className="font-bold text-slate-800">الأعمدة الظاهرة:</span>
+                          <button 
+                            onClick={() => setShowColumnPicker(false)}
+                            className="text-slate-400 hover:text-slate-600 p-0.5 rounded-md"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <div className="space-y-1.5 pt-1">
+                          {[
+                            { key: 'name', label: 'العميل' },
+                            { key: 'phone', label: 'رقم الهاتف' },
+                            { key: 'debtDueDate', label: 'تاريخ الاستحقاق' },
+                            { key: 'totalDebt', label: 'الرصيد / الدين' },
+                            { key: 'loyaltyPoints', label: 'نقاط الولاء' },
+                            { key: 'actions', label: 'إجراءات والتعديل' },
+                          ].map(col => (
+                            <label key={col.key} className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 p-1.5 rounded-lg transition">
+                              <input
+                                type="checkbox"
+                                checked={visibleColumns[col.key as keyof typeof visibleColumns]}
+                                onChange={(e) => setVisibleColumns(prev => ({ ...prev, [col.key]: e.target.checked }))}
+                                className="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer"
+                              />
+                              <span className="text-slate-700 font-medium">{col.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -584,96 +755,112 @@ export default function Customers({
                 <table className="w-full text-right text-xs">
                   <thead>
                     <tr className="border-b border-slate-200 text-slate-400 font-bold">
-                      <th className="pb-3 pr-2">العميل</th>
-                      <th className="pb-3 text-center">رقم الهاتف</th>
-                      <th className="pb-3 text-center">الاستحقاق</th>
-                      <th className="pb-3 text-center">الرصيد / الدين</th>
-                      <th className="pb-3 pl-2 text-left">إجراءات والتعديل</th>
+                      {visibleColumns.name && <th className="pb-3 pr-2">العميل</th>}
+                      {visibleColumns.phone && <th className="pb-3 text-center">رقم الهاتف</th>}
+                      {visibleColumns.debtDueDate && <th className="pb-3 text-center">الاستحقاق</th>}
+                      {visibleColumns.totalDebt && <th className="pb-3 text-center">الرصيد / الدين</th>}
+                      {visibleColumns.loyaltyPoints && <th className="pb-3 text-center">نقاط الولاء</th>}
+                      {visibleColumns.actions && <th className="pb-3 pl-2 text-left">إجراءات والتعديل</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filteredCustomers.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="py-8 text-center text-slate-400">
+                        <td colSpan={Object.values(visibleColumns).filter(Boolean).length || 1} className="py-8 text-center text-slate-400">
                           لم يتم العثور على عملاء.
                         </td>
                       </tr>
                     ) : (
                       filteredCustomers.map(customer => (
                         <tr key={customer.id} className="hover:bg-slate-50">
-                          <td className="py-3 pr-2 font-bold text-slate-900">
-                            <div className="flex items-center gap-1.5">
-                              <span>{customer.name}</span>
-                              {(customer.loyaltyPoints || 0) > 0 && (
-                                <span className="text-[9px] bg-purple-100 text-purple-700 px-1 rounded">🎖️ {customer.loyaltyPoints}</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 text-center font-mono text-slate-500">
-                            {customer.phone}
-                          </td>
-                          <td className="py-3 text-center font-mono text-[11px] text-slate-600">
-                            {customer.debtDueDate ? new Date(customer.debtDueDate).toLocaleDateString('ar-YE') : '-'}
-                          </td>
-                          <td className={`py-3 text-center font-mono font-bold ${
-                            customer.totalDebt > 0 ? 'text-rose-600' : 'text-emerald-600'
-                          }`}>
-                            {fmtAmount(customer.totalDebt)}
-                          </td>
-                          <td className="py-3 pl-2 text-left flex justify-end gap-1">
-                            
-                            {/* Edit Button */}
-                            <button
-                              onClick={() => {
-                                soundManager.playScanBeep();
-                                setEditingCustomer(customer);
-                              }}
-                              className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition"
-                              title="تعديل العميل"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-
-                            {/* Statement Button */}
-                            <button
-                              onClick={() => {
-                                soundManager.playScanBeep();
-                                setStatementCustomer(customer);
-                              }}
-                              className="p-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition"
-                              title="كشف الحساب"
-                            >
-                              <FileText className="w-3.5 h-3.5" />
-                            </button>
-
-                            {/* Reminder Modal Button */}
-                            {customer.totalDebt > 0 && (
+                          {visibleColumns.name && (
+                            <td className="py-3 pr-2 font-bold text-slate-900">
+                              <div className="flex items-center gap-1.5">
+                                <span>{customer.name}</span>
+                              </div>
+                            </td>
+                          )}
+                          {visibleColumns.phone && (
+                            <td className="py-3 text-center font-mono text-slate-500">
+                              {customer.phone}
+                            </td>
+                          )}
+                          {visibleColumns.debtDueDate && (
+                            <td className="py-3 text-center font-mono text-[11px] text-slate-600">
+                              {customer.debtDueDate ? new Date(customer.debtDueDate).toLocaleDateString('ar-YE') : '-'}
+                            </td>
+                          )}
+                          {visibleColumns.totalDebt && (
+                            <td className={`py-3 text-center font-mono font-bold ${
+                              customer.totalDebt > 0 ? 'text-rose-600' : 'text-emerald-600'
+                            }`}>
+                              {fmtAmount(customer.totalDebt)}
+                            </td>
+                          )}
+                          {visibleColumns.loyaltyPoints && (
+                            <td className="py-3 text-center font-mono text-slate-600">
+                              {(customer.loyaltyPoints || 0) > 0 ? (
+                                <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full border border-purple-200">
+                                  🎖️ {customer.loyaltyPoints}
+                                </span>
+                              ) : '-'}
+                            </td>
+                          )}
+                          {visibleColumns.actions && (
+                            <td className="py-3 pl-2 text-left flex justify-end gap-1">
+                              {/* Edit Button */}
                               <button
                                 onClick={() => {
                                   soundManager.playScanBeep();
-                                  setReminderCustomer(customer);
+                                  setEditingCustomer(customer);
                                 }}
-                                className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition font-bold text-[10px] flex items-center gap-1"
+                                className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition"
+                                title="تعديل العميل"
                               >
-                                <Send className="w-3.5 h-3.5" /> تذكير
+                                <Edit2 className="w-3.5 h-3.5" />
                               </button>
-                            )}
 
-                            {/* Delete Button */}
-                            <button
-                              onClick={() => {
-                                if (customer.totalDebt > 0) {
-                                  soundManager.playWarningBeep();
-                                  alert('⚠️ لا يمكن حذف حساب العميل وهو يحمل مديونية نشطة!');
-                                  return;
-                                }
-                                onDeleteCustomer(customer.id);
-                              }}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
+                              {/* Statement Button */}
+                              <button
+                                onClick={() => {
+                                  soundManager.playScanBeep();
+                                  setStatementCustomer(customer);
+                                }}
+                                className="p-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition"
+                                title="كشف الحساب"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                              </button>
+
+                              {/* Reminder Modal Button */}
+                              {customer.totalDebt > 0 && (
+                                <button
+                                  onClick={() => {
+                                    soundManager.playScanBeep();
+                                    setReminderCustomer(customer);
+                                  }}
+                                  className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition font-bold text-[10px] flex items-center gap-1"
+                                >
+                                  <Send className="w-3.5 h-3.5" /> تذكير
+                                </button>
+                              )}
+
+                              {/* Delete Button */}
+                              <button
+                                onClick={() => {
+                                  if (customer.totalDebt > 0) {
+                                    soundManager.playWarningBeep();
+                                    alert('⚠️ لا يمكن حذف حساب العميل وهو يحمل مديونية نشطة!');
+                                    return;
+                                  }
+                                  onDeleteCustomer(customer.id);
+                                }}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       ))
                     )}
@@ -969,7 +1156,7 @@ export default function Customers({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">المبلغ المسلم نقدياً للتنزيل:</label>
+                  <label className="text-xs font-bold text-slate-700">المبلغ المسلم للتنزيل:</label>
                   <input
                     id="pay_debt_amount_input"
                     type="number"
@@ -983,13 +1170,54 @@ export default function Customers({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">ملاحظات أو رقم السند:</label>
+                  <label className="text-xs font-bold text-slate-700">طريقة الدفع وسند التسليم:</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                    {(Object.keys(PAYMENT_METHODS) as PaymentMethodKey[]).filter(k => k !== 'debt').map((methodKey) => {
+                      const method = PAYMENT_METHODS[methodKey];
+                      const isSelected = payPaymentMethod === methodKey;
+                      return (
+                        <button
+                          key={methodKey}
+                          type="button"
+                          onClick={() => {
+                            soundManager.playScanBeep();
+                            setPayPaymentMethod(methodKey);
+                          }}
+                          className={`py-2 px-2 rounded-xl text-[11px] font-bold border transition flex items-center gap-1.5 justify-center cursor-pointer ${
+                            isSelected
+                              ? `${method.bgLightClass} ${method.colorClass} ${method.borderClass} ring-2 ring-emerald-500 shadow-sm font-black`
+                              : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          <span className="text-sm">{method.emoji}</span>
+                          <span className="truncate">{method.shortLabel}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {payPaymentMethod !== 'cash' && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700">رقم الحوالة / السند / الإشعار:</label>
+                    <input
+                      type="text"
+                      value={payRefNumber}
+                      onChange={(e) => setPayRefNumber(e.target.value)}
+                      placeholder="مثال: #88741..."
+                      className="w-full bg-slate-50 border border-slate-200 text-xs font-mono font-bold rounded-xl px-3.5 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">ملاحظات أو بيان السند:</label>
                   <input
                     id="pay_debt_note_input"
                     type="text"
                     value={payNote}
                     onChange={(e) => setPayNote(e.target.value)}
-                    placeholder="مثال: تسديد جزئي نقدياً لصيانة الشاشات..."
+                    placeholder="مثال: تسديد دفعة من الحساب..."
                     className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
                   />
                 </div>
@@ -1000,7 +1228,7 @@ export default function Customers({
                   className="w-full py-3 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/20 transition cursor-pointer flex items-center justify-center gap-2"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>ترحيل سند المقبوضات نقدياً</span>
+                  <span>ترحيل سند المقبوضات وتنزيل الدين</span>
                 </button>
               </form>
             </motion.div>

@@ -88,14 +88,20 @@ export default function CustomerStatementModal({
 
     try {
       await generateAndSharePDF({
-        title: `Customer Statement - ${customer.name}`,
+        title: 'كشف حساب عميل',
+        storeName: 'القيصر للأجهزة الذكية والصيانة والبرمجة',
+        invoiceNumber: `كشف-${customer.id.substring(0, 6)}`,
         customerName: customer.name,
-        phone: customer.phone,
-        date: new Date().toLocaleDateString('en-US'),
+        phone: customer.phone || 'غير مسجل',
+        date: new Date().toLocaleDateString('ar-YE'),
+        paymentMethod: 'حساب آجل',
+        subtotal: `${customer.totalDebt.toLocaleString()} ${currency}`,
         totalAmount: `${customer.totalDebt.toLocaleString()} ${currency}`,
-        items: ledgerWithBalance.map(e => ({
-          description: `${e.description} (Balance: ${e.balance.toLocaleString()} ${currency})`,
-          amount: e.debit > 0 ? `+${e.debit}` : `-${e.credit}`
+        items: ledgerWithBalance.map((e, idx) => ({
+          description: `${e.description} (الرصيد: ${e.balance.toLocaleString()} ${currency})`,
+          quantity: idx + 1,
+          unitPrice: e.debit > 0 ? `مدين +${e.debit.toLocaleString()}` : `دائن -${e.credit.toLocaleString()}`,
+          amount: `${e.balance.toLocaleString()} ${currency}`
         }))
       });
     } catch (err) {

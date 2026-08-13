@@ -16,6 +16,7 @@ import {
   DollarSign, 
   MapPin, 
   Phone, 
+  FileText,
   Palette, 
   LayoutGrid, 
   Sun, 
@@ -82,6 +83,9 @@ export default function Settings({
   const [currency, setCurrency] = useState(settings.currency);
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
+  const [invoiceFooterNote, setInvoiceFooterNote] = useState(
+    settings.invoiceFooterNote || localStorage.getItem('sanad_invoice_footer_note') || 'البضاعة المباعة لا تُرد ولا تُستبدل إلا بالوصل وشروط الضمان المعتمدة. شكراً لتعاملكم معنا.'
+  );
   const [pinCode, setPinCode] = useState(settings.pinCode);
   const [isPinEnabled, setIsPinEnabled] = useState(settings.isPinEnabled);
   const [protectedSections, setProtectedSections] = useState<string[]>(() => {
@@ -502,6 +506,8 @@ export default function Settings({
       localStorage.removeItem('sanad_store_logo');
     }
 
+    localStorage.setItem('sanad_invoice_footer_note', invoiceFooterNote);
+
     onSaveSettings({
       storeName: storeName.trim(),
       storeLogoUrl,
@@ -511,6 +517,7 @@ export default function Settings({
       exchangeRates: getExchangeRatesMap(),
       address: address.trim(),
       phone: phone.trim(),
+      invoiceFooterNote: invoiceFooterNote.trim(),
       pinCode,
       isPinEnabled,
       protectedSections,
@@ -1546,6 +1553,27 @@ export default function Settings({
                   className="w-full bg-slate-50 border border-slate-200 text-xs font-mono rounded-xl px-3.5 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition text-right"
                 />
               </div>
+            </div>
+
+            {/* Invoice Footer Note / Policy / Warranty Terms */}
+            <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-200/80 space-y-2">
+              <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <FileText className="w-4 h-4 text-blue-600" />
+                <span>ملاحظات تذيلية للفاتورة (سياسة الاسترجاع والضمان):</span>
+              </label>
+              <textarea
+                rows={3}
+                value={invoiceFooterNote}
+                onChange={(e) => {
+                  setInvoiceFooterNote(e.target.value);
+                  localStorage.setItem('sanad_invoice_footer_note', e.target.value);
+                }}
+                placeholder="أدخل شروط الضمان وسياسة الاستبدال أو الملاحظات التي تظهر أسفل الفاتورة..."
+                className="w-full bg-white border border-slate-200 text-xs rounded-xl p-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition leading-relaxed"
+              />
+              <p className="text-[10px] text-slate-500">
+                💡 تظهر هذه الشروط والملاحظات تلقائياً في أسفل الفواتير المطبوعة (Thermal 80mm/58mm) وعند تصدير الفواتير ملف PDF.
+              </p>
             </div>
 
             {/* Security Locks */}

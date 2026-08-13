@@ -11,11 +11,12 @@ import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
 import { Invoice, SystemSettings, Customer } from '../types';
 import { soundManager } from '../utils/sound';
+import { formatPaymentMethodLabel } from '../utils/paymentMethods';
 import { requestStoragePermissionOnDemand } from '../utils/androidPermissions';
 import { saveAndShareFile } from '../utils/fileExport';
 import { openWhatsApp } from '../utils/nativeLauncher';
 import { generateAndSharePDF } from '../services/pdfService';
-import { printReceiptHTML } from '../services/ReceiptPrinter';
+import { printSalesInvoiceThermalHTML } from '../services/ReceiptPrinter';
 
 interface InvoiceModalProps {
   invoice: Invoice | null;
@@ -76,17 +77,25 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
       window.print();
     } else {
       try {
-        await generateAndSharePDF({
-          title: `فاتورة مبيعات #${invoice.invoiceNumber}`,
-          customerName: customers?.find(c => c.id === invoice.customerId)?.name || invoice.customerName || 'عميل كاش',
+        const pdfPayload = {
+          title: 'فاتورة مبيعات',
+          storeName: settings.storeName || 'القيصر للأجهزة الذكية والصيانة والبرمجة',
+          invoiceNumber: invoice.invoiceNumber,
+          customerName: customers?.find(c => c.id === invoice.customerId)?.name || invoice.customerName || 'عميل سفري / نقدي (كاش)',
           phone: phoneInput || '',
-          date: new Date(invoice.date).toLocaleDateString('ar-YE'),
+          date: `${new Date(invoice.date).toLocaleDateString('ar-YE')} ${new Date(invoice.date).toLocaleTimeString('ar-YE', { hour: '2-digit', minute: '2-digit' })}`,
+          paymentMethod: formatPaymentMethodLabel(invoice.paymentMethod || invoice.type, invoice.referenceNumber),
+          subtotal: `${invoice.totalAmount.toLocaleString()} ${settings.currency}`,
+          discount: invoice.discount ? `${invoice.discount.toLocaleString()} ${settings.currency}` : '0',
           totalAmount: `${invoice.finalAmount.toLocaleString()} ${settings.currency}`,
           items: invoice.items.map(i => ({
-            description: `${i.name} (x${i.quantity})`,
+            description: i.name,
+            quantity: i.quantity,
+            unitPrice: `${i.sellingPrice.toLocaleString()} ${settings.currency}`,
             amount: `${i.total.toLocaleString()} ${settings.currency}`
           }))
-        });
+        };
+        await generateAndSharePDF(pdfPayload);
       } catch (e) {
         console.error('Mobile Print Error:', e);
         window.print();
@@ -114,14 +123,22 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
         }
       }
 
-      printReceiptHTML(settings.storeName, {
-        ticketNumber: invoice.invoiceNumber,
-        customerName: invoice.customerName,
-        customerPhone: phoneInput || '',
-        deviceModel: `فاتورة مبيعات (${invoice.items.length} صنف)`,
-        estimatedCost: invoice.finalAmount,
-        createdAt: new Date(invoice.date).toISOString()
-      }, settings.currency);
+      printSalesInvoiceThermalHTML(
+        settings.storeName || 'سند للمحاسبة والخدمات',
+        {
+          invoiceNumber: invoice.invoiceNumber,
+          customerName: customers?.find(c => c.id === invoice.customerId)?.name || invoice.customerName || 'عميل سفري / نقدي (كاش)',
+          customerPhone: phoneInput || '',
+          date: invoice.date,
+          paymentMethod: formatPaymentMethodLabel(invoice.paymentMethod || invoice.type, invoice.referenceNumber),
+          items: invoice.items,
+          totalAmount: invoice.totalAmount,
+          discount: invoice.discount,
+          finalAmount: invoice.finalAmount,
+          notes: settings.invoiceFooterNote || localStorage.getItem('sanad_invoice_footer_note') || ''
+        },
+        settings.currency
+      );
 
     } catch (err) {
       console.error('Bluetooth Thermal Print Error:', err);
@@ -137,17 +154,26 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
     setIsExportingPDF(true);
 
     try {
-      await generateAndSharePDF({
-        title: `فاتورة مبيعات #${invoice.invoiceNumber}`,
-        customerName: customers?.find(c => c.id === invoice.customerId)?.name || invoice.customerName || 'عميل كاش',
+      const pdfPayload = {
+        title: 'فاتورة مبيعات',
+        storeName: settings.storeName || 'القيصر للأجهزة الذكية والصيانة والبرمجة',
+        invoiceNumber: invoice.invoiceNumber,
+        customerName: customers?.find(c => c.id === invoice.customerId)?.name || invoice.customerName || 'عميل سفري / نقدي (كاش)',
         phone: phoneInput || '',
-        date: new Date(invoice.date).toLocaleDateString('ar-YE'),
+        date: `${new Date(invoice.date).toLocaleDateString('ar-YE')} ${new Date(invoice.date).toLocaleTimeString('ar-YE', { hour: '2-digit', minute: '2-digit' })}`,
+        paymentMethod: formatPaymentMethodLabel(invoice.paymentMethod || invoice.type, invoice.referenceNumber),
+        subtotal: `${invoice.totalAmount.toLocaleString()} ${settings.currency}`,
+        discount: invoice.discount ? `${invoice.discount.toLocaleString()} ${settings.currency}` : '0',
         totalAmount: `${invoice.finalAmount.toLocaleString()} ${settings.currency}`,
+        notes: settings.invoiceFooterNote || localStorage.getItem('sanad_invoice_footer_note') || 'البضاعة المباعة لا تُرد ولا تُستبدل إلا بشرط الضمان المعتمدة. شكراً لتعاملكم معنا.',
         items: invoice.items.map(i => ({
-          description: `${i.name} (x${i.quantity})`,
+          description: i.name,
+          quantity: i.quantity,
+          unitPrice: `${i.sellingPrice.toLocaleString()} ${settings.currency}`,
           amount: `${i.total.toLocaleString()} ${settings.currency}`
         }))
-      });
+      };
+      await generateAndSharePDF(pdfPayload);
     } catch (error) {
       console.error('فشل تصدير الفاتورة كـ PDF:', error);
     } finally {
@@ -357,9 +383,9 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
               <span className="font-bold">{invoice.customerName}</span>
             </div>
             <div className="flex justify-between">
-              <span>شروط الفاتورة:</span>
-              <span className="font-bold text-[9px]">
-                {invoice.type === 'cash' ? 'نقدي (كاش)' : 'ذمم / آجل قيد الحساب'}
+              <span>طريقة السداد:</span>
+              <span className="font-bold text-[9px] text-[#C5A862]">
+                {formatPaymentMethodLabel(invoice.paymentMethod || invoice.type, invoice.referenceNumber)}
               </span>
             </div>
           </div>
@@ -419,7 +445,14 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
           <div className="my-3 border-t border-dashed border-gray-400"></div>
 
           {/* Footer message / QR placeholder */}
-          <div className="text-center space-y-1 text-gray-600">
+          <div className="text-center space-y-1.5 text-gray-600">
+            {/* Printed Invoice Footer Note (Policy / Terms / Warranty) */}
+            {(settings.invoiceFooterNote || localStorage.getItem('sanad_invoice_footer_note')) && (
+              <div className="my-2 p-2 bg-gray-50 border border-dashed border-gray-300 rounded-lg text-[9px] text-gray-800 font-bold leading-relaxed whitespace-pre-line text-center">
+                {settings.invoiceFooterNote || localStorage.getItem('sanad_invoice_footer_note')}
+              </div>
+            )}
+
             <p className="text-[9px] font-semibold flex items-center justify-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5 text-green-600" />
               تم الحفظ بنجاح في النظام المحاسبي للكمبيوتر

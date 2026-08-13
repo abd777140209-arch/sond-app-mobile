@@ -105,13 +105,18 @@ export default function BarcodeLabelPrinterModal({
     soundManager.playScanBeep();
     try {
       await generateAndSharePDF({
-        title: `Barcode Label - ${customTitle}`,
-        customerName: storeName || 'Sanad Store',
-        date: new Date().toLocaleDateString('en-US'),
+        title: 'ملصق باركود صنف',
+        storeName: storeName || 'القيصر للأجهزة الذكية والصيانة والبرمجة',
+        invoiceNumber: `باركود-${customBarcode || '0000'}`,
+        customerName: 'طباعة ملصقات الباركود',
+        phone: '',
+        date: new Date().toLocaleDateString('ar-YE'),
+        paymentMethod: 'ملصق تسعير منتج',
+        subtotal: `${customPrice.toLocaleString()} ${currency}`,
         totalAmount: `${customPrice.toLocaleString()} ${currency}`,
         items: [
-          { description: `Product: ${customTitle}`, amount: `Price: ${customPrice} ${currency}` },
-          { description: `Barcode: ${customBarcode}`, amount: `Copies: ${printCopies}` }
+          { description: `اسم المنتج: ${customTitle}`, quantity: printCopies, unitPrice: `${customPrice.toLocaleString()} ${currency}`, amount: `${(customPrice * printCopies).toLocaleString()} ${currency}` },
+          { description: `كود الباركود: ${customBarcode}`, quantity: printCopies, unitPrice: '-', amount: '-' }
         ]
       });
     } catch (e) {

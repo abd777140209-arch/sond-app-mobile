@@ -56,15 +56,20 @@ export const SanadDiagnosticScreen: React.FC<SanadDiagnosticScreenProps> = ({
     soundManager.playScanBeep();
     try {
       await generateAndSharePDF({
-        title: 'Sanad Motor Diagnostic Report',
-        customerName: 'Diagnostic Client',
-        date: new Date().toLocaleDateString('en-US'),
-        totalAmount: diagnosisResult ? diagnosisResult.issueCategory : 'Standard',
+        title: 'تقرير تشخيص الأعطال والصيانة',
+        storeName: 'القيصر للأجهزة الذكية والصيانة والبرمجة',
+        invoiceNumber: `تشخيص-${Date.now().toString().slice(-4)}`,
+        customerName: 'عميل الفحص والتشخيص الذكي',
+        phone: '',
+        date: new Date().toLocaleDateString('ar-YE'),
+        paymentMethod: 'تقرير فحص تقني',
+        subtotal: diagnosisResult ? diagnosisResult.issueCategory : 'فحص شامل',
+        totalAmount: diagnosisResult ? diagnosisResult.issueCategory : 'فحص شامل',
         items: diagnosisResult ? [
-          { description: 'Likely Problem', amount: diagnosisResult.likelyCause },
-          ...diagnosisResult.suggestedParts.map(p => ({ description: `Suggested Part: ${p}`, amount: 'Recommended' }))
+          { description: `السبب المرجح للعطل: ${diagnosisResult.likelyCause}`, quantity: 1, unitPrice: '-', amount: diagnosisResult.issueCategory },
+          ...diagnosisResult.suggestedParts.map(p => ({ description: `القطع المقترح استبدالها: ${p}`, quantity: 1, unitPrice: 'موصى به', amount: 'متوفر' }))
         ] : [
-          { description: 'Symptoms', amount: symptoms || 'Vehicle Inspection' }
+          { description: `الأعراض المبلغ عنها: ${symptoms || 'فحص أجهزة إلكترونية'}`, quantity: 1, unitPrice: '-', amount: 'تحت الفحص' }
         ]
       });
     } catch (e) {

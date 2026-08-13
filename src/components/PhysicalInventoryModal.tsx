@@ -105,18 +105,25 @@ export function PhysicalInventoryModal({
     try {
       const todayStr = new Date().toLocaleDateString('ar-YE');
       await generateAndSharePDF({
-        title: `تقرير الجرد الميداني والحصر - ${storeName}`,
-        customerName: storeName,
+        title: 'تقرير الجرد الميداني وحصر المخزون',
+        storeName: storeName || 'القيصر للأجهزة الذكية والصيانة والبرمجة',
+        invoiceNumber: `جرد-${new Date().toISOString().slice(0, 10)}`,
+        customerName: 'قسم إدارة المخازن والجرد',
+        phone: '',
         date: todayStr,
-        totalAmount: `إجمالي الأصناف: ${stats.totalItems} | قيمة المخزون: ${stats.totalValuation.toLocaleString()} ${currency}`,
+        paymentMethod: 'جرد مطابقة المخزون',
+        subtotal: `${stats.totalValuation.toLocaleString()} ${currency}`,
+        totalAmount: `${stats.totalValuation.toLocaleString()} ${currency}`,
         items: filteredProducts.map(p => {
           const physical = physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : p.stock;
           const diff = physical - p.stock;
-          const statusStr = diff === 0 ? 'مطابق' : diff > 0 ? `زيادة (+${diff})` : `عجز (${diff})`;
+          const statusStr = diff === 0 ? 'مطابق' : diff > 0 ? `زيادة +${diff}` : `عجز ${diff}`;
 
           return {
-            description: `${p.name} [بارلود: ${p.barcode || 'لا يوجد'}] - نظام: ${p.stock} | فعلي: ${physical}`,
-            amount: `${statusStr} (${(physical * p.sellingPrice).toLocaleString()} ${currency})`
+            description: `${p.name} (بارلود: ${p.barcode || 'بدون'}) [نظام: ${p.stock} | فعلي: ${physical}]`,
+            quantity: physical,
+            unitPrice: `${p.sellingPrice.toLocaleString()} ${currency}`,
+            amount: `${statusStr} - ${(physical * p.sellingPrice).toLocaleString()} ${currency}`
           };
         })
       });

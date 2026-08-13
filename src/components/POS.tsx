@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { Product, Customer, Invoice, InvoiceItem, InvoiceType, SystemSettings } from '../types';
 import { soundManager } from '../utils/sound';
+import { PAYMENT_METHODS, PaymentMethodKey } from '../utils/paymentMethods';
 import VoicePOSModal from './VoicePOSModal';
 import BarcodeScannerModal from './BarcodeScannerModal';
 import BarcodeLabelPrinterModal from './BarcodeLabelPrinterModal';
@@ -48,7 +49,8 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
   const [cart, setCart] = useState<InvoiceItem[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [discountInput, setDiscountInput] = useState<number>(0);
-  const [paymentType, setPaymentType] = useState<InvoiceType>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodKey>('cash');
+  const [referenceNumber, setReferenceNumber] = useState<string>('');
   const [posError, setPosError] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('الكل');
   
@@ -285,7 +287,7 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
     setCart([]);
     setDiscountInput(0);
     setSelectedCustomerId('');
-    setPaymentType('cash');
+    setPaymentMethod('cash');
     setPosError('');
   };
 
@@ -298,7 +300,7 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
   const convertedTotal = selectedCurrObj?.isBase ? cartTotal : (cartTotal / selectedRate);
 
   const executeSaleCompletion = () => {
-    if (paymentType === 'debt' && !selectedCustomerId) {
+    if (paymentMethod === 'debt' && !selectedCustomerId) {
       soundManager.playWarningBeep();
       setPosError('⚠️ مبيعات الآجل (الذمم) تتطلب اختيار عميل مسجل من القائمة لتقييد الدين عليه!');
       return;
@@ -314,7 +316,9 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
       totalAmount: cartSubtotal,
       discount: discountInput,
       finalAmount: cartTotal,
-      type: paymentType,
+      type: paymentMethod === 'debt' ? 'debt' : 'cash',
+      paymentMethod: paymentMethod,
+      referenceNumber: referenceNumber.trim() || undefined,
       date: new Date().toISOString()
     });
 
@@ -322,7 +326,8 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
     setCart([]);
     setDiscountInput(0);
     setSelectedCustomerId('');
-    setPaymentType('cash');
+    setPaymentMethod('cash');
+    setReferenceNumber('');
     setPosError('');
     setCreditLimitModalOpen(false);
     setCreditLimitBlockedInfo(null);
@@ -336,7 +341,7 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
       return;
     }
 
-    if (paymentType === 'debt') {
+    if (paymentMethod === 'debt') {
       if (!selectedCustomerId) {
         soundManager.playWarningBeep();
         setPosError('⚠️ مبيعات الآجل (الذمم) تتطلب اختيار عميل مسجل من القائمة لتقييد الدين عليه!');
@@ -393,14 +398,14 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
           setPosError('⚠️ السلة فارغة! أضف أصنافاً أولاً للبيع السريع بـ F4.');
           return;
         }
-        if (paymentType === 'debt' && !selectedCustomerId) {
+        if (paymentMethod === 'debt' && !selectedCustomerId) {
           soundManager.playWarningBeep();
           setPosError('⚠️ مبيعات الآجل (الذمم) تتطلب اختيار عميل مسجل من القائمة لتقييد الدين عليه!');
           return;
         }
         soundManager.playScanBeep();
-        if (paymentType !== 'debt') {
-          setPaymentType('cash');
+        if (paymentMethod !== 'debt') {
+          setPaymentMethod('cash');
         }
         setTimeout(() => {
           handleCheckout();
@@ -429,7 +434,7 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cart, creditLimitModalOpen, showVoiceModal, showScannerModal, showLabelPrinterModal, typoGuardModalOpen, selectedCustomerId, paymentType, cartTotal, cartSubtotal, discountInput]);
+  }, [cart, creditLimitModalOpen, showVoiceModal, showScannerModal, showLabelPrinterModal, typoGuardModalOpen, selectedCustomerId, paymentMethod, cartTotal, cartSubtotal, discountInput]);
 
   // Filter products for quick selection grid
   const filteredProducts = activeProducts.filter(p => {
@@ -552,14 +557,14 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
                 setPosError('⚠️ السلة فارغة! أضف منتجات قبل إتمام البيع.');
                 return;
               }
-              if (paymentType === 'debt' && !selectedCustomerId) {
+              if (paymentMethod === 'debt' && !selectedCustomerId) {
                 soundManager.playWarningBeep();
                 setPosError('⚠️ مبيعات الآجل (الذمم) تتطلب اختيار عميل مسجل من القائمة لتقييد الدين عليه!');
                 return;
               }
               soundManager.playScanBeep();
-              if (paymentType !== 'debt') {
-                setPaymentType('cash');
+              if (paymentMethod !== 'debt') {
+                setPaymentMethod('cash');
               }
               setTimeout(() => {
                 handleCheckout();
@@ -788,35 +793,49 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
             {/* Customer Selection & Payment Type */}
             <div className="space-y-3 pt-3 border-t border-slate-100">
               
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">نوع العملية والتسديد:</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentType('cash')}
-                    className={`py-2 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
-                      paymentType === 'cash'
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Banknote className="w-4 h-4" />
-                    <span>نقداً (كاش)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setPaymentType('debt')}
-                    className={`py-2 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
-                      paymentType === 'debt'
-                        ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
-                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <CreditCard className="w-4 h-4" />
-                    <span>آجل (على الحساب)</span>
-                  </button>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">طريقة القبض والدفع:</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                  {(Object.keys(PAYMENT_METHODS) as PaymentMethodKey[]).map((methodKey) => {
+                    const method = PAYMENT_METHODS[methodKey];
+                    const isSelected = paymentMethod === methodKey;
+                    return (
+                      <button
+                        key={methodKey}
+                        type="button"
+                        onClick={() => {
+                          soundManager.playScanBeep();
+                          setPaymentMethod(methodKey);
+                        }}
+                        className={`py-2 px-2 rounded-xl text-[11px] font-bold border transition flex items-center gap-1.5 justify-center cursor-pointer ${
+                          isSelected
+                            ? `${method.bgLightClass} ${method.colorClass} ${method.borderClass} ring-2 ring-blue-500 shadow-sm font-black`
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span className="text-sm">{method.emoji}</span>
+                        <span className="truncate">{method.shortLabel}</span>
+                      </button>
+                    );
+                  })}
                 </div>
+
+                {/* Reference Number Input for Electronic Payments */}
+                {paymentMethod !== 'cash' && paymentMethod !== 'debt' && (
+                  <div className="pt-1.5">
+                    <label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
+                      <span>رقم الحوالة / العملية / الإشعار:</span>
+                      <span className="text-[10px] text-slate-400">(اختياري للمطابقة)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={referenceNumber}
+                      onChange={(e) => setReferenceNumber(e.target.value)}
+                      placeholder="مثال: #984321 أو إشعار التحويل..."
+                      className="w-full mt-1 bg-white border border-slate-300 text-xs font-mono font-bold rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Select Customer */}
@@ -996,7 +1015,7 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
         onAddToCartByVoice={(product, qty) => addProductToCart(product, qty)}
         onSetCustomerByVoice={(cust) => setSelectedCustomerId(cust.id)}
         onSetDiscountByVoice={(disc) => handleDiscountInputChange(disc)}
-        onSetPaymentTypeByVoice={(type) => setPaymentType(type)}
+        onSetPaymentTypeByVoice={(type) => setPaymentMethod(type as PaymentMethodKey)}
         onCompleteSaleByVoice={() => handleCheckout()}
         onClearCartByVoice={() => clearCart()}
       />

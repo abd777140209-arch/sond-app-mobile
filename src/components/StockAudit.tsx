@@ -450,19 +450,26 @@ export default function StockAudit({
   const handlePrintAuditSheet = async () => {
     soundManager.playSuccessChime();
     try {
-      const todayStr = new Date().toLocaleDateString('ar-EG');
+      const todayStr = new Date().toLocaleDateString('ar-YE');
       await generateAndSharePDF({
-        title: `كشف الجرد الفعلي الميداني - ${storeName}`,
+        title: 'كشف الجرد الفعلي الميداني للمخزون',
+        storeName: storeName || 'القيصر للأجهزة الذكية والصيانة والبرمجة',
+        invoiceNumber: `جرد-${Date.now().toString().slice(-4)}`,
         customerName: storeName || 'المستودع الرئيسي',
+        phone: '',
         date: todayStr,
-        totalAmount: `إجمالي الأصناف المحصورة: ${activeProducts.length}`,
+        paymentMethod: 'كشف جرد المشتريات والمخزون',
+        subtotal: `${activeProducts.length} صنف`,
+        totalAmount: `${activeProducts.length} صنف`,
         items: activeProducts.slice(0, 50).map(p => {
           const physical = physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : p.stock;
           const diff = physical - p.stock;
-          const statusStr = diff === 0 ? 'مطابق' : diff > 0 ? `زيادة (+${diff})` : `عجز (${diff})`;
+          const statusStr = diff === 0 ? 'مطابق' : diff > 0 ? `زيادة +${diff}` : `عجز ${diff}`;
           return {
-            description: `${p.name} (بارلود: ${p.barcode || 'لا يوجد'}) - كمية النظام: ${p.stock} | الفعلي: ${physical}`,
-            amount: `الحالة: ${statusStr}`
+            description: `${p.name} (بارلود: ${p.barcode || 'بدون'}) [نظام: ${p.stock} | فعلي: ${physical}]`,
+            quantity: physical,
+            unitPrice: `${p.sellingPrice.toLocaleString()} ${currency}`,
+            amount: `${statusStr}`
           };
         })
       });

@@ -756,6 +756,8 @@ export default function App() {
       type: 'sale',
       amount: saleData.finalAmount,
       date: saleData.date,
+      paymentMethod: saleData.paymentMethod || (saleData.type === 'debt' ? 'debt' : 'cash'),
+      referenceNumber: saleData.referenceNumber,
       description: `مبيعات فاتورة ${nextInvoiceNum} لـ ${saleData.customerName}`
     };
 
@@ -804,14 +806,14 @@ export default function App() {
     if (license.licenseKey) saveStoreDocument(license.licenseKey, 'customers', customerId, softDeleted);
   };
 
-  const handlePayDebt = (customerId: string, amount: number, note: string) => {
+  const handlePayDebt = (customerId: string, amount: number, note: string, paymentMethod: string = 'cash', referenceNumber?: string) => {
     const payId = `pay-${Date.now()}`;
     const dateStr = new Date().toISOString();
     const customer = customers.find(c => c.id === customerId);
     if (!customer) return;
 
-    const newPayment: Payment = { id: payId, customerId, customerName: customer.name, amount, date: dateStr, note };
-    const newTransaction: Transaction = { id: `t-${Date.now()}`, type: 'payment', amount, date: dateStr, description: `سداد ديون: ${customer.name}` };
+    const newPayment: Payment = { id: payId, customerId, customerName: customer.name, amount, date: dateStr, note, paymentMethod, referenceNumber };
+    const newTransaction: Transaction = { id: `t-${Date.now()}`, type: 'payment', amount, date: dateStr, paymentMethod, referenceNumber, description: `سداد ديون: ${customer.name}` };
     const updatedCustomer: Customer = { ...customer, totalDebt: Math.max(0, customer.totalDebt - amount) };
 
     setCustomers(prev => prev.map(c => c.id === customerId ? updatedCustomer : c));
@@ -852,8 +854,8 @@ export default function App() {
     if (license.licenseKey) saveStoreDocument(license.licenseKey, 'products', productId, updated);
   };
 
-  const handleAddExpense = (amount: number, description: string) => {
-    const newTx: Transaction = { id: `t-${Date.now()}`, type: 'expense', amount, date: new Date().toISOString(), description: `مصروفات: ${description}` };
+  const handleAddExpense = (amount: number, description: string, paymentMethod: string = 'cash', referenceNumber?: string) => {
+    const newTx: Transaction = { id: `t-${Date.now()}`, type: 'expense', amount, date: new Date().toISOString(), paymentMethod, referenceNumber, description: `مصروفات: ${description}` };
     setTransactions(prev => [...prev, newTx]);
     if (license.licenseKey) saveStoreDocument(license.licenseKey, 'transactions', newTx.id, newTx);
   };
@@ -1344,6 +1346,7 @@ export default function App() {
                 onViewInvoice={setActiveInvoice}
                 currency={settings.currency}
                 isPrivacyMode={isPrivacyMode}
+                storeName={settings.storeName}
               />
             )}
 

@@ -125,14 +125,20 @@ export default function ProfitReports({
     try {
       setIsExportingPDF(true);
       await generateAndSharePDF({
-        title: 'Monthly Maintenance Report',
-        customerName: settings?.storeName || 'Store System',
+        title: 'تقرير عمليات الصيانة الشهرية',
+        storeName: settings?.storeName || 'القيصر للأجهزة الذكية والصيانة والبرمجة',
+        invoiceNumber: `صيانة-${new Date().getMonth() + 1}`,
+        customerName: 'تقرير النظام الإداري',
         phone: settings?.phone || '',
-        date: new Date().toLocaleDateString('en-US'),
-        totalAmount: `${maintenanceOrders.length} Maintenance Ticket(s)`,
-        items: maintenanceOrders.slice(0, 10).map(m => ({
-          description: `Ticket #${m.orderNumber || m.id}: ${m.deviceName}`,
-          amount: `${m.cost || 0} ${currency}`
+        date: new Date().toLocaleDateString('ar-YE'),
+        paymentMethod: 'تقرير إحصائي',
+        subtotal: `${maintenanceOrders.reduce((sum, m) => sum + (m.cost || 0), 0).toLocaleString()} ${currency}`,
+        totalAmount: `${maintenanceOrders.reduce((sum, m) => sum + (m.cost || 0), 0).toLocaleString()} ${currency}`,
+        items: maintenanceOrders.slice(0, 20).map((m, idx) => ({
+          description: `كرت #${m.orderNumber || m.id}: ${m.deviceName || 'جهاز صيانة'} - ${m.issueDescription || 'صيانة عامة'}`,
+          quantity: 1,
+          unitPrice: `${(m.cost || 0).toLocaleString()} ${currency}`,
+          amount: `${(m.cost || 0).toLocaleString()} ${currency}`
         }))
       });
     } catch (error) {
@@ -147,15 +153,19 @@ export default function ProfitReports({
     try {
       setIsExportingPDF(true);
       await generateAndSharePDF({
-        title: 'Sales & Profit Financial Report',
-        customerName: settings?.storeName || 'Store Report',
+        title: 'التقرير المالي للمبيعات والأرباح',
+        storeName: settings?.storeName || 'القيصر للأجهزة الذكية والصيانة والبرمجة',
+        invoiceNumber: `تقرير-${Date.now().toString().slice(-4)}`,
+        customerName: 'الإدارة العامة للمتجر',
         phone: settings?.phone || '',
-        date: new Date().toLocaleDateString('en-US'),
-        totalAmount: `${invoices.length} Invoice(s)`,
+        date: new Date().toLocaleDateString('ar-YE'),
+        paymentMethod: 'تقرير مالي شامل',
+        subtotal: `${invoices.reduce((sum, inv) => sum + (inv.finalAmount || 0), 0).toLocaleString()} ${currency}`,
+        totalAmount: `${invoices.reduce((sum, inv) => sum + (inv.finalAmount || 0), 0).toLocaleString()} ${currency}`,
         items: [
-          { description: 'Period Preset', amount: period },
-          { description: 'Total Invoices Count', amount: `${invoices.length}` },
-          { description: 'Total Products Count', amount: `${products.length}` }
+          { description: 'الفترة الزمنية للتقرير', quantity: 1, unitPrice: period, amount: period },
+          { description: 'إجمالي عدد الفواتير الصادرة', quantity: invoices.length, unitPrice: '-', amount: `${invoices.length} فاتورة` },
+          { description: 'إجمالي عدد الأصناف في المخزن', quantity: products.length, unitPrice: '-', amount: `${products.length} صنف` }
         ]
       });
     } catch (error) {
@@ -327,6 +337,84 @@ export default function ProfitReports({
 
     return Array.from(grouped.values()).sort((a, b) => a.dateLabel.localeCompare(b.dateLabel));
   }, [filteredInvoices, period, productCostMap]);
+
+  // Recharts Data: Current Week Sales & Daily Trends Breakdown
+  const currentWeekStats = useMemo(() => {
+    const dayNamesArabic = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    const now = new Date();
+    const currentDayIndex = now.getDay(); // 0 is Sunday, 6 is Saturday
+    
+    // Middle Eastern work week starts Saturday (Saturday = 0 offset, Friday = 6)
+    const diffToSaturday = (currentDayIndex + 1) % 7; 
+    const saturdayDate = new Date(now);
+    saturdayDate.setDate(now.getDate() - diffToSaturday);
+
+    const weekDays: Array<{
+      dateStr: string;
+      dayName: string;
+      dayLabel: string;
+      revenue: number;
+      profit: number;
+      count: number;
+    }> = [];
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(saturdayDate);
+      d.setDate(saturdayDate.getDate() + i);
+      const dateStr = d.toISOString().split('T')[0];
+      const dayName = dayNamesArabic[d.getDay()];
+      const dayLabel = `${dayName} (${d.getDate()}/${d.getMonth() + 1})`;
+
+      weekDays.push({
+        dateStr,
+        dayName,
+        dayLabel,
+        revenue: 0,
+        profit: 0,
+        count: 0
+      });
+    }
+
+    // Process all non-refunded invoices for these 7 days
+    invoices.forEach(inv => {
+      if (inv.status === 'refunded') return;
+      let invDateStr = inv.date;
+      if (inv.date.includes('T')) invDateStr = inv.date.split('T')[0];
+
+      const found = weekDays.find(w => w.dateStr === invDateStr);
+      if (found) {
+        let invCost = 0;
+        inv.items.forEach(item => {
+          const costPrice = productCostMap.get(item.productId) ?? productCostMap.get(item.name.trim().toLowerCase()) ?? 0;
+          invCost += item.quantity * costPrice;
+        });
+
+        const rev = inv.finalAmount || 0;
+        found.revenue += rev;
+        found.profit += (rev - invCost);
+        found.count += 1;
+      }
+    });
+
+    const totalRevenue = weekDays.reduce((acc, d) => acc + d.revenue, 0);
+    const totalProfit = weekDays.reduce((acc, d) => acc + d.profit, 0);
+    const totalCount = weekDays.reduce((acc, d) => acc + d.count, 0);
+
+    let peakDay = weekDays[0];
+    weekDays.forEach(d => {
+      if (d.revenue > peakDay.revenue) {
+        peakDay = d;
+      }
+    });
+
+    return {
+      chartData: weekDays,
+      totalRevenue,
+      totalProfit,
+      totalCount,
+      peakDay
+    };
+  }, [invoices, productCostMap]);
 
   // Pie chart data: Cash vs Debt
   const piePaymentData = useMemo(() => [
@@ -585,7 +673,7 @@ export default function ProfitReports({
               { id: 'month', label: 'الشهر الحالي' },
               { id: '30days', label: 'آخر 30 يوم' },
               { id: 'year', label: 'السنة' },
-              { id: 'custom', label: 'مخصص' },
+              { id: 'custom', label: 'مخصص 📅' },
               { id: 'all', label: 'الكل' }
             ].map(p => (
               <button
@@ -600,6 +688,43 @@ export default function ProfitReports({
                 {p.label}
               </button>
             ))}
+          </div>
+
+          {/* Date Range Picker (Shown for custom period or easily accessible) */}
+          <div className={`flex items-center gap-2 flex-wrap bg-slate-50 border border-slate-200 p-2 rounded-xl transition ${period === 'custom' ? 'ring-2 ring-blue-500/30 bg-blue-50/60 border-blue-300' : ''}`}>
+            <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-blue-600" />
+              تحديد نطاق تاريخ:
+            </span>
+            <div className="flex items-center gap-1.5">
+              <label className="text-[11px] font-bold text-slate-500">من:</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  if (period !== 'custom') setPeriod('custom');
+                }}
+                className="bg-white border border-slate-200 text-xs font-bold rounded-lg px-2.5 py-1 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <label className="text-[11px] font-bold text-slate-500">إلى:</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  if (period !== 'custom') setPeriod('custom');
+                }}
+                className="bg-white border border-slate-200 text-xs font-bold rounded-lg px-2.5 py-1 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
+              />
+            </div>
+            {period === 'custom' && (
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                مفعل
+              </span>
+            )}
           </div>
 
           {/* Type Filter */}
@@ -773,6 +898,102 @@ export default function ProfitReports({
           {/* CONDITIONAL RENDERING: INTERACTIVE CHARTS VS SIMPLIFIED TABLES */}
           {displayMode === 'charts' ? (
             <>
+              {/* CURRENT WEEK SALES & TRENDS CHART (RECHARTS INTEGRATION) */}
+              <div className="p-5 md:p-6 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5 text-indigo-600" />
+                      اتجاهات مبيعات الأسبوع الحالي (Recharts)
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      مخطط بياني تفاعلي يوضح حركة البيع والأرباح اليومية لأيام الأسبوع السبعة الحالية (من السبت إلى الجمعة)
+                    </p>
+                  </div>
+
+                  {/* Summary Badges for current week */}
+                  <div className="flex items-center gap-2 flex-wrap text-xs">
+                    <div className="px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 font-bold">
+                      مبيعات الأسبوع: <span className="font-black font-mono dir-ltr">{fmt(currentWeekStats.totalRevenue)}</span>
+                    </div>
+                    <div className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 font-bold">
+                      الأرباح: <span className="font-black font-mono dir-ltr">+{fmt(currentWeekStats.totalProfit)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick Indicators Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                    <div className="text-slate-400 font-bold text-[11px]">مبيعات الأسبوع الكلية</div>
+                    <div className="text-sm font-black text-slate-900 font-mono mt-0.5 dir-ltr text-right">{fmt(currentWeekStats.totalRevenue)}</div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-200 text-xs">
+                    <div className="text-emerald-700 font-bold text-[11px]">أرباح الأسبوع الصافية</div>
+                    <div className="text-sm font-black text-emerald-700 font-mono mt-0.5 dir-ltr text-right">+{fmt(currentWeekStats.totalProfit)}</div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                    <div className="text-slate-400 font-bold text-[11px]">فواتير الأسبوع</div>
+                    <div className="text-sm font-black text-slate-800 font-mono mt-0.5">{currentWeekStats.totalCount} فاتورة</div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-amber-50/60 border border-amber-200 text-xs">
+                    <div className="text-amber-800 font-bold text-[11px]">أعلى يوم مبيعات</div>
+                    <div className="text-xs font-black text-amber-900 mt-0.5 truncate">
+                      {currentWeekStats.peakDay.revenue > 0 
+                        ? `${currentWeekStats.peakDay.dayName} (${fmt(currentWeekStats.peakDay.revenue)})`
+                        : 'لا توجد مبيعات بعد'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Recharts BarChart Container */}
+                <div className="h-72 w-full pt-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={currentWeekStats.chartData} margin={{ top: 15, right: 10, left: 10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                      <XAxis dataKey="dayLabel" stroke="#64748B" fontSize={11} tickLine={false} />
+                      <YAxis stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#0F172A',
+                          borderRadius: '12px',
+                          border: 'none',
+                          color: '#FFFFFF',
+                          fontSize: '12px',
+                          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)'
+                        }}
+                        formatter={(value: any, name: any) => [
+                          typeof value === 'number' ? fmt(value) : value,
+                          name === 'revenue' ? 'إجمالي المبيعات' : name === 'profit' ? 'صافي الربح' : name
+                        ]}
+                        labelStyle={{ color: '#94A3B8', fontWeight: 'bold', marginBottom: '4px' }}
+                      />
+                      <Legend
+                        wrapperStyle={{ fontSize: '12px', paddingTop: '12px' }}
+                        formatter={(value) => (value === 'revenue' ? 'إجمالي المبيعات' : 'صافي الربح')}
+                      />
+                      <Bar
+                        dataKey="revenue"
+                        name="revenue"
+                        fill="#4F46E5"
+                        radius={[8, 8, 0, 0]}
+                        barSize={24}
+                      />
+                      <Bar
+                        dataKey="profit"
+                        name="profit"
+                        fill="#10B981"
+                        radius={[8, 8, 0, 0]}
+                        barSize={24}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
               {/* TIMELINE REVENUE & PROFIT CHART */}
               <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">

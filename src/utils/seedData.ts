@@ -24,6 +24,7 @@ export const DEFAULT_SETTINGS: SystemSettings = {
   protectedSections: ['reports', 'settings'],
   privacyPinCode: "1234",
   isPrivacyPinEnabled: true,
+  invoiceFooterNote: "البضاعة المباعة لا تُرد ولا تُستبدل إلا بالوصل وشروط الضمان المعتمدة. شكراً لتعاملكم معنا.",
   exchangeRates: {
     YER: 1,
     SAR: 140,
