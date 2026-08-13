@@ -29,7 +29,7 @@ jobs:
 
       - name: Package Windows EXE
         run: |
-          npx electron-packager . "SanadAccounting" --platform=win32 --arch=x64 --out=release --overwrite
+          npx electron-packager . "SanadAccounting" --platform=win32 --arch=x64 --out=release --overwrite --main=main.cjs
 
       - name: Upload EXE Artifact
         uses: actions/upload-artifact@v4
