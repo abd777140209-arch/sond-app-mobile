@@ -22,18 +22,17 @@ jobs:
       - name: Install Dependencies
         run: |
           npm install
-          npm install electron electron-builder --save-dev
+          npm install electron electron-packager --save-dev
 
       - name: Build Web Assets
         run: npm run build
 
-      - name: Build Electron App
-        run: npx electron-builder --dir
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Package Windows EXE
+        run: |
+          npx electron-packager . "SanadAccounting" --platform=win32 --arch=x64 --out=release --overwrite
 
       - name: Upload EXE Artifact
         uses: actions/upload-artifact@v4
         with:
           name: SanadAccounting-Windows-EXE
-          path: release/win-unpacked/
+          path: release/SanadAccounting-win32-x64/
