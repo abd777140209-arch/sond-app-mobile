@@ -63,11 +63,11 @@ export const SanadDiagnosticScreen: React.FC<SanadDiagnosticScreenProps> = ({
         phone: '',
         date: new Date().toLocaleDateString('ar-YE'),
         paymentMethod: 'تقرير فحص تقني',
-        subtotal: diagnosisResult ? diagnosisResult.issueCategory : 'فحص شامل',
-        totalAmount: diagnosisResult ? diagnosisResult.issueCategory : 'فحص شامل',
+        subtotal: diagnosisResult?.issueCategory || diagnosisResult?.problem || 'فحص شامل',
+        totalAmount: diagnosisResult?.issueCategory || diagnosisResult?.problem || 'فحص شامل',
         items: diagnosisResult ? [
-          { description: `السبب المرجح للعطل: ${diagnosisResult.likelyCause}`, quantity: 1, unitPrice: '-', amount: diagnosisResult.issueCategory },
-          ...diagnosisResult.suggestedParts.map(p => ({ description: `القطع المقترح استبدالها: ${p}`, quantity: 1, unitPrice: 'موصى به', amount: 'متوفر' }))
+          { description: `السبب المرجح للعطل: ${diagnosisResult.likelyCause || diagnosisResult.problem || diagnosisResult.response}`, quantity: 1, unitPrice: '-', amount: diagnosisResult.issueCategory || 'تشخيص' },
+          ...(diagnosisResult.suggestedParts || diagnosisResult.parts_needed || []).map(p => ({ description: `القطع المقترح استبدالها: ${p}`, quantity: 1, unitPrice: 'موصى به', amount: 'متوفر' }))
         ] : [
           { description: `الأعراض المبلغ عنها: ${symptoms || 'فحص أجهزة إلكترونية'}`, quantity: 1, unitPrice: '-', amount: 'تحت الفحص' }
         ]

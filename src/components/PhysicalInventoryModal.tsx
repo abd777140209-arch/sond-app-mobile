@@ -8,6 +8,7 @@ import {
   X,
   Printer,
   FileDown,
+  FileSpreadsheet,
   Share2,
   Search,
   ClipboardCheck,
@@ -19,9 +20,10 @@ import {
   Loader2,
   MessageCircle
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { Product } from '../types';
 import { soundManager } from '../utils/sound';
-import { exportToCSV } from '../utils/fileExport';
+import { exportToCSV, saveAndShareFile } from '../utils/fileExport';
 import { generateAndSharePDF } from '../services/pdfService';
 import { openWhatsApp } from '../utils/nativeLauncher';
 import StockAudit from './StockAudit';
@@ -97,35 +99,71 @@ export function PhysicalInventoryModal({
 
   if (!isOpen) return null;
 
-  // 🎯 Fast Text-Based PDF Generation & Print (0% html2canvas screenshots, uses generateAndSharePDF with embedded Arabic font)
+  // 🎯 Fast Structured Accounting PDF Generation
   const handlePrintPDF = async () => {
     soundManager.playSuccessChime();
     setIsExportingPDF(true);
 
     try {
       const todayStr = new Date().toLocaleDateString('ar-YE');
-      await generateAndSharePDF({
-        title: 'تقرير الجرد الميداني وحصر المخزون',
-        storeName: storeName || 'القيصر للأجهزة الذكية والصيانة والبرمجة',
-        invoiceNumber: `جرد-${new Date().toISOString().slice(0, 10)}`,
-        customerName: 'قسم إدارة المخازن والجرد',
-        phone: '',
-        date: todayStr,
-        paymentMethod: 'جرد مطابقة المخزون',
-        subtotal: `${stats.totalValuation.toLocaleString()} ${currency}`,
-        totalAmount: `${stats.totalValuation.toLocaleString()} ${currency}`,
-        items: filteredProducts.map(p => {
-          const physical = physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : p.stock;
-          const diff = physical - p.stock;
-          const statusStr = diff === 0 ? 'مطابق' : diff > 0 ? `زيادة +${diff}` : `عجز ${diff}`;
 
-          return {
-            description: `${p.name} (بارلود: ${p.barcode || 'بدون'}) [نظام: ${p.stock} | فعلي: ${physical}]`,
-            quantity: physical,
-            unitPrice: `${p.sellingPrice.toLocaleString()} ${currency}`,
-            amount: `${statusStr} - ${(physical * p.sellingPrice).toLocaleString()} ${currency}`
-          };
-        })
+      const customColumns = [
+        { key: 'index', label: 'م', width: '35px', align: 'center' as const },
+        { key: 'name', label: 'اسم الصنف / السلعة', align: 'right' as const },
+        { key: 'barcode', label: 'الباركود', width: '90px', align: 'center' as const },
+        { key: 'category', label: 'التصنيف', width: '80px', align: 'center' as const },
+        { key: 'systemStock', label: 'النظام', width: '55px', align: 'center' as const },
+        { key: 'physicalStock', label: 'الفعلي', width: '55px', align: 'center' as const },
+        { key: 'diff', label: 'الفارق', width: '60px', align: 'center' as const },
+        { key: 'costPrice', label: 'سعر الشراء', width: '80px', align: 'center' as const },
+        { key: 'sellingPrice', label: 'سعر البيع', width: '80px', align: 'center' as const },
+        { key: 'status', label: 'الحالة', width: '85px', align: 'center' as const }
+      ];
+
+      const customRows = filteredProducts.map((p, idx) => {
+        const physical = physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : p.stock;
+        const diff = physical - p.stock;
+        const statusStr = diff === 0 ? '✅ مطابق' : diff > 0 ? `+${diff} زيادة` : `${diff} عجز`;
+
+        return {
+          index: idx + 1,
+          name: p.name || 'بدون اسم',
+          barcode: p.barcode || '—',
+          category: p.category || 'عام',
+          systemStock: p.stock,
+          physicalStock: physical,
+          diff: diff > 0 ? `+${diff}` : diff,
+          costPrice: `${p.costPrice.toLocaleString()} ${currency}`,
+          sellingPrice: `${p.sellingPrice.toLocaleString()} ${currency}`,
+          status: statusStr
+        };
+      });
+
+      const summaryBoxes = [
+        { label: 'إجمالي الأصناف', value: `${activeProducts.length} صنف`, color: '#0284c7', bg: '#f0f9ff' },
+        { label: 'الأصناف المتطابقة', value: `${stats.matched} صنف`, color: '#059669', bg: '#ecfdf5' },
+        { label: 'إجمالي العجز', value: `${stats.deficit} قطعة`, color: '#dc2626', bg: '#fef2f2' },
+        { label: 'إجمالي الفائض', value: `${stats.surplus} قطعة`, color: '#16a34a', bg: '#f0fdf4' },
+        { label: 'تقييم المخزون الفعلي', value: `${stats.totalValuation.toLocaleString()} ${currency}`, color: '#0f172a', bg: '#f8fafc' }
+      ];
+
+      await generateAndSharePDF({
+        title: 'كشف الجرد الفعلي الميداني للمخزون',
+        storeName: storeName || 'سند المحاسبي',
+        invoiceNumber: `جرد-${Date.now().toString().slice(-4)}`,
+        customerName: 'إدارة المستودعات والجرد الميداني',
+        phone: '',
+        date: todayStr + ' ' + new Date().toLocaleTimeString('ar-YE', { hour: '2-digit', minute: '2-digit' }),
+        paymentMethod: 'كشف مطابقة المخزون الفعلي',
+        orientation: 'l',
+        customColumns,
+        customRows,
+        summaryBoxes,
+        subtotal: `تقييم المخزون: ${stats.totalValuation.toLocaleString()} ${currency}`,
+        discount: stats.deficit > 0 ? `عجز: ${stats.deficit} قطعة` : 'مطابق',
+        totalAmount: `${stats.totalValuation.toLocaleString()} ${currency}`,
+        notes: `كشف مطابقة وجرد ميداني رسمي للأصناف. تم حصر ${stats.totalItems} صنف.`,
+        footerNote: '✨ كشف الجرد المعتمد - نظام سند المحاسبي'
       });
     } catch (e) {
       console.error('Physical Inventory PDF Error:', e);
@@ -134,7 +172,63 @@ export function PhysicalInventoryModal({
     }
   };
 
-  // 🎯 Export Excel / CSV with UTF-8 BOM
+  // 🎯 Export Excel (.xlsx) ككشف محاسبي تفصيلي
+  const handleExportExcel = async () => {
+    soundManager.playSuccessChime();
+
+    const data: Record<string, string | number>[] = filteredProducts.map((p, idx) => {
+      const physical = physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : p.stock;
+      const diff = physical - p.stock;
+      const statusStr = diff === 0 ? 'مطابق تماماً' : diff > 0 ? `زيادة (+${diff})` : `عجز (${diff})`;
+
+      return {
+        'م': idx + 1,
+        'اسم الصنف / السلعة': p.name || '',
+        'الباركود': p.barcode || '—',
+        'التصنيف': p.category || 'عام',
+        'كمية النظام': p.stock,
+        'الكمية الفعلية (الميدانية)': physical,
+        'فارق الكمية': diff,
+        'سعر الشراء (التكلفة)': p.costPrice,
+        'سعر البيع': p.sellingPrice,
+        'إجمالي قيمة المخزون الفعلي': physical * p.costPrice,
+        'الحالة': statusStr
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    worksheet['!cols'] = [
+      { wch: 6 },
+      { wch: 30 },
+      { wch: 18 },
+      { wch: 15 },
+      { wch: 14 },
+      { wch: 18 },
+      { wch: 14 },
+      { wch: 18 },
+      { wch: 16 },
+      { wch: 22 },
+      { wch: 16 }
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'كشف الجرد الميداني');
+
+    const excelBase64 = XLSX.write(workbook, { bookType: 'xlsx', type: 'base64' });
+    const todayStr = new Date().toISOString().split('T')[0];
+    const fileName = `كشف_الجرد_الميداني_${storeName}_${todayStr}.xlsx`;
+
+    await saveAndShareFile({
+      fileName,
+      data: excelBase64,
+      isBase64: true,
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      title: 'كشف الجرد الميداني Excel',
+      text: `كشف الجرد الميداني من تطبيق سند المحاسبي`
+    });
+  };
+
+  // 🎯 Export CSV with UTF-8 BOM
   const handleExportCSV = async () => {
     soundManager.playSuccessChime();
     setIsExportingCSV(true);
@@ -308,28 +402,37 @@ export function PhysicalInventoryModal({
                 onClick={handlePrintPDF}
                 disabled={isExportingPDF}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
-                title="طباعة / تصدير PDF مباشر بدون لقطة شاشة"
+                title="تصدير كشف الجرد الميداني PDF"
               >
                 {isExportingPDF ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <Printer className="w-4 h-4" />
                 )}
-                <span>طباعة PDF</span>
+                <span>كشف جرد PDF</span>
+              </button>
+
+              <button
+                onClick={handleExportExcel}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
+                title="تصدير كشف الجرد بصيغة Excel (.xlsx)"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>كشف جرد Excel</span>
               </button>
 
               <button
                 onClick={handleExportCSV}
                 disabled={isExportingCSV}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
-                title="تصدير ملف Excel CSV مع ترميز UTF-8 BOM العربي"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition border border-slate-300 shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
+                title="تصدير ملف CSV"
               >
                 {isExportingCSV ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <FileDown className="w-4 h-4" />
+                  <FileDown className="w-4 h-4 text-slate-600" />
                 )}
-                <span>تصدير Excel</span>
+                <span>تصدير CSV</span>
               </button>
 
               <button

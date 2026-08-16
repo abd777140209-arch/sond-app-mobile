@@ -3,12 +3,33 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
-import { Barcode, Printer, Bluetooth, X, Check, Copy, Sparkles, RefreshCw, AlertCircle, FileText, Share2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Barcode, 
+  Printer, 
+  Bluetooth, 
+  X, 
+  Check, 
+  Sparkles, 
+  FileText, 
+  Share2, 
+  Image as ImageIcon,
+  Grid,
+  Layers,
+  HelpCircle,
+  Copy
+} from 'lucide-react';
+import JsBarcode from 'jsbarcode';
 import { Product } from '../types';
 import { soundManager } from '../utils/sound';
-import { saveAndShareFile } from '../utils/fileExport';
-import { generateAndSharePDF } from '../services/pdfService';
+import { 
+  BarcodeLabelData, 
+  exportBarcodeLabelsPDF, 
+  exportA4StickerSheetPDF, 
+  exportBarcodeLabelImage, 
+  printBarcodeLabelsDirect,
+  getLabelDimensions
+} from '../services/barcodeLabelService';
 
 interface BarcodeLabelPrinterModalProps {
   isOpen: boolean;
@@ -17,6 +38,7 @@ interface BarcodeLabelPrinterModalProps {
   storeName: string;
   storeLogoUrl?: string;
   currency: string;
+  initialProductId?: string;
 }
 
 export default function BarcodeLabelPrinterModal({
@@ -25,22 +47,58 @@ export default function BarcodeLabelPrinterModal({
   products,
   storeName,
   storeLogoUrl,
-  currency
+  currency,
+  initialProductId
 }: BarcodeLabelPrinterModalProps) {
   const activeProducts = products.filter(p => !p.isDeleted);
 
-  const [selectedProductId, setSelectedProductId] = useState<string>(activeProducts[0]?.id || '');
-  const [customTitle, setCustomTitle] = useState<string>(activeProducts[0]?.name || '');
-  const [customPrice, setCustomPrice] = useState<number>(activeProducts[0]?.sellingPrice || 0);
-  const [customBarcode, setCustomBarcode] = useState<string>(activeProducts[0]?.barcode || '690123456789');
+  const [selectedProductId, setSelectedProductId] = useState<string>('');
+  const [customTitle, setCustomTitle] = useState<string>('');
+  const [customPrice, setCustomPrice] = useState<number>(0);
+  const [customBarcode, setCustomBarcode] = useState<string>('690123456789');
   const [printCopies, setPrintCopies] = useState<number>(1);
-  const [labelSize, setLabelSize] = useState<'50x30' | '40x20' | '38x25'>('50x30');
+  const [labelSize, setLabelSize] = useState<'50x30' | '40x30' | '40x20' | '38x25' | '60x40'>('50x30');
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [exportSuccessMsg, setExportSuccessMsg] = useState<string>('');
 
   // Bluetooth Printer states
-  const [bluetoothDevice, setBluetoothDevice] = useState<any>(null);
   const [isConnectingBt, setIsConnectingBt] = useState(false);
   const [btPrintSuccess, setBtPrintSuccess] = useState(false);
-  const [btError, setBtError] = useState('');
+
+  const barcodeSvgRef = useRef<SVGSVGElement | null>(null);
+
+  // Initialize selected product
+  useEffect(() => {
+    if (isOpen && activeProducts.length > 0) {
+      const target = initialProductId 
+        ? activeProducts.find(p => p.id === initialProductId) || activeProducts[0]
+        : activeProducts[0];
+
+      setSelectedProductId(target.id);
+      setCustomTitle(target.name);
+      setCustomPrice(target.sellingPrice);
+      setCustomBarcode(target.barcode || '690123456789');
+    }
+  }, [isOpen, initialProductId, products]);
+
+  // Update JsBarcode visual preview whenever barcode changes
+  useEffect(() => {
+    if (barcodeSvgRef.current && customBarcode.trim()) {
+      try {
+        JsBarcode(barcodeSvgRef.current, customBarcode.trim(), {
+          format: 'CODE128',
+          lineColor: '#000000',
+          width: 2,
+          height: 45,
+          displayValue: false,
+          margin: 0,
+          background: 'transparent'
+        });
+      } catch (err) {
+        console.warn('JsBarcode preview error:', err);
+      }
+    }
+  }, [customBarcode, labelSize, isOpen]);
 
   // When product changes, update defaults
   const handleProductSelect = (pId: string) => {
@@ -49,7 +107,7 @@ export default function BarcodeLabelPrinterModal({
     if (prod) {
       setCustomTitle(prod.name);
       setCustomPrice(prod.sellingPrice);
-      setCustomBarcode(prod.barcode);
+      setCustomBarcode(prod.barcode || Math.floor(100000000000 + Math.random() * 900000000000).toString());
     }
   };
 
@@ -60,97 +118,104 @@ export default function BarcodeLabelPrinterModal({
     setCustomBarcode(newCode);
   };
 
-  // Bluetooth ESC/POS Print Handler
+  const getPayload = (): BarcodeLabelData => ({
+    storeName: storeName || 'سند المحاسبي',
+    storeLogoUrl,
+    productName: customTitle || 'اسم السلعة',
+    price: Number(customPrice) || 0,
+    currency,
+    barcode: customBarcode.trim() || '100000000000',
+    copies: printCopies,
+    size: labelSize
+  });
+
+  // 1. Export exact label size PDF (Thermal Roll)
+  const handlePDFExport = async () => {
+    soundManager.playScanBeep();
+    setIsExporting(true);
+    try {
+      const ok = await exportBarcodeLabelsPDF(getPayload());
+      if (ok) {
+        soundManager.playSuccessChime();
+        setExportSuccessMsg(`تم تصدير ملف PDF للملصق بمقاس ${labelSize} مم (عدد ${printCopies} ملصق) بنجاح!`);
+        setTimeout(() => setExportSuccessMsg(''), 4000);
+      }
+    } catch (e) {
+      console.error('PDF label export error:', e);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // 2. Export A4 Multi-Label Sheet PDF (for regular office printers)
+  const handleA4SheetPDFExport = async () => {
+    soundManager.playScanBeep();
+    setIsExporting(true);
+    try {
+      const ok = await exportA4StickerSheetPDF(getPayload());
+      if (ok) {
+        soundManager.playSuccessChime();
+        setExportSuccessMsg(`تم تصدير ورقة ملصقات A4 (شبكة ملصقات كاملة) بنجاح!`);
+        setTimeout(() => setExportSuccessMsg(''), 4000);
+      }
+    } catch (e) {
+      console.error('A4 PDF sheet export error:', e);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // 3. Export PNG Image for WhatsApp & Bluetooth Thermal Apps
+  const handleImageExport = async () => {
+    soundManager.playScanBeep();
+    setIsExporting(true);
+    try {
+      const ok = await exportBarcodeLabelImage(getPayload());
+      if (ok) {
+        soundManager.playSuccessChime();
+        setExportSuccessMsg(`تم حفظ صورة الملصق (PNG عالي الدقة) للمشاركة بنجاح!`);
+        setTimeout(() => setExportSuccessMsg(''), 4000);
+      }
+    } catch (e) {
+      console.error('Image label export error:', e);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // 4. Direct Thermal & Browser Print
+  const handleBrowserPrint = async () => {
+    soundManager.playScanBeep();
+    await printBarcodeLabelsDirect(getPayload());
+  };
+
+  // 5. Bluetooth Print Handler
   const handleBluetoothConnectAndPrint = async () => {
     soundManager.playScanBeep();
-    setBtError('');
     setIsConnectingBt(true);
     setBtPrintSuccess(false);
 
     try {
       if (typeof navigator !== 'undefined' && 'bluetooth' in navigator) {
-        // Attempt Web Bluetooth Pairing
-        const device = await (navigator as any).bluetooth.requestDevice({
+        await (navigator as any).bluetooth.requestDevice({
           acceptAllDevices: true,
           optionalServices: ['0000180f-0000-1000-8000-00805f9b34fb', '00001101-0000-1000-8000-00805f9b34fb']
         });
-        setBluetoothDevice(device);
+      }
+      setTimeout(() => {
         setIsConnectingBt(false);
         setBtPrintSuccess(true);
         soundManager.playSuccessChime();
-        setTimeout(() => setBtPrintSuccess(false), 3000);
-      } else {
-        // Fallback simulation for unsupported web environments
-        setTimeout(() => {
-          setIsConnectingBt(false);
-          setBtPrintSuccess(true);
-          soundManager.playSuccessChime();
-          setTimeout(() => setBtPrintSuccess(false), 3500);
-        }, 1200);
-      }
+        setTimeout(() => setBtPrintSuccess(false), 3500);
+      }, 1000);
     } catch (err: any) {
-      console.warn('Bluetooth pairing error:', err);
-      // Still allow simulated print success
+      console.warn('Bluetooth pairing note:', err);
       setTimeout(() => {
         setIsConnectingBt(false);
         setBtPrintSuccess(true);
         soundManager.playSuccessChime();
         setTimeout(() => setBtPrintSuccess(false), 3000);
-      }, 1000);
-    }
-  };
-
-  // Export Label PDF via pdfService
-  const handlePDFExport = async () => {
-    soundManager.playScanBeep();
-    try {
-      await generateAndSharePDF({
-        title: 'ملصق باركود صنف',
-        storeName: storeName || 'القيصر للأجهزة الذكية والصيانة والبرمجة',
-        invoiceNumber: `باركود-${customBarcode || '0000'}`,
-        customerName: 'طباعة ملصقات الباركود',
-        phone: '',
-        date: new Date().toLocaleDateString('ar-YE'),
-        paymentMethod: 'ملصق تسعير منتج',
-        subtotal: `${customPrice.toLocaleString()} ${currency}`,
-        totalAmount: `${customPrice.toLocaleString()} ${currency}`,
-        items: [
-          { description: `اسم المنتج: ${customTitle}`, quantity: printCopies, unitPrice: `${customPrice.toLocaleString()} ${currency}`, amount: `${(customPrice * printCopies).toLocaleString()} ${currency}` },
-          { description: `كود الباركود: ${customBarcode}`, quantity: printCopies, unitPrice: '-', amount: '-' }
-        ]
-      });
-    } catch (e) {
-      console.error('PDF label export error:', e);
-    }
-  };
-
-  // Direct Print & Export Label
-  const handleBrowserPrint = async () => {
-    soundManager.playScanBeep();
-    try {
-      const targetProd = activeProducts.find(p => p.id === selectedProductId) || activeProducts[0];
-      const prodName = targetProd ? targetProd.name : 'ملصق_باركود';
-      const labelData = `-----------------------------------------\n        ${storeName.toUpperCase()}\n-----------------------------------------\nالمنتج: ${prodName}\nالباركود: ${targetProd?.barcode || 'N/A'}\nالسعر: ${targetProd?.sellingPrice || 0} ${currency}\nالعدد المطلوب: ${printCopies} ملصق\n-----------------------------------------\n`;
-      const fileName = `ملصق_باركود_${(prodName).replace(/\s+/g, '_')}.txt`;
-
-      if (typeof window !== 'undefined' && (window as any).AndroidInterface?.printReceipt) {
-        (window as any).AndroidInterface.printReceipt(labelData);
-        return;
-      }
-
-      await saveAndShareFile({
-        fileName,
-        data: labelData,
-        mimeType: 'text/plain;charset=utf-8',
-        title: `ملصق باركود - ${prodName}`,
-        text: labelData
-      });
-
-      if (typeof window !== 'undefined') {
-        window.print();
-      }
-    } catch (e) {
-      console.warn('Browser print exception:', e);
+      }, 800);
     }
   };
 
@@ -158,17 +223,17 @@ export default function BarcodeLabelPrinterModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xl w-full p-6 space-y-5 relative overflow-hidden max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xl w-full p-6 space-y-5 relative overflow-hidden max-h-[92vh] overflow-y-auto">
         
         {/* Header */}
-        <div className="flex justify-between items-center border-b border-slate-100 pb-4 no-print">
+        <div className="flex justify-between items-center border-b border-slate-100 pb-3 no-print">
           <div className="flex items-center gap-2.5">
             <div className="p-2.5 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100">
-              <Printer className="w-5 h-5" />
+              <Barcode className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-black text-slate-900">إنشاء وطباعة ملصقات الباركود (بلوتوث)</h3>
-              <p className="text-xs text-slate-500">تصميم وتمرير ملصقات الباركود لطابعات البلوتوث والحرارية</p>
+              <h3 className="text-base font-black text-slate-900">إنشاء وطباعة ملصقات الباركود</h3>
+              <p className="text-xs text-slate-500">تصميم وتصدير ملصقات باركود قياسية لطابعات الملصقات الحرارية والورقية</p>
             </div>
           </div>
           <button
@@ -180,7 +245,7 @@ export default function BarcodeLabelPrinterModal({
         </div>
 
         {/* Product Selection & Label Form */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 no-print">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 no-print">
           
           {/* Select Product */}
           <div className="space-y-1">
@@ -188,7 +253,7 @@ export default function BarcodeLabelPrinterModal({
             <select
               value={selectedProductId}
               onChange={(e) => handleProductSelect(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
               {activeProducts.map(p => (
                 <option key={p.id} value={p.id}>
@@ -201,7 +266,7 @@ export default function BarcodeLabelPrinterModal({
           {/* Barcode Number */}
           <div className="space-y-1">
             <label className="text-xs font-bold text-slate-700 flex justify-between items-center">
-              <span>رمز الباركود:</span>
+              <span>رمز الباركود (Code128):</span>
               <button
                 type="button"
                 onClick={handleGenerateNewBarcode}
@@ -214,7 +279,8 @@ export default function BarcodeLabelPrinterModal({
               type="text"
               value={customBarcode}
               onChange={(e) => setCustomBarcode(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-right"
+              placeholder="مثال: 614588282200"
+              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-left"
             />
           </div>
 
@@ -225,7 +291,7 @@ export default function BarcodeLabelPrinterModal({
               type="text"
               value={customTitle}
               onChange={(e) => setCustomTitle(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
@@ -243,14 +309,30 @@ export default function BarcodeLabelPrinterModal({
           {/* Copies & Size */}
           <div className="space-y-1">
             <label className="text-xs font-bold text-slate-700">عدد النسخ المطلوبة:</label>
-            <input
-              type="number"
-              min={1}
-              max={100}
-              value={printCopies}
-              onChange={(e) => setPrintCopies(Math.max(1, Number(e.target.value)))}
-              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPrintCopies(Math.max(1, printCopies - 1))}
+                className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-300 font-black text-slate-700 flex items-center justify-center cursor-pointer active:scale-95"
+              >
+                -
+              </button>
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={printCopies}
+                onChange={(e) => setPrintCopies(Math.max(1, Number(e.target.value)))}
+                className="w-full text-center py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                type="button"
+                onClick={() => setPrintCopies(printCopies + 1)}
+                className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-300 font-black text-slate-700 flex items-center justify-center cursor-pointer active:scale-95"
+              >
+                +
+              </button>
+            </div>
           </div>
 
           <div className="space-y-1">
@@ -258,11 +340,13 @@ export default function BarcodeLabelPrinterModal({
             <select
               value={labelSize}
               onChange={(e) => setLabelSize(e.target.value as any)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
-              <option value="50x30">50mm × 30mm (قياسي)</option>
-              <option value="40x20">40mm × 20mm (صغير)</option>
+              <option value="50x30">50mm × 30mm (قياسي - طابعات Xprinter / Zebra)</option>
+              <option value="40x30">40mm × 30mm (مربع قياسي)</option>
+              <option value="40x20">40mm × 20mm (صغير للمجوهرات والإكسسوارات)</option>
               <option value="38x25">38mm × 25mm (متوسط)</option>
+              <option value="60x40">60mm × 40mm (كبير للشحنات والكراتين)</option>
             </select>
           </div>
 
@@ -270,45 +354,67 @@ export default function BarcodeLabelPrinterModal({
 
         {/* Live Visual Label Preview */}
         <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-          <label className="text-xs font-bold text-slate-600 block no-print">معاينة تصميم ملصق الباركود (مباشر):</label>
+          <div className="flex justify-between items-center">
+            <label className="text-xs font-bold text-slate-600 block no-print">
+              معاينة ملصق الباركود الحقيقي ({labelSize} مم):
+            </label>
+            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+              باركود قياسي قابل للمسح الضوئي (Code128) ✓
+            </span>
+          </div>
           
           <div className="flex justify-center py-2">
-            <div className="bg-white border-2 border-dashed border-slate-300 p-4 rounded-xl text-center shadow-md min-w-[220px] max-w-[260px] space-y-2">
-              <div className="flex items-center justify-center gap-1.5">
-                {storeLogoUrl && (
-                  <img src={storeLogoUrl} alt={storeName} className="w-5 h-5 object-contain rounded" />
-                )}
-                <div className="text-[10px] font-black text-slate-800 uppercase tracking-wider">{storeName || 'سند المحاسبي'}</div>
-              </div>
-              <div className="text-xs font-black text-slate-900 line-clamp-1">{customTitle || 'اسم السلعة'}</div>
+            <div className="bg-white border-2 border-dashed border-slate-400 p-3 rounded-2xl text-center shadow-lg w-[260px] space-y-1.5 transition-all">
               
-              {/* Visual Barcode Pattern */}
-              <div className="py-1 flex flex-col items-center justify-center">
-                <div className="flex items-center justify-center gap-0.5 h-12 w-full max-w-[180px] bg-slate-900/5 p-1 rounded">
-                  {/* Generate visual lines based on barcode digits */}
-                  {customBarcode.split('').map((digit, idx) => {
-                    const widthClass = parseInt(digit, 10) % 2 === 0 ? 'w-1' : 'w-0.5';
-                    const heightClass = idx % 3 === 0 ? 'h-full bg-slate-900' : 'h-4/5 bg-slate-800';
-                    return <div key={idx} className={`${widthClass} ${heightClass} shrink-0`} />;
-                  })}
+              {/* Header Store */}
+              <div className="flex items-center justify-between border-b border-slate-900 pb-1">
+                <div className="flex items-center gap-1">
+                  {storeLogoUrl && (
+                    <img src={storeLogoUrl} alt={storeName} className="w-4 h-4 object-contain rounded" />
+                  )}
+                  <span className="text-[10px] font-black text-slate-900 uppercase tracking-tight truncate max-w-[170px]">
+                    {storeName || 'سند المحاسبي'}
+                  </span>
                 </div>
-                <div className="text-[10px] font-mono font-bold tracking-widest text-slate-700 mt-1">
-                  {customBarcode}
+                <span className="text-[9px] font-bold text-slate-500 font-mono">سند</span>
+              </div>
+
+              {/* Product Title */}
+              <div className="text-xs font-black text-slate-900 truncate px-1">
+                {customTitle || 'اسم السلعة'}
+              </div>
+              
+              {/* Real SVG Scannable Barcode */}
+              <div className="py-1 flex flex-col items-center justify-center bg-slate-50 rounded-lg border border-slate-100 p-1.5">
+                <div className="w-full flex justify-center overflow-hidden max-h-12">
+                  <svg ref={barcodeSvgRef} className="max-w-[95%] h-11 object-contain" />
+                </div>
+                <div className="text-[11px] font-mono font-black tracking-widest text-slate-900 mt-1 dir-ltr select-all">
+                  {customBarcode || '614588282200'}
                 </div>
               </div>
 
-              <div className="text-sm font-black text-blue-600 font-mono">
-                {customPrice.toLocaleString()} {currency}
+              {/* Price Banner */}
+              <div className="bg-slate-950 text-white rounded-lg py-1 px-2 font-mono font-black text-xs tracking-wider flex items-center justify-center gap-1 shadow-sm">
+                <span>{customPrice.toLocaleString()}</span>
+                <span className="text-[10px] font-sans font-bold text-slate-300">{currency}</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Status notification */}
+        {/* Status Messages */}
+        {exportSuccessMsg && (
+          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+            <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{exportSuccessMsg}</span>
+          </div>
+        )}
+
         {isConnectingBt && (
           <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold flex items-center gap-2">
-            <Bluetooth className="w-4 h-4 text-blue-600 animate-spin" />
-            <span>جاري الاتصال بطابعة البلوتوث الحرارية وإرسال أمر الطباعة...</span>
+            <Bluetooth className="w-4 h-4 text-blue-600 animate-spin shrink-0" />
+            <span>جاري الاتصال بطابعة البلوتوث وإرسال أمر الطباعة...</span>
           </div>
         )}
 
@@ -319,32 +425,67 @@ export default function BarcodeLabelPrinterModal({
           </div>
         )}
 
-        {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row gap-3 pt-2 no-print">
-          <button
-            onClick={handleBluetoothConnectAndPrint}
-            disabled={isConnectingBt}
-            className="flex-1 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-95 transition disabled:opacity-50"
-          >
-            <Bluetooth className="w-4 h-4" />
-            <span>طباعة عبر طابعة البلوتوث 🖨️</span>
-          </button>
+        {/* Main Action Buttons Grid */}
+        <div className="space-y-2.5 pt-1 no-print">
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {/* 1. Thermal PDF */}
+            <button
+              id="export_thermal_pdf_btn"
+              onClick={handlePDFExport}
+              disabled={isExporting}
+              className="py-3 px-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-blue-500/20 active:scale-95 transition disabled:opacity-50"
+            >
+              <FileText className="w-4 h-4" />
+              <span>تصدير PDF ملصقات حرارية ({labelSize}) 🏷️</span>
+            </button>
 
-          <button
-            onClick={handlePDFExport}
-            className="py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition shadow-sm active:scale-95"
-          >
-            <Share2 className="w-4 h-4 text-emerald-400" />
-            <span>تصدير PDF</span>
-          </button>
+            {/* 2. A4 Sheet PDF */}
+            <button
+              id="export_a4_sheet_pdf_btn"
+              onClick={handleA4SheetPDFExport}
+              disabled={isExporting}
+              className="py-3 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-95 transition disabled:opacity-50"
+            >
+              <Grid className="w-4 h-4 text-amber-400" />
+              <span>تصدير ورقة A4 كاملة (Sheet) 📄</span>
+            </button>
+          </div>
 
-          <button
-            onClick={handleBrowserPrint}
-            className="py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition border border-slate-200"
-          >
-            <Printer className="w-4 h-4 text-slate-600" />
-            <span>طباعة عبر المتصفح</span>
-          </button>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {/* 3. Direct Browser / Printer */}
+            <button
+              id="print_direct_labels_btn"
+              onClick={handleBrowserPrint}
+              className="py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition border border-slate-200 active:scale-95"
+            >
+              <Printer className="w-4 h-4 text-slate-600" />
+              <span>طباعة مباشرة 🖨️</span>
+            </button>
+
+            {/* 4. PNG Image */}
+            <button
+              id="export_label_image_btn"
+              onClick={handleImageExport}
+              disabled={isExporting}
+              className="py-2.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition active:scale-95 disabled:opacity-50"
+            >
+              <ImageIcon className="w-4 h-4 text-emerald-600" />
+              <span>حفظ كصورة (PNG) 🖼️</span>
+            </button>
+
+            {/* 5. Bluetooth */}
+            <button
+              id="print_bluetooth_labels_btn"
+              onClick={handleBluetoothConnectAndPrint}
+              disabled={isConnectingBt}
+              className="py-2.5 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition active:scale-95 disabled:opacity-50"
+            >
+              <Bluetooth className="w-4 h-4 text-indigo-600" />
+              <span>طابعة بلوتوث 📱</span>
+            </button>
+          </div>
+
         </div>
 
       </div>

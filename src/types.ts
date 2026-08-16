@@ -12,6 +12,7 @@ export interface Product {
   stock: number;
   minStock: number;
   category?: string; // e.g. "أجهزة", "إكسسوارات", "صيانة", "أخرى"
+  description?: string;
   isDeleted?: boolean;
 }
 
@@ -53,6 +54,7 @@ export interface Invoice {
   type: InvoiceType;
   paymentMethod?: string;
   referenceNumber?: string;
+  proofImage?: string; // صورة السند / إشعار التحويل / الإيداع
   date: string;
   status?: 'active' | 'refunded'; // supports returns
 }
@@ -66,6 +68,7 @@ export interface Payment {
   note: string;
   paymentMethod?: string;
   referenceNumber?: string;
+  proofImage?: string; // صورة سند القبض / الإيداع
 }
 
 export type ChecklistStatus = 'intact' | 'damaged' | 'untested';
@@ -97,6 +100,7 @@ export interface MaintenanceOrder {
   checklist?: DeviceChecklist;
   paymentMethod?: string;
   referenceNumber?: string;
+  proofImage?: string;
 }
 
 export interface Transaction {
@@ -107,6 +111,7 @@ export interface Transaction {
   description: string;
   paymentMethod?: string;
   referenceNumber?: string;
+  proofImage?: string; // صورة سند التحويل أو إشعار الإيداع
 }
 
 export type AppTheme = 'financial-blue' | 'emerald-green' | 'warm-amber' | 'dark-luxury';
@@ -126,6 +131,7 @@ export type BackupFrequency = 'off' | 'daily' | 'weekly' | 'monthly';
 
 export interface SystemSettings {
   storeName: string;
+  companyName?: string;
   currency: string;
   currencies?: CurrencyRate[];
   selectedCurrencySymbol?: string;

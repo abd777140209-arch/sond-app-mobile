@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>نظام سند المحاسبي الذكي</title>
     
     <!-- PWA Manifest & Icons -->
@@ -31,13 +31,7 @@
       const isNativeApp = window.location.protocol.startsWith('file') || window.location.protocol.startsWith('capacitor');
       if ('serviceWorker' in navigator && isHttpProtocol && !isNativeApp) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js')
-            .then((registration) => {
-              console.log('سُند PWA Service Worker Registered:', registration.scope);
-            })
-            .catch((error) => {
-              console.warn('Service Worker Registration Skipped/Failed:', error);
-            });
+          navigator.serviceWorker.register('./sw.js').catch(() => {});
         });
       }
     </script>

@@ -21,6 +21,9 @@ export interface DiagnosticResult {
   response: string;
   parts_needed?: string[];
   recommended_actions?: string[];
+  likelyCause?: string;
+  issueCategory?: string;
+  suggestedParts?: string[];
 }
 
 export interface InventoryCheckResult {

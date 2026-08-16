@@ -20,7 +20,13 @@ export function getSafeHtml2CanvasOptions(customOptions: Partial<Options> = {}):
     logging: false,
     onclone: (clonedDoc: Document, element: HTMLElement) => {
       try {
-        // 1. Sanitize all <style> tags to replace oklch(...) and color-mix(...) expressions with standard hex/rgb
+        // 1. Clean cloned document root to avoid any interface mode (desktop/mobile) distortions
+        clonedDoc.documentElement.classList.remove('mode-desktop', 'mode-mobile');
+        clonedDoc.body.classList.remove('mode-desktop', 'mode-mobile');
+        clonedDoc.documentElement.style.width = 'auto';
+        clonedDoc.body.style.width = 'auto';
+
+        // 2. Sanitize all <style> tags to replace oklch(...) and color-mix(...) expressions with standard hex/rgb
         const styleElements = clonedDoc.querySelectorAll('style');
         styleElements.forEach((styleEl) => {
           if (styleEl.textContent) {
@@ -31,7 +37,7 @@ export function getSafeHtml2CanvasOptions(customOptions: Partial<Options> = {}):
           }
         });
 
-        // 2. Process all elements in clonedDoc to strip oklch from inline styles
+        // 3. Process all elements in clonedDoc to strip oklch from inline styles and normalize export tables
         const allClonedElements = clonedDoc.querySelectorAll('*');
         allClonedElements.forEach((node) => {
           const el = node as HTMLElement;
@@ -50,7 +56,19 @@ export function getSafeHtml2CanvasOptions(customOptions: Partial<Options> = {}):
           }
         });
 
-        // 3. Run custom user onclone if specified
+        // 4. Ensure target element and all export tables in clonedDoc have full width and clean rendering
+        if (element) {
+          element.style.overflow = 'visible';
+          element.style.boxSizing = 'border-box';
+          const clonedTables = element.querySelectorAll('table');
+          clonedTables.forEach(t => {
+            t.style.display = 'table';
+            t.style.width = '100%';
+            t.style.borderCollapse = 'collapse';
+          });
+        }
+
+        // 5. Run custom user onclone if specified
         if (customOptions.onclone) {
           customOptions.onclone(clonedDoc, element);
         }

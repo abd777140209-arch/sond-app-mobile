@@ -15,13 +15,14 @@ interface State {
   error: Error | null;
 }
 
-export interface ErrorBoundary extends React.Component<Props, State> {}
-
-export class ErrorBoundary extends (React.Component as any) {
-  state: State = {
-    hasError: false,
-    error: null,
-  };
+export class ErrorBoundary extends React.Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+    };
+  }
 
   public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };

@@ -62,11 +62,11 @@ export const SanadPhoneLedger: React.FC<SanadPhoneLedgerProps> = ({
 
   // Calculate stats from local transactions if server URL isn't configured
   const totalSalesBase = transactions
-    .filter(t => t.type === 'income' || t.type === 'sale')
+    .filter(t => t.type === 'sale' || t.type === 'payment' || t.type === 'maintenance_income')
     .reduce((sum, t) => sum + t.amount, 0);
 
   const totalExpensesBase = transactions
-    .filter(t => t.type === 'expense')
+    .filter(t => t.type === 'expense' || t.type === 'refund')
     .reduce((sum, t) => sum + t.amount, 0);
 
   const netProfitBase = totalSalesBase - totalExpensesBase;
@@ -93,7 +93,7 @@ export const SanadPhoneLedger: React.FC<SanadPhoneLedgerProps> = ({
     let csv = `\uFEFFالتاريخ,النوع,الوصف,المبلغ,العملة,المبلغ المحول (${selectedCurrency})\n`;
     transactions.forEach(t => {
       const converted = t.amount * currentRate;
-      const typeAr = t.type === 'income' || t.type === 'sale' ? 'إيراد / مبيعات' : 'مصروف / مشتريات';
+      const typeAr = (t.type === 'sale' || t.type === 'payment' || t.type === 'maintenance_income') ? 'إيراد / مبيعات' : 'مصروف / مشتريات';
       csv += `"${t.date}","${typeAr}","${(t.description || '').replace(/"/g, '""')}","${t.amount}","${selectedCurrency}","${converted.toFixed(2)}"\n`;
     });
 

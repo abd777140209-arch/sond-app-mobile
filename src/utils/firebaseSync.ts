@@ -92,7 +92,6 @@ export function syncStoreCollection<T extends { id: string }>(
       if (snapshot.empty) {
         const alreadySeeded = localStorage.getItem(seedFlagKey);
         if (!alreadySeeded && defaultSeed && defaultSeed.length > 0) {
-          console.log(`Initial seed for collection '${cleanCol}' for store '${cleanKey}'...`);
           localStorage.setItem(seedFlagKey, 'true');
           defaultSeed.forEach((item) => {
             if (!item || !item.id) return;
@@ -100,11 +99,9 @@ export function syncStoreCollection<T extends { id: string }>(
             if (!itemId) return;
             try {
               const itemDocRef = doc(db, 'stores', cleanKey, cleanCol, itemId);
-              setDoc(itemDocRef, item).catch((err) => {
-                console.error(`Failed to upload seed item for ${cleanCol}:`, err);
-              });
-            } catch (err) {
-              console.error(`Error creating seed doc ref for ${cleanCol}:`, err);
+              setDoc(itemDocRef, item).catch(() => {});
+            } catch {
+              // Seed failure catch
             }
           });
           onUpdate(defaultSeed);
@@ -125,8 +122,7 @@ export function syncStoreCollection<T extends { id: string }>(
     });
 
     return unsubscribe;
-  } catch (err) {
-    console.warn(`Failed to set up listener for store collection ${cleanCol}:`, err);
+  } catch {
     return () => {};
   }
 }
@@ -153,10 +149,7 @@ export function syncStoreSettings(
 
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (!docSnap.exists()) {
-        console.log(`Seeding settings document for store '${cleanKey}'...`);
-        setDoc(docRef, defaultSettings).catch((err) => {
-          console.error(`Failed to upload seed settings:`, err);
-        });
+        setDoc(docRef, defaultSettings).catch(() => {});
         onUpdate(defaultSettings);
       } else {
         onUpdate(docSnap.data());
@@ -166,8 +159,7 @@ export function syncStoreSettings(
     });
 
     return unsubscribe;
-  } catch (err) {
-    console.warn(`Failed to set up listener for store settings:`, err);
+  } catch {
     return () => {};
   }
 }

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Save, 
   Shield, 
@@ -76,13 +76,19 @@ export default function Settings({
   onOpenDevPortal
 }: SettingsProps) {
   // Local state form variables
-  const [storeName, setStoreName] = useState(settings.storeName);
+  const [storeName, setStoreName] = useState(
+    settings.storeName || localStorage.getItem('smart_accounting_store_name') || ''
+  );
   const [storeLogoUrl, setStoreLogoUrl] = useState(
     settings.storeLogoUrl || localStorage.getItem('smart_accounting_company_logo') || ''
   );
-  const [currency, setCurrency] = useState(settings.currency);
-  const [address, setAddress] = useState('');
-  const [phone, setPhone] = useState('');
+  const [currency, setCurrency] = useState(settings.currency || 'ر.ي');
+  const [address, setAddress] = useState(
+    settings.address || localStorage.getItem('smart_accounting_address') || localStorage.getItem('sanad_store_address') || ''
+  );
+  const [phone, setPhone] = useState(
+    settings.phone || localStorage.getItem('smart_accounting_phone') || localStorage.getItem('sanad_store_phone') || ''
+  );
   const [invoiceFooterNote, setInvoiceFooterNote] = useState(
     settings.invoiceFooterNote || localStorage.getItem('sanad_invoice_footer_note') || 'البضاعة المباعة لا تُرد ولا تُستبدل إلا بالوصل وشروط الضمان المعتمدة. شكراً لتعاملكم معنا.'
   );
@@ -96,6 +102,46 @@ export default function Settings({
   const [isBiometricEnabled] = useState(() => {
     return localStorage.getItem('sond_biometrics_enabled') === 'true';
   });
+
+  // Sync state if settings prop changes externally or on component remount
+  useEffect(() => {
+    if (settings) {
+      if (settings.storeName !== undefined) {
+        setStoreName(settings.storeName || localStorage.getItem('smart_accounting_store_name') || '');
+      }
+      if (settings.address !== undefined) {
+        setAddress(settings.address || localStorage.getItem('smart_accounting_address') || localStorage.getItem('sanad_store_address') || '');
+      }
+      if (settings.phone !== undefined) {
+        setPhone(settings.phone || localStorage.getItem('smart_accounting_phone') || localStorage.getItem('sanad_store_phone') || '');
+      }
+      if (settings.currency !== undefined) {
+        setCurrency(settings.currency);
+      }
+      if (settings.storeLogoUrl !== undefined) {
+        setStoreLogoUrl(settings.storeLogoUrl || localStorage.getItem('smart_accounting_company_logo') || '');
+      }
+      if (settings.invoiceFooterNote !== undefined) {
+        setInvoiceFooterNote(settings.invoiceFooterNote || localStorage.getItem('sanad_invoice_footer_note') || '');
+      }
+      if (settings.pinCode !== undefined) setPinCode(settings.pinCode);
+      if (settings.isPinEnabled !== undefined) setIsPinEnabled(settings.isPinEnabled);
+      if (settings.protectedSections) setProtectedSections(settings.protectedSections);
+      if (settings.privacyPinCode) setPrivacyPinCode(settings.privacyPinCode);
+      if (settings.isPrivacyPinEnabled !== undefined) setIsPrivacyPinEnabled(settings.isPrivacyPinEnabled);
+      if (settings.appTheme) setAppTheme(settings.appTheme);
+      if (settings.cardShape) setCardShape(settings.cardShape);
+      if (settings.density) setDensity(settings.density);
+      if (settings.deviceMode) setDeviceMode(settings.deviceMode);
+      if (settings.backupFolderPath) setBackupFolderPath(settings.backupFolderPath);
+      if (settings.localBackupSchedule) setLocalBackupSchedule(settings.localBackupSchedule);
+      if (settings.autoBackupOnExit !== undefined) setAutoBackupOnExit(settings.autoBackupOnExit);
+      if (settings.driveBackupAccount) setDriveBackupAccount(settings.driveBackupAccount);
+      if (settings.driveBackupSchedule) setDriveBackupSchedule(settings.driveBackupSchedule);
+      if (settings.lastLocalBackupDate) setLastLocalBackupDate(settings.lastLocalBackupDate);
+      if (settings.lastDriveBackupDate) setLastDriveBackupDate(settings.lastDriveBackupDate);
+    }
+  }, [settings]);
 
   // Upgrade License State
   const [upgradeKey, setUpgradeKey] = useState('');
@@ -507,6 +553,11 @@ export default function Settings({
     }
 
     localStorage.setItem('sanad_invoice_footer_note', invoiceFooterNote);
+    localStorage.setItem('smart_accounting_address', address.trim());
+    localStorage.setItem('sanad_store_address', address.trim());
+    localStorage.setItem('smart_accounting_phone', phone.trim());
+    localStorage.setItem('sanad_store_phone', phone.trim());
+    localStorage.setItem('smart_accounting_store_name', storeName.trim());
 
     onSaveSettings({
       storeName: storeName.trim(),

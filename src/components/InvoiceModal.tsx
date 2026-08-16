@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Printer, Download, X, ShieldCheck, Heart, Smartphone, SlidersHorizontal, MessageCircle, FileDown, Loader2, Share2, Bluetooth, QrCode, ArrowRight } from 'lucide-react';
+import { Printer, Download, X, ShieldCheck, Heart, Smartphone, SlidersHorizontal, MessageCircle, FileDown, Loader2, Share2, Bluetooth, QrCode, ArrowRight, Eye, Paperclip, Image as ImageIcon } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
@@ -15,8 +15,7 @@ import { formatPaymentMethodLabel } from '../utils/paymentMethods';
 import { requestStoragePermissionOnDemand } from '../utils/androidPermissions';
 import { saveAndShareFile } from '../utils/fileExport';
 import { openWhatsApp } from '../utils/nativeLauncher';
-import { generateAndSharePDF } from '../services/pdfService';
-import { printSalesInvoiceThermalHTML } from '../services/ReceiptPrinter';
+import { printSalesInvoiceThermalHTML, generateSalesInvoiceThermalPDF, SalesInvoicePrintData } from '../services/ReceiptPrinter';
 
 interface InvoiceModalProps {
   invoice: Invoice | null;
@@ -35,6 +34,7 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
   const [phoneInput, setPhoneInput] = useState('');
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [isBluetoothConnecting, setIsBluetoothConnecting] = useState(false);
+  const [showProofModal, setShowProofModal] = useState(false);
 
   useEffect(() => {
     if (invoice && customers) {
@@ -68,42 +68,50 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
 
   if (!invoice) return null;
 
-  // 1. [طباعة] - ينفذ window.print() في الويندوز ويدعو PDF النصي السريع في الأندرويد
-  const handlePrint = async () => {
-    soundManager.playSuccessChime();
-    const isMobile = Capacitor.isNativePlatform() || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    
-    if (!isMobile) {
-      window.print();
-    } else {
-      try {
-        const pdfPayload = {
-          title: 'فاتورة مبيعات',
-          storeName: settings.storeName || 'القيصر للأجهزة الذكية والصيانة والبرمجة',
-          invoiceNumber: invoice.invoiceNumber,
-          customerName: customers?.find(c => c.id === invoice.customerId)?.name || invoice.customerName || 'عميل سفري / نقدي (كاش)',
-          phone: phoneInput || '',
-          date: `${new Date(invoice.date).toLocaleDateString('ar-YE')} ${new Date(invoice.date).toLocaleTimeString('ar-YE', { hour: '2-digit', minute: '2-digit' })}`,
-          paymentMethod: formatPaymentMethodLabel(invoice.paymentMethod || invoice.type, invoice.referenceNumber),
-          subtotal: `${invoice.totalAmount.toLocaleString()} ${settings.currency}`,
-          discount: invoice.discount ? `${invoice.discount.toLocaleString()} ${settings.currency}` : '0',
-          totalAmount: `${invoice.finalAmount.toLocaleString()} ${settings.currency}`,
-          items: invoice.items.map(i => ({
-            description: i.name,
-            quantity: i.quantity,
-            unitPrice: `${i.sellingPrice.toLocaleString()} ${settings.currency}`,
-            amount: `${i.total.toLocaleString()} ${settings.currency}`
-          }))
-        };
-        await generateAndSharePDF(pdfPayload);
-      } catch (e) {
-        console.error('Mobile Print Error:', e);
-        window.print();
+  // Helper to extract SVG QR code as base64 data URL
+  const getQrCodeDataUrl = (): string => {
+    try {
+      const svgEl = document.querySelector('#invoice-printable-card svg') as SVGElement;
+      if (svgEl) {
+        const xml = new XMLSerializer().serializeToString(svgEl);
+        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(xml)}`;
       }
-    }
+    } catch (e) {}
+    return '';
   };
 
-  // 2. [بلوتوث] - طباعة حرارية مباشرة عبر ReceiptPrinter ونصوص ESC/POS
+  const getInvoicePrintPayload = (): SalesInvoicePrintData => {
+    return {
+      invoiceNumber: invoice.invoiceNumber,
+      customerName: customers?.find(c => c.id === invoice.customerId)?.name || invoice.customerName || 'عميل سفري / نقدي (كاش)',
+      customerPhone: phoneInput || '',
+      date: invoice.date,
+      paymentMethod: formatPaymentMethodLabel(invoice.paymentMethod || invoice.type, invoice.referenceNumber),
+      items: invoice.items,
+      totalAmount: invoice.totalAmount,
+      discount: invoice.discount || 0,
+      finalAmount: invoice.finalAmount,
+      notes: settings.invoiceFooterNote || localStorage.getItem('sanad_invoice_footer_note') || '',
+      storeLogoUrl: settings.storeLogoUrl || '',
+      storeAddress: settings.address || '',
+      storePhone: settings.phone || '',
+      paperSize: paperSize,
+      qrCodeUrl: getQrCodeDataUrl()
+    };
+  };
+
+  // 1. [طباعة] - طباعة حرارية (Thermal 80mm / 58mm) متطابقة 100% مع شكل الفاتورة المعروضة
+  const handlePrint = async () => {
+    soundManager.playSuccessChime();
+    const payload = getInvoicePrintPayload();
+    await printSalesInvoiceThermalHTML(
+      settings.storeName || 'سند للمحاسبة والخدمات',
+      payload,
+      settings.currency
+    );
+  };
+
+  // 2. [بلوتوث] - طباعة حرارية مباشرة عبر البلوتوث للطابعات المحمولة
   const handleBluetoothPrint = async () => {
     soundManager.playSuccessChime();
     setIsBluetoothConnecting(true);
@@ -123,23 +131,12 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
         }
       }
 
-      printSalesInvoiceThermalHTML(
+      const payload = getInvoicePrintPayload();
+      await printSalesInvoiceThermalHTML(
         settings.storeName || 'سند للمحاسبة والخدمات',
-        {
-          invoiceNumber: invoice.invoiceNumber,
-          customerName: customers?.find(c => c.id === invoice.customerId)?.name || invoice.customerName || 'عميل سفري / نقدي (كاش)',
-          customerPhone: phoneInput || '',
-          date: invoice.date,
-          paymentMethod: formatPaymentMethodLabel(invoice.paymentMethod || invoice.type, invoice.referenceNumber),
-          items: invoice.items,
-          totalAmount: invoice.totalAmount,
-          discount: invoice.discount,
-          finalAmount: invoice.finalAmount,
-          notes: settings.invoiceFooterNote || localStorage.getItem('sanad_invoice_footer_note') || ''
-        },
+        payload,
         settings.currency
       );
-
     } catch (err) {
       console.error('Bluetooth Thermal Print Error:', err);
     } finally {
@@ -147,33 +144,19 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
     }
   };
 
-  // 3. [PDF] - تنزيل ومشاركة PDF نصي خفيف وسريع جداً عبر pdfService
+  // 3. [PDF] - حفظ الفاتورة كملف PDF نصي عالي الدقة بنفس شكل الفاتورة الحرارية تماماً
   const handleExportPDF = async () => {
     if (isExportingPDF) return;
     soundManager.playSuccessChime();
     setIsExportingPDF(true);
 
     try {
-      const pdfPayload = {
-        title: 'فاتورة مبيعات',
-        storeName: settings.storeName || 'القيصر للأجهزة الذكية والصيانة والبرمجة',
-        invoiceNumber: invoice.invoiceNumber,
-        customerName: customers?.find(c => c.id === invoice.customerId)?.name || invoice.customerName || 'عميل سفري / نقدي (كاش)',
-        phone: phoneInput || '',
-        date: `${new Date(invoice.date).toLocaleDateString('ar-YE')} ${new Date(invoice.date).toLocaleTimeString('ar-YE', { hour: '2-digit', minute: '2-digit' })}`,
-        paymentMethod: formatPaymentMethodLabel(invoice.paymentMethod || invoice.type, invoice.referenceNumber),
-        subtotal: `${invoice.totalAmount.toLocaleString()} ${settings.currency}`,
-        discount: invoice.discount ? `${invoice.discount.toLocaleString()} ${settings.currency}` : '0',
-        totalAmount: `${invoice.finalAmount.toLocaleString()} ${settings.currency}`,
-        notes: settings.invoiceFooterNote || localStorage.getItem('sanad_invoice_footer_note') || 'البضاعة المباعة لا تُرد ولا تُستبدل إلا بشرط الضمان المعتمدة. شكراً لتعاملكم معنا.',
-        items: invoice.items.map(i => ({
-          description: i.name,
-          quantity: i.quantity,
-          unitPrice: `${i.sellingPrice.toLocaleString()} ${settings.currency}`,
-          amount: `${i.total.toLocaleString()} ${settings.currency}`
-        }))
-      };
-      await generateAndSharePDF(pdfPayload);
+      const payload = getInvoicePrintPayload();
+      await generateSalesInvoiceThermalPDF(
+        settings.storeName || 'سند للمحاسبة والخدمات',
+        payload,
+        settings.currency
+      );
     } catch (error) {
       console.error('فشل تصدير الفاتورة كـ PDF:', error);
     } finally {
@@ -340,7 +323,13 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
         </div>
 
         {/* PRINTABLE BILL CANVAS AREA */}
-        <div id="invoice-printable-card" className="p-4 bg-white overflow-y-auto font-sans flex-1" style={{ direction: 'rtl' }}>
+        <div 
+          id="invoice-printable-card" 
+          data-export-container="true" 
+          data-receipt-card="true"
+          className="p-4 bg-white overflow-y-auto font-sans flex-1 printable-invoice-card" 
+          style={{ direction: 'rtl', boxSizing: 'border-box' }}
+        >
           
           <div className="text-center space-y-1">
             {settings.storeLogoUrl && (
@@ -388,6 +377,22 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
                 {formatPaymentMethodLabel(invoice.paymentMethod || invoice.type, invoice.referenceNumber)}
               </span>
             </div>
+            {invoice.proofImage && (
+              <div className="flex justify-between items-center bg-blue-50/80 p-1.5 rounded-lg border border-blue-200 mt-1">
+                <span className="flex items-center gap-1 text-[9px] font-bold text-blue-950">
+                  <Paperclip className="w-3 h-3 text-blue-600" />
+                  <span>إشعار السند المرفق:</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowProofModal(true)}
+                  className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-[9px] font-bold transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                >
+                  <Eye className="w-2.5 h-2.5" />
+                  <span>عرض السند</span>
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="my-2.5 border-t border-dashed border-gray-400"></div>
@@ -598,6 +603,48 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
         </div>
 
       </div>
+
+      {/* Proof Image Fullscreen View Modal */}
+      {showProofModal && invoice.proofImage && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/85 backdrop-blur-xs p-3 sm:p-6 no-print">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+            <div className="p-3.5 bg-slate-950 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-emerald-400" />
+                <span className="text-xs font-bold">صورة سند التحويل / إشعار الإيداع المرفق</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowProofModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 overflow-auto flex items-center justify-center bg-slate-950/60 max-h-[70vh]">
+              <img
+                src={invoice.proofImage}
+                alt="صورة السند"
+                className="max-h-[65vh] w-auto object-contain rounded-xl shadow-lg border border-slate-800"
+              />
+            </div>
+
+            <div className="p-3 bg-slate-900 border-t border-slate-800 flex justify-between items-center gap-2">
+              <span className="text-[11px] text-slate-400 font-mono">
+                فاتورة: {invoice.invoiceNumber} {invoice.referenceNumber ? `(مرجع #${invoice.referenceNumber})` : ''}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowProofModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold cursor-pointer transition"
+              >
+                إغلاق
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

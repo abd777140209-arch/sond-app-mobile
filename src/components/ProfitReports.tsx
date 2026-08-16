@@ -35,8 +35,10 @@ import {
   Tag,
   Download,
   Loader2,
-  Table
+  Table,
+  FileSpreadsheet
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -120,60 +122,6 @@ export default function ProfitReports({
   const [invoiceTypeFilter, setInvoiceTypeFilter] = useState<InvoiceTypeFilter>('all');
   const [copied, setCopied] = useState(false);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
-
-  const handleExportMaintenancePDF = async () => {
-    try {
-      setIsExportingPDF(true);
-      await generateAndSharePDF({
-        title: 'تقرير عمليات الصيانة الشهرية',
-        storeName: settings?.storeName || 'القيصر للأجهزة الذكية والصيانة والبرمجة',
-        invoiceNumber: `صيانة-${new Date().getMonth() + 1}`,
-        customerName: 'تقرير النظام الإداري',
-        phone: settings?.phone || '',
-        date: new Date().toLocaleDateString('ar-YE'),
-        paymentMethod: 'تقرير إحصائي',
-        subtotal: `${maintenanceOrders.reduce((sum, m) => sum + (m.cost || 0), 0).toLocaleString()} ${currency}`,
-        totalAmount: `${maintenanceOrders.reduce((sum, m) => sum + (m.cost || 0), 0).toLocaleString()} ${currency}`,
-        items: maintenanceOrders.slice(0, 20).map((m, idx) => ({
-          description: `كرت #${m.orderNumber || m.id}: ${m.deviceName || 'جهاز صيانة'} - ${m.issueDescription || 'صيانة عامة'}`,
-          quantity: 1,
-          unitPrice: `${(m.cost || 0).toLocaleString()} ${currency}`,
-          amount: `${(m.cost || 0).toLocaleString()} ${currency}`
-        }))
-      });
-    } catch (error) {
-      console.error('Error generating Maintenance PDF:', error);
-    } finally {
-      setIsExportingPDF(false);
-    }
-  };
-
-  const handleExportSummaryPDF = async () => {
-    soundManager.playSuccessChime();
-    try {
-      setIsExportingPDF(true);
-      await generateAndSharePDF({
-        title: 'التقرير المالي للمبيعات والأرباح',
-        storeName: settings?.storeName || 'القيصر للأجهزة الذكية والصيانة والبرمجة',
-        invoiceNumber: `تقرير-${Date.now().toString().slice(-4)}`,
-        customerName: 'الإدارة العامة للمتجر',
-        phone: settings?.phone || '',
-        date: new Date().toLocaleDateString('ar-YE'),
-        paymentMethod: 'تقرير مالي شامل',
-        subtotal: `${invoices.reduce((sum, inv) => sum + (inv.finalAmount || 0), 0).toLocaleString()} ${currency}`,
-        totalAmount: `${invoices.reduce((sum, inv) => sum + (inv.finalAmount || 0), 0).toLocaleString()} ${currency}`,
-        items: [
-          { description: 'الفترة الزمنية للتقرير', quantity: 1, unitPrice: period, amount: period },
-          { description: 'إجمالي عدد الفواتير الصادرة', quantity: invoices.length, unitPrice: '-', amount: `${invoices.length} فاتورة` },
-          { description: 'إجمالي عدد الأصناف في المخزن', quantity: products.length, unitPrice: '-', amount: `${products.length} صنف` }
-        ]
-      });
-    } catch (error) {
-      console.error('Error generating Summary PDF:', error);
-    } finally {
-      setIsExportingPDF(false);
-    }
-  };
 
   // Helper map for fast product cost lookup
   const productCostMap = useMemo(() => {
@@ -562,6 +510,286 @@ export default function ProfitReports({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // 📊 تصدير كشف أرباح ومبيعات الأصناف إلى إكسل Excel (.xlsx) احترافي ككشف تفصيلي
+  const handleExportSalesProfitExcel = async () => {
+    soundManager.playSuccessChime();
+
+    // تجميع المبيعات حسب الصنف
+    const productStatsMap = new Map<string, { name: string; qty: number; totalCost: number; totalRev: number; profit: number }>();
+
+    filteredInvoices.forEach(inv => {
+      inv.items.forEach(item => {
+        const costPrice = productCostMap.get(item.productId) ?? productCostMap.get(item.name.trim().toLowerCase()) ?? 0;
+        const itemCostTotal = item.quantity * costPrice;
+        const itemProfit = item.total - itemCostTotal;
+
+        const prev = productStatsMap.get(item.name) || { name: item.name, qty: 0, totalCost: 0, totalRev: 0, profit: 0 };
+        productStatsMap.set(item.name, {
+          name: item.name,
+          qty: prev.qty + item.quantity,
+          totalCost: prev.totalCost + itemCostTotal,
+          totalRev: prev.totalRev + item.total,
+          profit: prev.profit + itemProfit
+        });
+      });
+    });
+
+    const itemsList = Array.from(productStatsMap.values()).sort((a, b) => b.profit - a.profit);
+    const totalQtySold = itemsList.reduce((sum, it) => sum + it.qty, 0);
+
+    const data: Record<string, string | number>[] = itemsList.map((it, idx) => {
+      const avgCost = it.qty > 0 ? it.totalCost / it.qty : 0;
+      const avgSelling = it.qty > 0 ? it.totalRev / it.qty : 0;
+      const margin = it.totalRev > 0 ? (it.profit / it.totalRev) * 100 : 0;
+
+      return {
+        'م': idx + 1,
+        'اسم الصنف / السلعة': it.name,
+        'الكمية المباعة': it.qty,
+        'سعر الشراء (التكلفة)': isPrivacyMode ? '***' : Math.round(avgCost),
+        'متوسط سعر البيع': Math.round(avgSelling),
+        'إجمالي التكلفة': isPrivacyMode ? '***' : it.totalCost,
+        'إجمالي الإيرادات (المبيعات)': it.totalRev,
+        'صافي الأرباح المحققة': isPrivacyMode ? '***' : it.profit,
+        'نسبة هامش الربح %': isPrivacyMode ? '***' : `%${margin.toFixed(1)}`
+      };
+    });
+
+    // إضافة صف الإجمالي
+    data.push({
+      'م': 'الإجمالي الكلي',
+      'اسم الصنف / السلعة': `إجمالي الأصناف المباعة: ${itemsList.length} صنف (${stats.invoiceCount} فاتورة)`,
+      'الكمية المباعة': totalQtySold,
+      'سعر الشراء (التكلفة)': '-',
+      'متوسط سعر البيع': '-',
+      'إجمالي التكلفة': isPrivacyMode ? '***' : stats.totalCostOfGoods,
+      'إجمالي الإيرادات (المبيعات)': stats.totalRevenue,
+      'صافي الأرباح المحققة': isPrivacyMode ? '***' : stats.grossProfit,
+      'نسبة هامش الربح %': isPrivacyMode ? '***' : `%${stats.profitMargin.toFixed(1)}`
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+
+    worksheet['!cols'] = [
+      { wch: 6 },  // م
+      { wch: 32 }, // اسم الصنف
+      { wch: 16 }, // الكمية المباعة
+      { wch: 20 }, // سعر الشراء
+      { wch: 18 }, // متوسط سعر البيع
+      { wch: 20 }, // إجمالي التكلفة
+      { wch: 24 }, // إجمالي الإيرادات
+      { wch: 22 }, // صافي الأرباح
+      { wch: 18 }  // هامش الربح
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'كشف أرباح المبيعات');
+
+    const excelBase64 = XLSX.write(workbook, { bookType: 'xlsx', type: 'base64' });
+    const fileName = `كشف_أرباح_المبيعات_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    await saveAndShareFile({
+      fileName,
+      data: excelBase64,
+      isBase64: true,
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      title: 'كشف أرباح المبيعات Excel',
+      text: `كشف أرباح ومبيعات الأصناف التفصيلي من تطبيق سند المحاسبي`
+    });
+  };
+
+  // 📄 تصدير كشف أرباح ومبيعات الأصناف PDF ككشف رسمي
+  const handleExportSummaryPDF = async () => {
+    soundManager.playSuccessChime();
+    try {
+      setIsExportingPDF(true);
+
+      const productStatsMap = new Map<string, { name: string; qty: number; totalCost: number; totalRev: number; profit: number }>();
+
+      filteredInvoices.forEach(inv => {
+        inv.items.forEach(item => {
+          const costPrice = productCostMap.get(item.productId) ?? productCostMap.get(item.name.trim().toLowerCase()) ?? 0;
+          const itemCostTotal = item.quantity * costPrice;
+          const itemProfit = item.total - itemCostTotal;
+
+          const prev = productStatsMap.get(item.name) || { name: item.name, qty: 0, totalCost: 0, totalRev: 0, profit: 0 };
+          productStatsMap.set(item.name, {
+            name: item.name,
+            qty: prev.qty + item.quantity,
+            totalCost: prev.totalCost + itemCostTotal,
+            totalRev: prev.totalRev + item.total,
+            profit: prev.profit + itemProfit
+          });
+        });
+      });
+
+      const itemsList = Array.from(productStatsMap.values()).sort((a, b) => b.profit - a.profit);
+
+      const customColumns = [
+        { key: 'index', label: 'م', width: '35px', align: 'center' as const },
+        { key: 'name', label: 'اسم الصنف / المادة المباعة', align: 'right' as const },
+        { key: 'qty', label: 'الكمية', width: '60px', align: 'center' as const },
+        { key: 'unitCost', label: 'سعر الشراء', width: '85px', align: 'center' as const },
+        { key: 'unitPrice', label: 'سعر البيع', width: '85px', align: 'center' as const },
+        { key: 'totalCost', label: 'إجمالي التكلفة', width: '95px', align: 'center' as const },
+        { key: 'totalRev', label: 'إجمالي المبيعات', width: '95px', align: 'center' as const },
+        { key: 'profit', label: 'صافي الربح', width: '90px', align: 'center' as const },
+        { key: 'margin', label: 'الهامش %', width: '70px', align: 'center' as const }
+      ];
+
+      const customRows: Record<string, string | number>[] = itemsList.map((it, idx) => {
+        const avgCost = it.qty > 0 ? it.totalCost / it.qty : 0;
+        const avgSelling = it.qty > 0 ? it.totalRev / it.qty : 0;
+        const margin = it.totalRev > 0 ? (it.profit / it.totalRev) * 100 : 0;
+
+        return {
+          index: idx + 1,
+          name: it.name || 'صنف',
+          qty: it.qty,
+          unitCost: isPrivacyMode ? '***' : `${Math.round(avgCost).toLocaleString()} ${currency}`,
+          unitPrice: `${Math.round(avgSelling).toLocaleString()} ${currency}`,
+          totalCost: isPrivacyMode ? '***' : `${it.totalCost.toLocaleString()} ${currency}`,
+          totalRev: `${it.totalRev.toLocaleString()} ${currency}`,
+          profit: isPrivacyMode ? '***' : `${it.profit.toLocaleString()} ${currency}`,
+          margin: `%${margin.toFixed(0)}`
+        };
+      });
+
+      if (itemsList.length > 0) {
+        customRows.push({
+          index: 'الإجمالي',
+          name: `إجمالي الأصناف: ${itemsList.length} صنف`,
+          qty: itemsList.reduce((sum, it) => sum + it.qty, 0),
+          unitCost: '—',
+          unitPrice: '—',
+          totalCost: isPrivacyMode ? '***' : `${stats.totalCostOfGoods.toLocaleString()} ${currency}`,
+          totalRev: `${stats.totalRevenue.toLocaleString()} ${currency}`,
+          profit: isPrivacyMode ? '***' : `${stats.grossProfit.toLocaleString()} ${currency}`,
+          margin: `%${stats.profitMargin.toFixed(1)}`
+        });
+      }
+
+      const periodLabel = period === 'today' ? 'اليوم' : period === 'week' ? 'الأسبوع الحالي' : period === 'month' ? 'الشهر الحالي' : period === '30days' ? 'آخر 30 يوم' : period === 'year' ? 'السنة الحالية' : 'فترة مخصصة';
+
+      const summaryBoxes = [
+        { label: 'إجمالي المبيعات', value: `${stats.totalRevenue.toLocaleString()} ${currency}`, color: '#0284c7', bg: '#f0f9ff' },
+        { label: 'تكلفة البضاعة المباعة', value: isPrivacyMode ? '***' : `${stats.totalCostOfGoods.toLocaleString()} ${currency}`, color: '#0f172a', bg: '#f8fafc' },
+        { label: 'صافي الأرباح المحققة', value: isPrivacyMode ? '***' : `${stats.grossProfit.toLocaleString()} ${currency}`, color: '#059669', bg: '#ecfdf5' },
+        { label: 'نسبة هامش الربح', value: `%${stats.profitMargin.toFixed(1)}`, color: '#16a34a', bg: '#f0fdf4' },
+        { label: 'عدد الفواتير الصادرة', value: `${stats.invoiceCount} فاتورة`, color: '#6366f1', bg: '#eef2ff' },
+        { label: 'مبيعات نقداً / آجل', value: `كاش: ${stats.totalCashRevenue.toLocaleString()} | آجل: ${stats.totalDebtRevenue.toLocaleString()}`, color: '#d97706', bg: '#fffbeb' }
+      ];
+
+      await generateAndSharePDF({
+        title: 'كشف حساب أرباح ومبيعات الأصناف التفصيلي',
+        storeName: settings?.storeName || 'سند المحاسبي',
+        invoiceNumber: `أرباح-${Date.now().toString().slice(-4)}`,
+        customerName: 'الإدارة العامة ومراقبة الأرباح',
+        phone: settings?.phone || '',
+        date: new Date().toLocaleDateString('ar-YE') + ' ' + new Date().toLocaleTimeString('ar-YE', { hour: '2-digit', minute: '2-digit' }),
+        paymentMethod: `الفترة المحددة: ${periodLabel}`,
+        orientation: 'l',
+        customColumns,
+        customRows: customRows.length > 0 ? customRows : [
+          { index: 1, name: 'لا توجد مبيعات مسجلة في هذه الفترة', qty: 0, unitCost: '-', unitPrice: '-', totalCost: '0', totalRev: '0', profit: '0', margin: '0%' }
+        ],
+        summaryBoxes,
+        subtotal: `إجمالي الإيرادات: ${stats.totalRevenue.toLocaleString()} ${currency}`,
+        discount: `التكلفة: ${stats.totalCostOfGoods.toLocaleString()} ${currency}`,
+        totalAmount: `${stats.grossProfit.toLocaleString()} ${currency}`,
+        notes: `تقرير مالي رسمي مفصل للأرباح ومبيعات الأصناف عن الفترة: ${periodLabel}. تم إصدار ${stats.invoiceCount} فاتورة.`,
+        footerNote: '✨ كشف الأرباح والمبيعات المعتمد - نظام سند المحاسبي'
+      });
+    } catch (error) {
+      console.error('Error generating Summary PDF:', error);
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
+  // 📄 تصدير كشف عمليات الصيانة PDF ككشف محاسبي
+  const handleExportMaintenancePDF = async () => {
+    try {
+      setIsExportingPDF(true);
+      const totalMaintenanceCost = maintenanceOrders.reduce((sum, m) => sum + (m.cost || 0), 0);
+      const totalMaintenanceSpareCost = maintenanceOrders.reduce((sum, m) => sum + (m.sparePartsCost || 0), 0);
+      const netMaintenanceProfit = totalMaintenanceCost - totalMaintenanceSpareCost;
+
+      const customColumns = [
+        { key: 'index', label: 'م', width: '35px', align: 'center' as const },
+        { key: 'orderNum', label: 'رقم الكرت', width: '80px', align: 'center' as const },
+        { key: 'date', label: 'تاريخ الاستلام', width: '95px', align: 'center' as const },
+        { key: 'device', label: 'الجهاز والموديل', align: 'right' as const },
+        { key: 'customer', label: 'العميل والهاتف', width: '130px', align: 'right' as const },
+        { key: 'issue', label: 'العطل المطلوب', align: 'right' as const },
+        { key: 'fee', label: 'قيمة الصيانة', width: '90px', align: 'center' as const },
+        { key: 'status', label: 'الحالة', width: '85px', align: 'center' as const }
+      ];
+
+      const customRows: Record<string, string | number>[] = maintenanceOrders.map((m, idx) => {
+        const statusLabel = 
+          m.status === 'delivered' ? '✅ تم التسليم' :
+          m.status === 'completed' ? '🎉 تم الإنجاز' :
+          m.status === 'repairing' ? '🔧 قيد العمل' :
+          m.status === 'received' ? '📥 مستلم' : '—';
+
+        return {
+          index: idx + 1,
+          orderNum: m.orderNumber || m.id.slice(0, 6),
+          date: m.dateReceived ? new Date(m.dateReceived).toLocaleDateString('ar-YE') : '-',
+          device: m.deviceName || 'جهاز صيانة',
+          customer: `${m.customerName || 'عميل'} ${m.customerPhone ? ' (' + m.customerPhone + ')' : ''}`,
+          issue: m.issueDescription || 'فحص وصيانة',
+          fee: `${(m.cost || 0).toLocaleString()} ${currency}`,
+          status: statusLabel
+        };
+      });
+
+      if (maintenanceOrders.length > 0) {
+        customRows.push({
+          index: 'الإجمالي',
+          orderNum: `العدد: ${maintenanceOrders.length}`,
+          date: '—',
+          device: '—',
+          customer: '—',
+          issue: `صافي الربح: ${netMaintenanceProfit.toLocaleString()} ${currency}`,
+          fee: `${totalMaintenanceCost.toLocaleString()} ${currency}`,
+          status: '✅ معتمد'
+        });
+      }
+
+      const summaryBoxes = [
+        { label: 'إجمالي أوامر الصيانة', value: `${maintenanceOrders.length} كرت صيانة`, color: '#6366f1', bg: '#eef2ff' },
+        { label: 'إجمالي دخل الصيانة', value: `${totalMaintenanceCost.toLocaleString()} ${currency}`, color: '#059669', bg: '#ecfdf5' },
+        { label: 'صافي ربح الصيانة', value: `${netMaintenanceProfit.toLocaleString()} ${currency}`, color: '#0284c7', bg: '#f0f9ff' },
+        { label: 'تاريخ إصدار الكشف', value: new Date().toLocaleDateString('ar-YE'), color: '#475569', bg: '#f8fafc' }
+      ];
+
+      await generateAndSharePDF({
+        title: 'كشف حساب وعمليات الصيانة الفنية',
+        storeName: settings?.storeName || 'سند المحاسبي',
+        invoiceNumber: `صيانة-${new Date().getMonth() + 1}`,
+        customerName: 'قسم الصيانة والدعم الفني',
+        phone: settings?.phone || '',
+        date: new Date().toLocaleDateString('ar-YE') + ' ' + new Date().toLocaleTimeString('ar-YE', { hour: '2-digit', minute: '2-digit' }),
+        paymentMethod: 'كشف تشغيلي ومالي مفصل لخدمات الصيانة',
+        orientation: 'l',
+        customColumns,
+        customRows,
+        summaryBoxes,
+        subtotal: `إجمالي الصيانة: ${totalMaintenanceCost.toLocaleString()} ${currency}`,
+        discount: '0',
+        totalAmount: `${totalMaintenanceCost.toLocaleString()} ${currency}`,
+        notes: `كشف رسمي بكافة كروت وعمليات الصيانة المسجلة.`,
+        footerNote: '✨ كشف خدمات الصيانة الفنية المعتمد - نظام سند المحاسبي'
+      });
+    } catch (error) {
+      console.error('Error generating Maintenance PDF:', error);
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
   return (
     <div id="profit_reports_view" className="space-y-6 pb-12">
       
@@ -627,7 +855,15 @@ export default function ProfitReports({
               className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md no-print disabled:opacity-50"
             >
               {isExportingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              <span>{isExportingPDF ? 'جاري التصدير...' : 'تصدير PDF للملخص'}</span>
+              <span>{isExportingPDF ? 'جاري التصدير...' : 'كشف أرباح PDF'}</span>
+            </button>
+
+            <button
+              onClick={handleExportSalesProfitExcel}
+              className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-emerald-200 shadow-sm no-print"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+              <span>كشف أرباح Excel</span>
             </button>
 
             {reportSubTab === 'maintenance' && (
@@ -637,7 +873,7 @@ export default function ProfitReports({
                 className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md no-print disabled:opacity-50"
               >
                 {isExportingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                <span>{isExportingPDF ? 'جاري التصدير...' : 'تصدير PDF للصيانة'}</span>
+                <span>{isExportingPDF ? 'جاري التصدير...' : 'كشف صيانة PDF'}</span>
               </button>
             )}
 

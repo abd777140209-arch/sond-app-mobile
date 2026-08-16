@@ -3,11 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
-import { Barcode, Printer, Bluetooth, X, Check, Smartphone, User, Wrench, FileText } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Barcode, Printer, Bluetooth, X, Check, Smartphone, User, Wrench, FileText, Image as ImageIcon, Share2 } from 'lucide-react';
+import JsBarcode from 'jsbarcode';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import { MaintenanceOrder } from '../types';
 import { soundManager } from '../utils/sound';
 import { saveAndShareFile } from '../utils/fileExport';
+import { getSafeHtml2CanvasOptions } from '../utils/pdfHelper';
 
 interface MaintenanceStickerModalProps {
   isOpen: boolean;
@@ -27,9 +31,163 @@ export default function MaintenanceStickerModal({
   const [printCopies, setPrintCopies] = useState<number>(1);
   const [isConnectingBt, setIsConnectingBt] = useState(false);
   const [btPrintSuccess, setBtPrintSuccess] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportSuccessMsg, setExportSuccessMsg] = useState('');
+
+  const barcodeSvgRef = useRef<SVGSVGElement | null>(null);
+  const stickerCardRef = useRef<HTMLDivElement | null>(null);
+
+  const orderBarcode = order?.orderNumber ? `M${order.orderNumber}` : 'M0001';
+
+  useEffect(() => {
+    if (barcodeSvgRef.current && order) {
+      try {
+        JsBarcode(barcodeSvgRef.current, orderBarcode, {
+          format: 'CODE128',
+          lineColor: '#000000',
+          width: 2,
+          height: 35,
+          displayValue: false,
+          margin: 0,
+          background: 'transparent'
+        });
+      } catch (e) {
+        console.warn('Maintenance JsBarcode error:', e);
+      }
+    }
+  }, [order, isOpen]);
 
   if (!isOpen || !order) return null;
 
+  // 1. Export PDF sticker (50mm x 30mm)
+  const handleExportPDF = async () => {
+    if (!stickerCardRef.current) return;
+    soundManager.playScanBeep();
+    setIsExporting(true);
+
+    try {
+      const canvas = await html2canvas(stickerCardRef.current, getSafeHtml2CanvasOptions({
+        scale: 3,
+        useCORS: true,
+        backgroundColor: '#ffffff'
+      }));
+
+      const imgData = canvas.toDataURL('image/png', 1.0);
+      const widthMm = 50;
+      const heightMm = 30;
+      const copies = Math.max(1, printCopies);
+
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: [widthMm, heightMm]
+      });
+
+      for (let i = 0; i < copies; i++) {
+        if (i > 0) pdf.addPage([widthMm, heightMm], 'landscape');
+        pdf.addImage(imgData, 'PNG', 0, 0, widthMm, heightMm, undefined, 'FAST');
+      }
+
+      const fileName = `ملصق_صيانة_${order.orderNumber}.pdf`;
+      const pdfBase64 = pdf.output('datauristring');
+
+      await saveAndShareFile({
+        fileName,
+        data: pdfBase64,
+        isBase64: true,
+        mimeType: 'application/pdf',
+        title: `ملصق صيانة - #${order.orderNumber}`,
+        text: `ملصق صيانة لجهاز ${order.deviceName} - عميل: ${order.customerName}`
+      });
+
+      soundManager.playSuccessChime();
+      setExportSuccessMsg('تم تصدير ملصق الصيانة PDF بنجاح!');
+      setTimeout(() => setExportSuccessMsg(''), 4000);
+    } catch (err) {
+      console.error('Maintenance sticker export PDF error:', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // 2. Export PNG Image
+  const handleExportImage = async () => {
+    if (!stickerCardRef.current) return;
+    soundManager.playScanBeep();
+    setIsExporting(true);
+
+    try {
+      const canvas = await html2canvas(stickerCardRef.current, getSafeHtml2CanvasOptions({
+        scale: 3,
+        useCORS: true,
+        backgroundColor: '#ffffff'
+      }));
+
+      const imgData = canvas.toDataURL('image/png', 1.0);
+      const fileName = `ملصق_صيانة_${order.orderNumber}.png`;
+
+      await saveAndShareFile({
+        fileName,
+        data: imgData,
+        isBase64: true,
+        mimeType: 'image/png',
+        title: `ملصق صيانة - #${order.orderNumber}`,
+        text: `ملصق صيانة: ${order.deviceName} | الزبون: ${order.customerName} | السند: #${order.orderNumber}`
+      });
+
+      soundManager.playSuccessChime();
+      setExportSuccessMsg('تم حفظ صورة ملصق الصيانة بنجاح!');
+      setTimeout(() => setExportSuccessMsg(''), 4000);
+    } catch (err) {
+      console.error('Maintenance sticker export Image error:', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // 3. Direct Browser Print
+  const handleBrowserPrint = () => {
+    soundManager.playScanBeep();
+    const printWindow = window.open('', '_blank', 'width=500,height=500');
+    if (!printWindow || !stickerCardRef.current) {
+      window.print();
+      return;
+    }
+
+    const cardHtml = stickerCardRef.current.outerHTML;
+    let pagesHtml = '';
+    for (let i = 0; i < printCopies; i++) {
+      pagesHtml += `<div class="sticker-page">${cardHtml}</div>`;
+    }
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="utf-8">
+        <title>ملصق صيانة #${order.orderNumber}</title>
+        <style>
+          @page { size: 50mm 30mm; margin: 0; }
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body { font-family: 'Cairo', Tahoma, sans-serif; background: #fff; }
+          .sticker-page { width: 50mm; height: 30mm; page-break-after: always; display: flex; align-items: center; justify-content: center; }
+          .sticker-page:last-child { page-break-after: avoid; }
+        </style>
+      </head>
+      <body>
+        ${pagesHtml}
+        <script>
+          window.onload = function() {
+            setTimeout(function() { window.focus(); window.print(); }, 250);
+          };
+        </script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  // 4. Bluetooth Print
   const handleBluetoothConnectAndPrint = async () => {
     soundManager.playScanBeep();
     setIsConnectingBt(true);
@@ -58,35 +216,6 @@ export default function MaintenanceStickerModal({
       }, 800);
     }
   };
-
-  const handleBrowserPrint = async () => {
-    soundManager.playScanBeep();
-    try {
-      const stickerText = `==============================\n      ${storeName}\n  ملصق صيانة جهاز - رقم #${order.orderNumber}\n==============================\nالعميل: ${order.customerName}\nالجوال: ${order.deviceName}\nالعطل: ${order.issueDescription}\nالتكلفة المقدرة: ${order.cost} ${currency}\nالتاريخ: ${new Date(order.dateReceived).toLocaleDateString('ar-YE')}\n==============================\n`;
-      const fileName = `ملصق_صيانة_${order.orderNumber}.txt`;
-
-      if (typeof window !== 'undefined' && (window as any).AndroidInterface?.printReceipt) {
-        (window as any).AndroidInterface.printReceipt(stickerText);
-        return;
-      }
-
-      await saveAndShareFile({
-        fileName,
-        data: stickerText,
-        mimeType: 'text/plain;charset=utf-8',
-        title: `ملصق صيانة - رقم ${order.orderNumber}`,
-        text: stickerText
-      });
-
-      if (typeof window !== 'undefined') {
-        window.print();
-      }
-    } catch (e) {
-      console.warn('Browser print exception:', e);
-    }
-  };
-
-  const orderBarcode = order.orderNumber || '0000';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 animate-in fade-in duration-200">
@@ -137,11 +266,13 @@ export default function MaintenanceStickerModal({
             معاينة الملصق (مقاس 50 مم × 30 مم):
           </span>
           
-          <div className="bg-white border-2 border-slate-900 p-2.5 rounded-xl shadow-md text-black font-sans w-[240px] text-right space-y-1.5 select-none relative overflow-hidden">
-            
+          <div 
+            ref={stickerCardRef}
+            className="bg-white border-2 border-slate-900 p-2.5 rounded-xl shadow-md text-black font-sans w-[250px] text-right space-y-1.5 select-none relative overflow-hidden"
+          >
             {/* Header: Store name & Order Number */}
             <div className="flex justify-between items-center border-b-2 border-black pb-1">
-              <span className="text-[11px] font-black tracking-tight truncate max-w-[140px]">
+              <span className="text-[11px] font-black tracking-tight truncate max-w-[145px]">
                 {storeName}
               </span>
               <span className="text-[11px] font-mono font-black bg-black text-white px-1.5 py-0.2 rounded">
@@ -172,16 +303,13 @@ export default function MaintenanceStickerModal({
               )}
             </div>
 
-            {/* Barcode Visual */}
+            {/* Real Barcode SVG */}
             <div className="pt-1 border-t border-slate-300 flex flex-col items-center justify-center">
-              <div className="flex items-center justify-center gap-0.5 h-7 w-full bg-slate-900/10 px-1 rounded">
-                {orderBarcode.repeat(3).slice(0, 22).split('').map((char, idx) => {
-                  const widthClass = parseInt(char, 10) % 2 === 0 ? 'w-1' : 'w-0.5';
-                  return <div key={idx} className={`${widthClass} h-full bg-black shrink-0`} />;
-                })}
+              <div className="flex items-center justify-center h-8 w-full max-w-[90%] overflow-hidden">
+                <svg ref={barcodeSvgRef} className="max-w-full h-8 object-contain" />
               </div>
               <div className="text-[9px] font-mono font-black tracking-widest text-black mt-0.5 dir-ltr">
-                *MAINT-{orderBarcode}*
+                *{orderBarcode}*
               </div>
             </div>
 
@@ -189,6 +317,13 @@ export default function MaintenanceStickerModal({
         </div>
 
         {/* Notifications */}
+        {exportSuccessMsg && (
+          <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+            <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{exportSuccessMsg}</span>
+          </div>
+        )}
+
         {isConnectingBt && (
           <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-xs font-bold flex items-center gap-2">
             <Bluetooth className="w-4 h-4 text-blue-600 animate-spin shrink-0" />
@@ -204,23 +339,45 @@ export default function MaintenanceStickerModal({
         )}
 
         {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row gap-2.5 pt-1 no-print">
-          <button
-            onClick={handleBluetoothConnectAndPrint}
-            disabled={isConnectingBt}
-            className="flex-1 py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-95 transition disabled:opacity-50"
-          >
-            <Bluetooth className="w-4 h-4" />
-            <span>طباعة طابعة حرارية / بلوتوث</span>
-          </button>
+        <div className="space-y-2 pt-1 no-print">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={handleExportPDF}
+              disabled={isExporting}
+              className="py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95 transition disabled:opacity-50"
+            >
+              <FileText className="w-4 h-4" />
+              <span>تصدير PDF حراري 🏷️</span>
+            </button>
 
-          <button
-            onClick={handleBrowserPrint}
-            className="py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition border border-slate-200"
-          >
-            <Printer className="w-4 h-4 text-slate-600" />
-            <span>طباعة المتصفح</span>
-          </button>
+            <button
+              onClick={handleExportImage}
+              disabled={isExporting}
+              className="py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95 transition disabled:opacity-50"
+            >
+              <ImageIcon className="w-4 h-4 text-emerald-400" />
+              <span>حفظ صورة (PNG) 🖼️</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={handleBrowserPrint}
+              className="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition border border-slate-200 active:scale-95"
+            >
+              <Printer className="w-4 h-4 text-slate-600" />
+              <span>طباعة مباشرة 🖨️</span>
+            </button>
+
+            <button
+              onClick={handleBluetoothConnectAndPrint}
+              disabled={isConnectingBt}
+              className="py-2 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition active:scale-95 disabled:opacity-50"
+            >
+              <Bluetooth className="w-4 h-4 text-indigo-600" />
+              <span>طابعة بلوتوث 📱</span>
+            </button>
+          </div>
         </div>
 
       </div>

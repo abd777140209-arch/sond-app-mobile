@@ -187,19 +187,6 @@ body.mode-desktop,
   --app-max-width: 100%;
 }
 
-.mode-desktop table {
-  width: 100% !important;
-  border-collapse: separate;
-  border-spacing: 0;
-}
-
-.mode-desktop table th,
-.mode-desktop table td {
-  padding: 0.75rem 1rem !important;
-  font-size: 0.875rem !important;
-  white-space: nowrap;
-}
-
 .mode-desktop .app-card-container {
   max-width: 100% !important;
   border-radius: 1rem !important;
@@ -217,17 +204,45 @@ body.mode-mobile,
   --app-max-width: 100%;
 }
 
-.mode-mobile table {
-  display: block;
-  width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+/* ========================================================
+   DEDICATED RESET & ISOLATION FOR INVOICES, RECEIPTS & EXPORTS
+   (Ensures 100% full-width, non-truncated export in all modes)
+   ======================================================== */
+#invoice-printable-card,
+.printable-invoice-card,
+.pdf-export-container,
+[data-export-container],
+[data-receipt-card] {
+  box-sizing: border-box !important;
+  white-space: normal !important;
+  direction: rtl !important;
+  overflow: visible !important;
 }
 
-.mode-mobile table th,
-.mode-mobile table td {
-  padding: 0.5rem 0.65rem !important;
-  font-size: 0.8rem !important;
+#invoice-printable-card table,
+.printable-invoice-card table,
+.pdf-export-container table,
+[data-export-container] table,
+[data-receipt-card] table {
+  display: table !important;
+  width: 100% !important;
+  border-collapse: collapse !important;
+  table-layout: auto !important;
+  overflow: visible !important;
+  margin: 0 !important;
+}
+
+#invoice-printable-card th,
+#invoice-printable-card td,
+.printable-invoice-card th,
+.printable-invoice-card td,
+.pdf-export-container th,
+.pdf-export-container td,
+[data-export-container] th,
+[data-export-container] td,
+[data-receipt-card] th,
+[data-receipt-card] td {
+  box-sizing: border-box !important;
 }
 
 

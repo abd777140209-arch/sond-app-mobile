@@ -44,7 +44,7 @@ export interface SanadDeviceReceiptProps {
   userRole?: string;
   currentUser?: UserAccount | null;
   settings?: SystemSettings;
-  onAddMaintenanceOrder?: (order: Omit<MaintenanceOrder, 'id' | 'ticketNumber' | 'createdAt'>) => void;
+  onAddMaintenanceOrder?: (order: Omit<MaintenanceOrder, 'id'>) => void;
 }
 
 export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
@@ -133,7 +133,18 @@ export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
 
     // Save to App State
     if (onAddMaintenanceOrder) {
-      onAddMaintenanceOrder(newTicket);
+      onAddMaintenanceOrder({
+        orderNumber: ticketId,
+        customerName: formData.customerName,
+        customerPhone: formData.customerPhone,
+        deviceName: formData.deviceModel,
+        issueDescription: `[${formData.serviceType === 'hardware' ? 'صيانة شاشات/آيسيات' : formData.serviceType === 'software' ? 'برمجة وتفليش' : 'صيانة + برمجة'}] ${formData.problemDescription}`,
+        status: 'received',
+        cost: Number(formData.estimatedCost) || 0,
+        notes: `عربون: ${Number(formData.advancePayment) || 0} | سيريال: ${formData.imei || 'لا يوجد'}`,
+        technicianName: currentUser?.name || 'فني الصيانة',
+        dateReceived: new Date().toISOString()
+      });
     }
 
     // Save Offline / Sync

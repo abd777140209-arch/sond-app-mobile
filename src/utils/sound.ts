@@ -10,24 +10,24 @@ class DesktopSoundManager {
   playScanBeep() {
     try {
       playBarcodeBeepSound();
-    } catch (e) {
-      console.warn('Audio playScanBeep warning:', e);
+    } catch {
+      // Safe silent catch on unsupported devices
     }
   }
 
   playSuccessChime() {
     try {
       playSaleSuccessSound();
-    } catch (e) {
-      console.warn('Audio playSuccessChime warning:', e);
+    } catch {
+      // Safe silent catch
     }
   }
 
   playWarningBeep() {
     try {
       playErrorWarningSound();
-    } catch (e) {
-      console.warn('Audio playWarningBeep warning:', e);
+    } catch {
+      // Safe silent catch
     }
   }
 }

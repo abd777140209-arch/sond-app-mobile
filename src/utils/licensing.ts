@@ -154,18 +154,18 @@ export const generateLicenseKey = (type: 'weekly' | 'monthly' | 'yearly' | 'life
 };
 
 // Calculate expiry date based on type
-export const getExpiryDate = (type: 'weekly' | 'monthly' | 'yearly' | 'lifetime' | 'trial', customDays?: number): string => {
+export const getExpiryDate = (type: 'weekly' | 'monthly' | 'yearly' | 'lifetime' | 'trial' | 'custom', customDays?: number): string => {
   const now = new Date();
-  if (type === 'weekly' || type === 'trial') {
+  if (type === 'custom' && customDays && customDays > 0) {
+    now.setDate(now.getDate() + customDays);
+  } else if (type === 'weekly' || type === 'trial') {
     now.setDate(now.getDate() + 7);
-  } else if (type === 'monthly') {
+  } else if (type === 'monthly' || type === 'custom') {
     now.setDate(now.getDate() + 30);
   } else if (type === 'yearly') {
     now.setDate(now.getDate() + 365);
   } else if (type === 'lifetime') {
     now.setFullYear(now.getFullYear() + 100);
-  } else if (customDays && customDays > 0) {
-    now.setDate(now.getDate() + customDays);
   } else {
     now.setDate(now.getDate() + 30);
   }

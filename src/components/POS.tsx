@@ -24,7 +24,12 @@ import {
   AlertTriangle,
   Lock,
   Zap,
-  Check
+  Check,
+  Image as ImageIcon,
+  CheckCircle2,
+  Eye,
+  Paperclip,
+  Maximize2
 } from 'lucide-react';
 import { Product, Customer, Invoice, InvoiceItem, InvoiceType, SystemSettings } from '../types';
 import { soundManager } from '../utils/sound';
@@ -33,6 +38,7 @@ import VoicePOSModal from './VoicePOSModal';
 import BarcodeScannerModal from './BarcodeScannerModal';
 import BarcodeLabelPrinterModal from './BarcodeLabelPrinterModal';
 import TypoGuardModal, { TypoGuardDetails } from './TypoGuardModal';
+import { findProductByScannedBarcode, cleanBarcode } from '../utils/barcodeMatcher';
 
 interface POSProps {
   products: Product[];
@@ -51,8 +57,54 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
   const [discountInput, setDiscountInput] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodKey>('cash');
   const [referenceNumber, setReferenceNumber] = useState<string>('');
+  const [proofImage, setProofImage] = useState<string>('');
+  const [selectedProofModalImage, setSelectedProofModalImage] = useState<string | null>(null);
   const [posError, setPosError] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('الكل');
+  
+  const proofFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Handle proof/deposit image upload and compress
+  const handleProofImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setPosError('⚠️ يرجى اختيار ملف صورة صالح (JPG, PNG, WEBP)');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1024;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+          setProofImage(compressedDataUrl);
+          soundManager.playSuccessChime();
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
   
   // Dynamic Currency Selector State
   const activeCurrencies = settings?.currencies && settings.currencies.length > 0
@@ -105,17 +157,17 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
   // Handle manual or scanned barcode submission
   const handleBarcodeSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const cleanBarcode = barcodeInput.trim();
-    if (!cleanBarcode) return;
+    const rawBarcode = barcodeInput.trim();
+    if (!rawBarcode) return;
 
-    const matchedProduct = activeProducts.find(p => p.barcode === cleanBarcode);
+    const matchedProduct = findProductByScannedBarcode(activeProducts, rawBarcode);
     if (matchedProduct) {
       addProductToCart(matchedProduct);
       setBarcodeInput('');
       setPosError('');
     } else {
       soundManager.playWarningBeep();
-      setPosError(`⚠️ لم يتم العثور على سلعة بالباركود: ${cleanBarcode}`);
+      setPosError(`⚠️ لم يتم العثور على سلعة بالباركود: ${rawBarcode}`);
     }
   };
 
@@ -288,6 +340,9 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
     setDiscountInput(0);
     setSelectedCustomerId('');
     setPaymentMethod('cash');
+    setReferenceNumber('');
+    setProofImage('');
+    if (proofFileInputRef.current) proofFileInputRef.current.value = '';
     setPosError('');
   };
 
@@ -319,6 +374,7 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
       type: paymentMethod === 'debt' ? 'debt' : 'cash',
       paymentMethod: paymentMethod,
       referenceNumber: referenceNumber.trim() || undefined,
+      proofImage: proofImage || undefined,
       date: new Date().toISOString()
     });
 
@@ -328,6 +384,8 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
     setSelectedCustomerId('');
     setPaymentMethod('cash');
     setReferenceNumber('');
+    setProofImage('');
+    if (proofFileInputRef.current) proofFileInputRef.current.value = '';
     setPosError('');
     setCreditLimitModalOpen(false);
     setCreditLimitBlockedInfo(null);
@@ -820,20 +878,97 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
                   })}
                 </div>
 
-                {/* Reference Number Input for Electronic Payments */}
+                {/* Reference Number & Proof Image Input for Electronic Payments & Transfers */}
                 {paymentMethod !== 'cash' && paymentMethod !== 'debt' && (
-                  <div className="pt-1.5">
-                    <label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
-                      <span>رقم الحوالة / العملية / الإشعار:</span>
-                      <span className="text-[10px] text-slate-400">(اختياري للمطابقة)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={referenceNumber}
-                      onChange={(e) => setReferenceNumber(e.target.value)}
-                      placeholder="مثال: #984321 أو إشعار التحويل..."
-                      className="w-full mt-1 bg-white border border-slate-300 text-xs font-mono font-bold rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                  <div className="pt-2 space-y-2 bg-slate-100/70 p-2.5 rounded-xl border border-slate-200">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
+                        <Paperclip className="w-3.5 h-3.5 text-blue-600" />
+                        <span>رقم الحوالة / السند وإشعار الدفع:</span>
+                      </label>
+                      <span className="text-[10px] text-slate-400 font-medium">(اختياري للمطابقة)</span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      {/* Input for Reference / Remittance # */}
+                      <input
+                        type="text"
+                        value={referenceNumber}
+                        onChange={(e) => setReferenceNumber(e.target.value)}
+                        placeholder="مثال: #984321 أو إشعار التحويل..."
+                        className="flex-1 bg-white border border-slate-300 text-xs font-mono font-bold rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
+                      />
+
+                      {/* Hidden File Input for image upload */}
+                      <input
+                        type="file"
+                        ref={proofFileInputRef}
+                        accept="image/*"
+                        onChange={handleProofImageUpload}
+                        className="hidden"
+                      />
+
+                      {/* Image Upload or Thumbnail View Button */}
+                      {proofImage ? (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedProofModalImage(proofImage)}
+                            className="relative w-9 h-9 rounded-xl overflow-hidden border-2 border-emerald-500 shadow-sm cursor-pointer hover:ring-2 hover:ring-emerald-400 transition shrink-0 group"
+                            title="معاينة وتكبير صورة السند"
+                          >
+                            <img src={proofImage} alt="صورة السند" className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                              <Maximize2 className="w-4 h-4 text-white" />
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              soundManager.playWarningBeep();
+                              setProofImage('');
+                              if (proofFileInputRef.current) proofFileInputRef.current.value = '';
+                            }}
+                            className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center transition cursor-pointer border border-rose-200 shrink-0"
+                            title="حذف الصورة المرفقة"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            soundManager.playScanBeep();
+                            proofFileInputRef.current?.click();
+                          }}
+                          className="px-2.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-[11px] font-bold flex items-center gap-1 shadow-sm transition cursor-pointer shrink-0 active:scale-95 border border-blue-500/50"
+                          title="إرفاق صورة سند التحويل أو إشعار الإيداع"
+                        >
+                          <Camera className="w-3.5 h-3.5 text-amber-300" />
+                          <span className="hidden sm:inline">صورة السند / الإيداع</span>
+                          <span className="sm:hidden">صورة السند</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Attached Status Confirmation */}
+                    {proofImage && (
+                      <div className="flex items-center justify-between text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                        <span className="flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>تم إرفاق صورة السند / الإيداع بنجاح</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProofModalImage(proofImage)}
+                          className="text-emerald-700 hover:text-emerald-900 underline cursor-pointer"
+                        >
+                          عرض وتكبير
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1025,9 +1160,10 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
         isOpen={showScannerModal}
         onClose={() => setShowScannerModal(false)}
         products={activeProducts}
-        onScanCode={(code) => {
+        currency={currency}
+        onScanCode={(code, matchedProduct) => {
           setBarcodeInput(code);
-          const matched = activeProducts.find(p => p.barcode === code);
+          const matched = matchedProduct || findProductByScannedBarcode(activeProducts, code);
           if (matched) {
             addProductToCart(matched);
             setPosError('');
@@ -1144,6 +1280,55 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
                     <span>تجاوز الحد بموافقة الإدارة ⚠️</span>
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Proof Image Fullscreen View Modal */}
+      <AnimatePresence>
+        {selectedProofModalImage && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-6 animate-fadeIn">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl"
+            >
+              <div className="p-3.5 bg-slate-950 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+                <div className="flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs font-bold">صورة سند التحويل / إشعار الإيداع المرفق</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedProofModalImage(null)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-3 overflow-auto flex items-center justify-center bg-slate-950/60 max-h-[70vh]">
+                <img
+                  src={selectedProofModalImage}
+                  alt="صورة السند بدقة كاملة"
+                  className="max-h-[65vh] w-auto object-contain rounded-xl shadow-lg border border-slate-800"
+                />
+              </div>
+
+              <div className="p-3 bg-slate-900 border-t border-slate-800 flex justify-between items-center gap-2">
+                <span className="text-[11px] text-slate-400 font-mono">
+                  {referenceNumber ? `المرجع: #${referenceNumber}` : 'إشعار تحويل مصرفي'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedProofModalImage(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold cursor-pointer transition"
+                >
+                  إغلاق المعاينة
+                </button>
               </div>
             </motion.div>
           </div>

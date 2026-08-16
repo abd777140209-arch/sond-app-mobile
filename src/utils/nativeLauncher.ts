@@ -12,8 +12,6 @@ import { AppLauncher } from '@capacitor/app-launcher';
 export async function openExternalUrl(url: string): Promise<boolean> {
   if (!url) return false;
 
-  console.log('[NativeLauncher] Attempting to launch URL:', url);
-
   if (Capacitor.isNativePlatform()) {
     try {
       // 1. Primary attempt via Capacitor AppLauncher plugin
@@ -22,16 +20,16 @@ export async function openExternalUrl(url: string): Promise<boolean> {
         await AppLauncher.openUrl({ url });
         return true;
       }
-    } catch (e) {
-      console.warn('[NativeLauncher] AppLauncher error:', e);
+    } catch {
+      // Fallback
     }
 
     // 2. Secondary attempt via window.open / system intent
     try {
       window.open(url, '_system') || (window.location.href = url);
       return true;
-    } catch (e) {
-      console.warn('[NativeLauncher] System open fallback warning:', e);
+    } catch {
+      // Fallback
     }
   }
 
@@ -43,9 +41,7 @@ export async function openExternalUrl(url: string): Promise<boolean> {
       window.open(url, '_blank', 'noopener,noreferrer') || (window.location.href = url);
     }
     return true;
-  } catch (err) {
-    console.error('[NativeLauncher] All launch attempts failed:', err);
-    alert(`⚠️ تعذر إطلاق التطبيق المطلوب تلقائياً.\nالرابط: ${url}`);
+  } catch {
     return false;
   }
 }
@@ -79,16 +75,16 @@ export async function openWhatsApp(phone: string, text: string = ''): Promise<bo
         await AppLauncher.openUrl({ url: whatsappSchemeUrl });
         return true;
       }
-    } catch (e) {
-      console.warn('[WhatsApp] Scheme check warning:', e);
+    } catch {
+      // Fallback
     }
 
     // B) Try API URL via AppLauncher
     try {
       await AppLauncher.openUrl({ url: whatsappApiUrl });
       return true;
-    } catch (e) {
-      console.warn('[WhatsApp] API launch warning:', e);
+    } catch {
+      // Fallback
     }
   }
 

@@ -26,8 +26,8 @@ export function getCustomSaveFolder(): string {
     if (saved && saved.trim().length > 0) {
       return saved.trim().replace(/^\/+|\/+$/g, '');
     }
-  } catch (e) {
-    console.warn('Error reading custom save folder:', e);
+  } catch {
+    // Silent fallback
   }
   return 'SanadApp';
 }
@@ -39,8 +39,8 @@ export function setCustomSaveFolder(folderName: string): void {
   try {
     const clean = (folderName || 'SanadApp').trim().replace(/^\/+|\/+$/g, '');
     localStorage.setItem('sanad_custom_save_folder', clean || 'SanadApp');
-  } catch (e) {
-    console.warn('Error setting custom save folder:', e);
+  } catch {
+    // Silent fallback
   }
 }
 
@@ -63,7 +63,7 @@ export function getBackupTimestamp(d = new Date()): string {
 export function getGoogleDriveAccount(): string {
   try {
     return localStorage.getItem('sanad_google_drive_account') || '';
-  } catch (e) {
+  } catch {
     return '';
   }
 }
@@ -74,8 +74,8 @@ export function getGoogleDriveAccount(): string {
 export function setGoogleDriveAccount(email: string): void {
   try {
     localStorage.setItem('sanad_google_drive_account', (email || '').trim());
-  } catch (e) {
-    console.warn('Error setting google drive account:', e);
+  } catch {
+    // Silent fallback
   }
 }
 
@@ -93,12 +93,11 @@ export async function ensureStoragePermissions(): Promise<boolean> {
       return request.publicStorage === 'granted';
     }
     return true;
-  } catch (err) {
-    console.warn('[fileExport] Permissions request warning:', err);
+  } catch {
     try {
       const req = await Filesystem.requestPermissions();
       return req.publicStorage === 'granted';
-    } catch (e) {
+    } catch {
       return true;
     }
   }
@@ -215,7 +214,6 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
   const {
     fileName,
     data,
-    isBase64 = false,
     mimeType = 'application/pdf',
     title = 'تصدير سند/تقرير - تطبيق سند',
     text = 'ملف مستند من نظام سند المحاسبي',
@@ -224,6 +222,19 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
 
   const isNative = Capacitor.isNativePlatform();
   
+  // Auto-detect if data is Base64 (PDFs, Images, Data URIs, or explicitly specified)
+  const isDataUri = typeof data === 'string' && data.startsWith('data:');
+  const isBase64 = options.isBase64 === true || isDataUri || (
+    typeof data === 'string' && (
+      mimeType.includes('pdf') ||
+      fileName.toLowerCase().endsWith('.pdf') ||
+      mimeType.includes('image') ||
+      fileName.toLowerCase().endsWith('.png') ||
+      fileName.toLowerCase().endsWith('.jpg') ||
+      fileName.toLowerCase().endsWith('.jpeg')
+    ) && !data.startsWith('%PDF')
+  );
+
   // Clean Base64 payload to remove headers or whitespace
   const cleanData = isBase64
     ? data.replace(/^data:.*?;base64,/, '').replace(/\s/g, '')
@@ -232,8 +243,6 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
   const targetFolder = folderName || getCustomSaveFolder();
   const cleanFolder = targetFolder.trim().replace(/^\/+|\/+$/g, '') || 'SanadApp';
   const relativeFilePath = `${cleanFolder}/${fileName}`;
-
-  console.log(`[saveAndShareFile] Platform Native: ${isNative}, File: ${fileName}, MIME: ${mimeType}`);
 
   // 1. CAPACITOR NATIVE (ANDROID / IOS APK) PATH
   if (isNative) {
@@ -252,8 +261,8 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
           encoding: isBase64 ? undefined : Encoding.UTF8
         });
         shareUri = cacheResult.uri;
-      } catch (cacheErr) {
-        console.warn('[fileExport] Cache write warning:', cacheErr);
+      } catch {
+        // Fallback
       }
 
       // B) Write persistent copy in Directory.Documents/SanadApp/
@@ -267,8 +276,8 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
           encoding: isBase64 ? undefined : Encoding.UTF8
         });
         if (!shareUri) shareUri = docResult.uri;
-      } catch (docErr) {
-        console.warn('[fileExport] Documents write warning:', docErr);
+      } catch {
+        // Fallback
       }
 
       // C) Retrieve URI via Filesystem.getUri if not captured
@@ -279,8 +288,8 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
             directory: Directory.Cache
           });
           shareUri = uriRes.uri;
-        } catch (e) {
-          console.warn('[fileExport] getUri fallback warning:', e);
+        } catch {
+          // Fallback
         }
       }
 
@@ -299,13 +308,12 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
           if (errStr.includes('cancel') || errStr.includes('dismiss') || errStr.includes('abort')) {
             return true;
           }
-          console.warn('[fileExport] Share.share warning:', shareErr);
           return true;
         }
       }
 
-    } catch (nativeErr: any) {
-      console.error('[fileExport] Native Capacitor file operation failed:', nativeErr);
+    } catch {
+      // Fallback to web
     }
   }
 
@@ -326,12 +334,8 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
         });
         return true;
       }
-    } catch (webShareErr: any) {
-      const errStr = String(webShareErr || '').toLowerCase();
-      if (errStr.includes('cancel') || errStr.includes('abort') || errStr.includes('dismiss')) {
-        return true;
-      }
-      console.warn('[fileExport] Web Share API error:', webShareErr);
+    } catch {
+      // Fallback to blob download
     }
   }
 
@@ -357,9 +361,8 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
     }, 3000);
 
     return true;
-  } catch (webLinkErr) {
-    console.warn('[fileExport] Web blob download link attempt error:', webLinkErr);
-    return false;
+  } catch {
+    // Emergency clipboard
   }
 
   // 4. EMERGENCY CLIPBOARD / ALERT FALLBACK IF EVERYTHING BLOCKED
@@ -409,23 +412,22 @@ export async function uploadToGoogleDrive(
 }
 
 /**
- * Converts a Base64 string to Blob for Web browser download
+ * Converts a Base64 string to Blob for Web browser download and Web Share API
  */
 export function base64ToBlob(base64Data: string, contentType: string = 'application/pdf'): Blob {
-  const cleanBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
-  const sanitized = cleanBase64.replace(/\s/g, '');
-  const byteCharacters = atob(sanitized);
-  const byteArrays = [];
-  for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-    const slice = byteCharacters.slice(offset, offset + 512);
-    const byteNumbers = new Array(slice.length);
-    for (let i = 0; i < slice.length; i++) {
-      byteNumbers[i] = slice.charCodeAt(i);
+  try {
+    const cleanBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+    const sanitized = cleanBase64.replace(/\s/g, '');
+    const byteCharacters = atob(sanitized);
+    const byteNumbers = new Uint8Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
     }
-    const byteArray = new Uint8Array(byteNumbers);
-    byteArrays.push(byteArray);
+    return new Blob([byteNumbers], { type: contentType });
+  } catch (e) {
+    console.error('Error converting base64 to blob:', e);
+    return new Blob([base64Data], { type: contentType });
   }
-  return new Blob(byteArrays, { type: contentType });
 }
 
 /**

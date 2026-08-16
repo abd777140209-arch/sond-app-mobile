@@ -249,82 +249,137 @@ export default function Customers({
     });
   };
 
-  // Export Customers & Debts to Excel (.xlsx)
+  // Export Customers & Debts to Excel (.xlsx) ككشف مديونيات مفصل
   const handleExportCustomersExcel = async () => {
     soundManager.playSuccessChime();
     const listToExport = filteredCustomers.length > 0 ? filteredCustomers : activeCustomers;
+    const totalDebtSum = listToExport.reduce((acc, c) => acc + (c.totalDebt || 0), 0);
+    const totalCreditLimit = listToExport.reduce((acc, c) => acc + (c.creditLimit || 0), 0);
 
-    const data = listToExport.map((c, index) => ({
-      '#': index + 1,
-      'اسم العميل': c.name || '',
-      'رقم الهاتف': c.phone || '',
-      'إجمالي المديونية': c.totalDebt || 0,
+    const data: Record<string, string | number>[] = listToExport.map((c, index) => ({
+      'م': index + 1,
+      'اسم العميل / الجهة': c.name || '',
+      'رقم الهاتف': c.phone || 'بدون هاتف',
+      'إجمالي المديونية الحالية': c.totalDebt || 0,
       'سقف الائتمان': c.creditLimit || 0,
-      'تاريخ الاستحقاق': c.debtDueDate ? new Date(c.debtDueDate).toLocaleDateString('ar-YE') : '-',
+      'تاريخ الاستحقاق': c.debtDueDate ? new Date(c.debtDueDate).toLocaleDateString('ar-YE') : 'غير محدد',
       'نقاط الولاء': c.loyaltyPoints || 0,
+      'حالة السداد': (c.totalDebt || 0) <= 0 ? 'مستوفي بالكامل ✅' : 'عليه مديونية قائمة ⏳',
       'الملاحظات': c.notes || ''
     }));
+
+    // إضافة صف الإجمالي في نهاية الكشف
+    data.push({
+      'م': 'الإجمالي الكلي',
+      'اسم العميل / الجهة': `إجمالي العملاء: ${listToExport.length} عميل`,
+      'رقم الهاتف': '-',
+      'إجمالي المديونية الحالية': totalDebtSum,
+      'سقف الائتمان': totalCreditLimit,
+      'تاريخ الاستحقاق': '-',
+      'نقاط الولاء': '-',
+      'حالة السداد': 'كشف معتمد',
+      'الملاحظات': ''
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(data);
 
     // Set column widths
     worksheet['!cols'] = [
-      { wch: 5 },  // #
-      { wch: 25 }, // اسم العميل
-      { wch: 16 }, // رقم الهاتف
-      { wch: 18 }, // إجمالي المديونية
-      { wch: 16 }, // سقف الائتمان
-      { wch: 16 }, // تاريخ الاستحقاق
-      { wch: 12 }, // نقاط الولاء
+      { wch: 6 },  // م
+      { wch: 28 }, // اسم العميل
+      { wch: 18 }, // رقم الهاتف
+      { wch: 22 }, // إجمالي المديونية
+      { wch: 18 }, // سقف الائتمان
+      { wch: 18 }, // تاريخ الاستحقاق
+      { wch: 14 }, // نقاط الولاء
+      { wch: 22 }, // حالة السداد
       { wch: 30 }  // الملاحظات
     ];
 
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'مديونيات العملاء');
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'كشف مديونيات العملاء');
 
     const excelBase64 = XLSX.write(workbook, { bookType: 'xlsx', type: 'base64' });
-    const fileName = `تقرير_مديونيات_العملاء_${new Date().toISOString().split('T')[0]}.xlsx`;
+    const fileName = `كشف_مديونيات_العملاء_${new Date().toISOString().split('T')[0]}.xlsx`;
 
     await saveAndShareFile({
       fileName,
       data: excelBase64,
       isBase64: true,
       mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      title: 'تقرير مديونيات العملاء Excel',
-      text: 'كشف تفصيلي بمديونيات وحسابات العملاء من تطبيق سند المحاسبي'
+      title: 'كشف مديونيات العملاء Excel',
+      text: `كشف مديونيات وحسابات العملاء (${listToExport.length} عميل، إجمالي ديون: ${totalDebtSum.toLocaleString()} ${currency})`
     });
   };
 
-  // Export Customers & Debts to PDF
+  // Export Customers & Debts to PDF ككشف رسمي
   const handleExportCustomersPDF = async () => {
     soundManager.playScanBeep();
 
     const listToExport = filteredCustomers.length > 0 ? filteredCustomers : activeCustomers;
     const totalDebtSum = listToExport.reduce((acc, c) => acc + (c.totalDebt || 0), 0);
+    const debtorsCount = listToExport.filter(c => (c.totalDebt || 0) > 0).length;
 
-    const pdfItems = listToExport.map((c) => ({
-      description: `${c.name} ${c.phone ? ' - 📱 ' + c.phone : ''}${c.notes ? ' (' + c.notes + ')' : ''}`,
-      quantity: c.loyaltyPoints ? `${c.loyaltyPoints} نقطة` : '1',
-      unitPrice: c.debtDueDate ? `استحقاق: ${c.debtDueDate}` : 'آجل',
-      amount: `${(c.totalDebt || 0).toLocaleString()} ${currency}`
-    }));
+    const customColumns = [
+      { key: 'index', label: 'م', width: '40px', align: 'center' as const },
+      { key: 'name', label: 'اسم العميل / الحساب', align: 'right' as const },
+      { key: 'phone', label: 'رقم الهاتف', width: '110px', align: 'center' as const },
+      { key: 'totalDebt', label: 'المديونية القائمة', width: '120px', align: 'center' as const },
+      { key: 'creditLimit', label: 'سقف الائتمان', width: '100px', align: 'center' as const },
+      { key: 'dueDate', label: 'تاريخ الاستحقاق', width: '105px', align: 'center' as const },
+      { key: 'status', label: 'حالة الحساب', width: '100px', align: 'center' as const }
+    ];
+
+    const customRows: Record<string, string | number>[] = listToExport.map((c, idx) => {
+      const debt = c.totalDebt || 0;
+      const status = debt <= 0 ? '✅ مستوفي' : debt > (c.creditLimit || 99999999) ? '⚠️ تجاوز السقف' : '⏳ مدين';
+      return {
+        index: idx + 1,
+        name: c.name || 'عميل بدون اسم',
+        phone: c.phone || '-',
+        totalDebt: `${debt.toLocaleString()} ${currency}`,
+        creditLimit: `${(c.creditLimit || 0).toLocaleString()} ${currency}`,
+        dueDate: c.debtDueDate ? new Date(c.debtDueDate).toLocaleDateString('ar-YE') : 'غير محدد',
+        status
+      };
+    });
+
+    // إضافة صف الإجمالي في ذيل الجدول
+    customRows.push({
+      index: 'الإجمالي',
+      name: `إجمالي العملاء: ${listToExport.length} عميل`,
+      phone: `المدينون: ${debtorsCount}`,
+      totalDebt: `${totalDebtSum.toLocaleString()} ${currency}`,
+      creditLimit: '—',
+      dueDate: '—',
+      status: debtorsCount > 0 ? '⏳ بحاجة تحصيل' : '✅ مسدد بالكامل'
+    });
+
+    const summaryBoxes = [
+      { label: 'إجمالي المسجلين', value: `${listToExport.length} عميل`, color: '#0284c7', bg: '#f0f9ff' },
+      { label: 'العملاء المدينون', value: `${debtorsCount} عميل`, color: '#d97706', bg: '#fffbeb' },
+      { label: 'إجمالي مبالغ الديون', value: `${totalDebtSum.toLocaleString()} ${currency}`, color: '#dc2626', bg: '#fef2f2' },
+      { label: 'تاريخ المطابقة', value: new Date().toLocaleDateString('ar-YE'), color: '#475569', bg: '#f8fafc' }
+    ];
 
     try {
       await generateAndSharePDF({
         title: 'كشف مديونيات وحسابات العملاء',
         storeName: storeName || 'سند المحاسبي',
         invoiceNumber: `ديون-${new Date().toISOString().slice(0, 10)}`,
-        customerName: 'تقرير المديونيات العامة والتفصيلية للعملاء',
+        customerName: 'إدارة الائتمان والتحصيل المالي',
         phone: '',
-        date: new Date().toLocaleDateString('ar-YE'),
-        paymentMethod: `إجمالي العملاء: ${listToExport.length} عميل`,
+        date: new Date().toLocaleDateString('ar-YE') + ' ' + new Date().toLocaleTimeString('ar-YE', { hour: '2-digit', minute: '2-digit' }),
+        paymentMethod: `كشف محاسبي بمديونيات العملاء والأرصدة القائمة`,
+        orientation: 'p',
+        customColumns,
+        customRows,
+        summaryBoxes,
         subtotal: `إجمالي الديون: ${totalDebtSum.toLocaleString()} ${currency}`,
         discount: '0',
         totalAmount: `${totalDebtSum.toLocaleString()} ${currency}`,
-        notes: `كشف مديونيات معتمد رسمي موثق بحسابات العملاء حتى تاريخ ${new Date().toLocaleDateString('ar-YE')}.`,
-        items: pdfItems.length > 0 ? pdfItems : [
-          { description: 'لا يوجد عملاء مدينون حالياً في السجل', quantity: 0, unitPrice: '-', amount: '0' }
-        ]
+        notes: `كشف مديونيات معتمد رسمي موثق بحسابات العملاء حتى تاريخه. يرجى المتابعة والتحصيل وفق التواريخ المحددة.`,
+        footerNote: '✨ كشف الحسابات والمديونيات المعتمد - تطبيق سند المحاسبي'
       });
     } catch (e) {
       console.error('Customer PDF Export Failed:', e);

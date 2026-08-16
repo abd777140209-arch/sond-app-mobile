@@ -28,8 +28,10 @@ import {
   Settings,
   Download,
   Volume2,
-  FileSpreadsheet
+  FileSpreadsheet,
+  FileText
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { Product } from '../types';
 import { soundManager } from '../utils/sound';
 import { saveAndShareFile, exportToCSV } from '../utils/fileExport';
@@ -60,6 +62,7 @@ export default function Inventory({
   isPrivacyMode = false
 }: InventoryProps) {
   const [showLabelPrinterModal, setShowLabelPrinterModal] = useState(false);
+  const [selectedBarcodeProductId, setSelectedBarcodeProductId] = useState<string>('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLowStock, setFilterLowStock] = useState(false);
@@ -239,47 +242,240 @@ export default function Inventory({
     return num.toLocaleString() + ' ' + currency;
   };
 
-  // 🎯 Export CSV / Excel Handler
-  const handleExportCSV = async () => {
+  // 📊 تصدير كشف جرد المستودع إلى إكسل Excel (.xlsx) احترافي ومنسق ككشف حساب تفصيلي
+  const handleExportExcel = async () => {
     soundManager.playSuccessChime();
-    const headers = ['الاسم', 'الباركود', 'التصنيف', 'المخزون', 'الحد الأدنى', 'تكلفة الشراء', 'سعر البيع'];
-    const rows = activeProductsList.map(p => [
-      p.name || '',
-      p.barcode || '',
-      p.category || 'عام',
-      p.stock,
-      p.minStock,
-      p.costPrice,
-      p.sellingPrice
-    ]);
-    const fileName = `جرد_المستودع_${new Date().toISOString().slice(0, 10)}.csv`;
-    await exportToCSV(fileName, headers, rows);
+    const listToExport = filteredProducts.length > 0 ? filteredProducts : activeProductsList;
+
+    const totalPieces = listToExport.reduce((sum, p) => sum + (p.stock || 0), 0);
+    const totalCostSum = listToExport.reduce((sum, p) => sum + ((p.stock || 0) * (p.costPrice || 0)), 0);
+    const totalSellingSum = listToExport.reduce((sum, p) => sum + ((p.stock || 0) * (p.sellingPrice || 0)), 0);
+    const totalProfitSum = totalSellingSum - totalCostSum;
+
+    // 1. جدول تفاصيل الأصناف ككشف مرتب
+    const data: Record<string, string | number>[] = listToExport.map((p, index) => {
+      const itemCost = p.costPrice || 0;
+      const itemSelling = p.sellingPrice || 0;
+      const totalItemCost = (p.stock || 0) * itemCost;
+      const totalItemSelling = (p.stock || 0) * itemSelling;
+      const itemProfitMargin = itemSelling - itemCost;
+      const totalItemProfit = totalItemSelling - totalItemCost;
+      const statusText = p.stock <= 0 ? 'نفد من المخزن' : p.stock <= p.minStock ? 'منخفض (تحت الطلب)' : 'متوفر بالمخزن';
+
+      return {
+        'م': index + 1,
+        'اسم الصنف / المادة': p.name || '',
+        'رمز الباركود': p.barcode || 'بدون باركود',
+        'التصنيف': p.category || 'عام',
+        'الكمية المتوفرة': p.stock || 0,
+        'الحد الأدنى': p.minStock || 0,
+        'سعر الشراء (التكلفة)': isPrivacyMode ? '***' : itemCost,
+        'سعر البيع المعتمد': itemSelling,
+        'إجمالي الشراء (رأس المال)': isPrivacyMode ? '***' : totalItemCost,
+        'إجمالي البيع (القيمة البيعية)': totalItemSelling,
+        'فارق ربح القطعة': isPrivacyMode ? '***' : itemProfitMargin,
+        'إجمالي الأرباح المتوقعة': isPrivacyMode ? '***' : totalItemProfit,
+        'حالة الصنف': statusText
+      };
+    });
+
+    // 2. إضافة صف الإجماليات النهائية في ذيل الكشف
+    data.push({
+      'م': 'الإجمالي الكلي',
+      'اسم الصنف / المادة': `إجمالي الأصناف: ${listToExport.length} صنف`,
+      'رمز الباركود': '-',
+      'التصنيف': '-',
+      'الكمية المتوفرة': totalPieces,
+      'الحد الأدنى': '-',
+      'سعر الشراء (التكلفة)': '-',
+      'سعر البيع المعتمد': '-',
+      'إجمالي الشراء (رأس المال)': isPrivacyMode ? '***' : totalCostSum,
+      'إجمالي البيع (القيمة البيعية)': totalSellingSum,
+      'فارق ربح القطعة': '-',
+      'إجمالي الأرباح المتوقعة': isPrivacyMode ? '***' : totalProfitSum,
+      'حالة الصنف': 'كشف معتمد'
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+
+    // ضبط قياسات الأعمدة بدقة
+    worksheet['!cols'] = [
+      { wch: 6 },  // م
+      { wch: 32 }, // اسم الصنف
+      { wch: 18 }, // الباركود
+      { wch: 16 }, // التصنيف
+      { wch: 16 }, // الكمية المتوفرة
+      { wch: 14 }, // الحد الأدنى
+      { wch: 20 }, // سعر الشراء
+      { wch: 18 }, // سعر البيع
+      { wch: 24 }, // إجمالي الشراء
+      { wch: 26 }, // إجمالي البيع
+      { wch: 18 }, // فارق ربح القطعة
+      { wch: 24 }, // إجمالي الأرباح
+      { wch: 20 }  // حالة الصنف
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'كشف جرد المستودع');
+
+    const excelBase64 = XLSX.write(workbook, { bookType: 'xlsx', type: 'base64' });
+    const fileName = `كشف_جرد_المستودع_التفصيلي_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    await saveAndShareFile({
+      fileName,
+      data: excelBase64,
+      isBase64: true,
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      title: 'كشف جرد المستودع Excel',
+      text: `كشف جرد المستودع الشامل (${listToExport.length} صنف، إجمالي ${totalPieces} قطعة) من تطبيق سند المحاسبي`
+    });
   };
 
-  // 🎯 Print Inventory Handler
-  const handlePrintInventory = async () => {
-    soundManager.playSuccessChime();
+  // 📄 تصدير كشف جرد المستودع والمخزون بصيغة PDF معتمدة ومرتبة ككشف محاسبي
+  const handleExportPDF = async () => {
+    soundManager.playScanBeep();
+    const listToExport = filteredProducts.length > 0 ? filteredProducts : activeProductsList;
+    const totalPiecesCount = listToExport.reduce((sum, p) => sum + (p.stock || 0), 0);
+    const totalSellingSum = listToExport.reduce((sum, p) => sum + ((p.stock || 0) * (p.sellingPrice || 0)), 0);
+    const totalCostSum = listToExport.reduce((sum, p) => sum + ((p.stock || 0) * (p.costPrice || 0)), 0);
+    const totalProfitSum = totalSellingSum - totalCostSum;
+    const lowCount = listToExport.filter(p => p.stock <= p.minStock).length;
+    const outOfStockCount = listToExport.filter(p => p.stock <= 0).length;
+
+    // إعداد الأعمدة المنسقة لكشف الجرد
+    const customColumns = [
+      { key: 'index', label: 'م', width: '35px', align: 'center' as const },
+      { key: 'name', label: 'اسم الصنف / المادة', align: 'right' as const },
+      { key: 'barcode', label: 'الباركود', width: '90px', align: 'center' as const },
+      { key: 'category', label: 'التصنيف', width: '75px', align: 'center' as const },
+      { key: 'stock', label: 'المخزون', width: '60px', align: 'center' as const },
+      { key: 'costPrice', label: 'سعر الشراء', width: '80px', align: 'center' as const },
+      { key: 'sellingPrice', label: 'سعر البيع', width: '80px', align: 'center' as const },
+      { key: 'totalCost', label: 'إجمالي الشراء', width: '95px', align: 'center' as const },
+      { key: 'totalSelling', label: 'إجمالي البيع', width: '95px', align: 'center' as const },
+      { key: 'profit', label: 'الأرباح', width: '85px', align: 'center' as const },
+      { key: 'status', label: 'الحالة', width: '85px', align: 'center' as const }
+    ];
+
+    // إعداد صفوف الكشف
+    const customRows: Record<string, string | number>[] = listToExport.map((p, idx) => {
+      const itemCost = p.costPrice || 0;
+      const itemSelling = p.sellingPrice || 0;
+      const totalItemCost = (p.stock || 0) * itemCost;
+      const totalItemSelling = (p.stock || 0) * itemSelling;
+      const totalItemProfit = totalItemSelling - totalItemCost;
+      const statusText = p.stock <= 0 ? '❌ نافد' : p.stock <= p.minStock ? '⚠️ منخفض' : '✅ متوفر';
+
+      return {
+        index: idx + 1,
+        name: p.name || 'صنف غير مسمى',
+        barcode: p.barcode || '—',
+        category: p.category || 'عام',
+        stock: p.stock || 0,
+        costPrice: isPrivacyMode ? '***' : `${itemCost.toLocaleString()} ${currency}`,
+        sellingPrice: `${itemSelling.toLocaleString()} ${currency}`,
+        totalCost: isPrivacyMode ? '***' : `${totalItemCost.toLocaleString()} ${currency}`,
+        totalSelling: `${totalItemSelling.toLocaleString()} ${currency}`,
+        profit: isPrivacyMode ? '***' : `${totalItemProfit.toLocaleString()} ${currency}`,
+        status: statusText
+      };
+    });
+
+    // إضافة صف الإجمالي النهائي المعتمد في ذيل جدول الجرد مباشرة
+    customRows.push({
+      index: 'الإجمالي',
+      name: `إجمالي الأصناف: ${listToExport.length} صنف`,
+      barcode: '—',
+      category: '—',
+      stock: totalPiecesCount,
+      costPrice: '—',
+      sellingPrice: '—',
+      totalCost: isPrivacyMode ? '***' : `${totalCostSum.toLocaleString()} ${currency}`,
+      totalSelling: `${totalSellingSum.toLocaleString()} ${currency}`,
+      profit: isPrivacyMode ? '***' : `${totalProfitSum.toLocaleString()} ${currency}`,
+      status: lowCount > 0 ? `⚠️ ${lowCount} بحاجة طلب` : '✅ مكتمل'
+    });
+
+    // شريط إحصائيات مدمج وسريع
+    const summaryBoxes = [
+      { label: 'الأصناف', value: `${listToExport.length} صنف`, color: '#0284c7' },
+      { label: 'إجمالي القطع', value: `${totalPiecesCount} قطعة`, color: '#4f46e5' },
+      { label: 'رأس المال', value: isPrivacyMode ? '***' : `${totalCostSum.toLocaleString()} ${currency}`, color: '#0f172a' },
+      { label: 'القيمة البيعية', value: `${totalSellingSum.toLocaleString()} ${currency}`, color: '#059669' },
+      { label: 'الأرباح المتوقعة', value: isPrivacyMode ? '***' : `${totalProfitSum.toLocaleString()} ${currency}`, color: '#16a34a' },
+      { label: 'نواقص', value: `${lowCount} صنف`, color: lowCount > 0 ? '#dc2626' : '#16a34a' }
+    ];
+
     try {
       await generateAndSharePDF({
-        title: 'تقرير جرد الكتالوج والمنتجات',
-        storeName: storeName || 'القيصر للأجهزة الذكية والصيانة والبرمجة',
-        invoiceNumber: `كتالوج-${new Date().toISOString().slice(0, 10)}`,
-        customerName: 'إدارة المخزون والمشتريات',
+        title: 'كشف جرد المستودع والمخزون العام',
+        storeName: storeName || 'سند المحاسبي',
+        invoiceNumber: `جرد-${new Date().toISOString().slice(0, 10)}`,
+        customerName: 'إدارة المستودعات ومراقبة المخزون',
         phone: '',
-        date: new Date().toLocaleDateString('ar-YE'),
-        paymentMethod: 'تقرير شامل بمنتجات الكتالوج',
-        subtotal: `${activeProductsList.length} صنف`,
-        totalAmount: `${activeProductsList.reduce((sum, p) => sum + (p.stock * p.sellingPrice), 0).toLocaleString()} ${currency}`,
-        items: activeProductsList.slice(0, 50).map(p => ({
-          description: `${p.name} (بارلود: ${p.barcode || 'بدون'}) [تصنيف: ${p.category || 'عام'}]`,
-          quantity: p.stock,
-          unitPrice: `${p.sellingPrice.toLocaleString()} ${currency}`,
-          amount: `${(p.stock * p.sellingPrice).toLocaleString()} ${currency}`
-        }))
+        date: new Date().toLocaleDateString('ar-YE') + ' ' + new Date().toLocaleTimeString('ar-YE', { hour: '2-digit', minute: '2-digit' }),
+        paymentMethod: `كشف تفصيلي بأسعار الشراء والبيع والإجماليات`,
+        orientation: 'l', // نمط أفقي (Landscape) لضمان اتساع ووضوح جميع الأعمدة بدقة
+        customColumns,
+        customRows,
+        summaryBoxes,
+        subtotal: isPrivacyMode ? `إجمالي البيع: ${totalSellingSum.toLocaleString()} ${currency}` : `التكلفة: ${totalCostSum.toLocaleString()} ${currency}`,
+        discount: '0',
+        totalAmount: `${totalSellingSum.toLocaleString()} ${currency}`,
+        notes: `كشف جرد رسمي مدقق (${listToExport.length} صنف، ${totalPiecesCount} قطعة مخزنية).`,
+        footerNote: '✨ كشف جرد المستودع المعتمد - نظام سند المحاسبي'
       });
     } catch (e) {
-      console.error('Inventory PDF Print Error:', e);
+      console.error('Inventory PDF Export Error:', e);
     }
+  };
+
+  // 🎯 Export CSV Handler مرتب ككشف
+  const handleExportCSV = async () => {
+    soundManager.playSuccessChime();
+    const listToExport = filteredProducts.length > 0 ? filteredProducts : activeProductsList;
+    const headers = [
+      'م',
+      'اسم الصنف / السلعة',
+      'رمز الباركود',
+      'التصنيف',
+      'الكمية المتوفرة',
+      'الحد الأدنى',
+      'سعر الشراء (التكلفة)',
+      'سعر البيع',
+      'إجمالي الشراء (رأس المال)',
+      'إجمالي البيع (القيمة البيعية)',
+      'فارق الربح للقطعة',
+      'إجمالي الأرباح المتوقعة',
+      'حالة التوفر'
+    ];
+    const rows = listToExport.map((p, idx) => {
+      const itemCost = p.costPrice || 0;
+      const itemSelling = p.sellingPrice || 0;
+      const totalItemCost = (p.stock || 0) * itemCost;
+      const totalItemSelling = (p.stock || 0) * itemSelling;
+      const itemProfitMargin = itemSelling - itemCost;
+      const totalItemProfit = totalItemSelling - totalItemCost;
+      const statusText = p.stock <= 0 ? 'نافد' : p.stock <= p.minStock ? 'منخفض' : 'متوفر';
+
+      return [
+        idx + 1,
+        p.name || '',
+        p.barcode || '',
+        p.category || 'عام',
+        p.stock || 0,
+        p.minStock || 0,
+        isPrivacyMode ? '***' : itemCost,
+        itemSelling,
+        isPrivacyMode ? '***' : totalItemCost,
+        totalItemSelling,
+        isPrivacyMode ? '***' : itemProfitMargin,
+        isPrivacyMode ? '***' : totalItemProfit,
+        statusText
+      ];
+    });
+    const fileName = `كشف_جرد_المستودع_${new Date().toISOString().slice(0, 10)}.csv`;
+    await exportToCSV(fileName, headers, rows);
   };
 
   // 🎯 Voice Assistant Zara Speech Reading
@@ -425,22 +621,35 @@ export default function Inventory({
               <span>المنتهية والمنخفضة فقط</span>
             </button>
 
+            {/* زر تصدير كشف PDF معتمد */}
             <button
-              onClick={handleExportCSV}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm"
-              title="تصدير بيانات الجرد كملف اكسل/CSV"
+              id="inventory_export_pdf_btn"
+              onClick={handleExportPDF}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+              title="تصدير كشف جرد المستودع كملف PDF معتمد"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>كشف PDF 📄</span>
+            </button>
+
+            {/* زر تصدير إكسل Excel */}
+            <button
+              id="inventory_export_excel_btn"
+              onClick={handleExportExcel}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+              title="تصدير بيانات السلع والمخزون كملف إكسل Excel (.xlsx)"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>تصدير CSV / Excel</span>
+              <span>تصدير إكسل (Excel) 📊</span>
             </button>
 
             <button
-              onClick={handlePrintInventory}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-900 text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm"
-              title="طباعة جرد المستودع"
+              onClick={handleExportCSV}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-700 hover:bg-slate-800 text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+              title="تصدير بيانات الجرد كملف CSV"
             >
-              <Printer className="w-3.5 h-3.5" />
-              <span>طباعة الجرد</span>
+              <Download className="w-3.5 h-3.5" />
+              <span>CSV</span>
             </button>
 
             <button
@@ -481,11 +690,31 @@ export default function Inventory({
       {/* 3. INVENTORY PRODUCTS TABLE & CARDS (FULL WIDTH) */}
       <div className="w-full space-y-6">
         <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5">
             <h3 className="text-base font-bold text-slate-900">سجل بضائع ومحتويات المستودع</h3>
-            <span className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-100 px-3 py-1 rounded-full">
-              {filteredProducts.length} صنف مسجل
-            </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                id="header_inventory_pdf_btn"
+                onClick={handleExportPDF}
+                className="px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition flex items-center gap-1 cursor-pointer"
+                title="تصدير كشف PDF"
+              >
+                <FileText className="w-3.5 h-3.5 text-rose-600" />
+                <span>كشف PDF</span>
+              </button>
+              <button
+                id="header_inventory_excel_btn"
+                onClick={handleExportExcel}
+                className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition flex items-center gap-1 cursor-pointer"
+                title="تصدير إكسل Excel"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                <span>إكسل Excel</span>
+              </button>
+              <span className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-100 px-3 py-1 rounded-full">
+                {filteredProducts.length} صنف مسجل
+              </span>
+            </div>
           </div>
 
         {/* MOBILE CARDS VIEW (block md:hidden) */}
@@ -535,6 +764,18 @@ export default function Inventory({
                       التكلفة: <span className="font-bold font-mono text-slate-700">{isPrivacyMode ? '****' : p.costPrice.toLocaleString() + ' ' + currency}</span>
                     </div>
                     <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => {
+                          setSelectedBarcodeProductId(p.id);
+                          setShowLabelPrinterModal(true);
+                          soundManager.playScanBeep();
+                        }}
+                        className="p-2 rounded-xl text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition flex items-center gap-1 text-xs font-bold"
+                        title="طباعة ملصق باركود للسلعة"
+                      >
+                        <Barcode className="w-3.5 h-3.5" /> ملصق
+                      </button>
+
                       <button
                         onClick={() => {
                           setEditingProduct(p);
@@ -616,6 +857,18 @@ export default function Inventory({
                         <td className="py-3 pl-2 text-left flex justify-end gap-1.5">
                           <button
                             onClick={() => {
+                              setSelectedBarcodeProductId(p.id);
+                              setShowLabelPrinterModal(true);
+                              soundManager.playScanBeep();
+                            }}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition"
+                            title="طباعة وتصدير ملصق باركود للسلعة"
+                          >
+                            <Barcode className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            onClick={() => {
                               setEditingProduct(p);
                               soundManager.playScanBeep();
                             }}
@@ -650,11 +903,15 @@ export default function Inventory({
 
       <BarcodeLabelPrinterModal
         isOpen={showLabelPrinterModal}
-        onClose={() => setShowLabelPrinterModal(false)}
+        onClose={() => {
+          setShowLabelPrinterModal(false);
+          setSelectedBarcodeProductId('');
+        }}
         products={products}
         storeName={storeName}
         storeLogoUrl={storeLogoUrl}
         currency={currency}
+        initialProductId={selectedBarcodeProductId}
       />
 
       {/* FLOATING ACTION BUTTON (FAB) FOR ADDING PRODUCT */}

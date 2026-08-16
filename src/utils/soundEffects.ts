@@ -16,9 +16,7 @@ class SoundEffectsEngine {
       }
     }
     if (this.audioCtx && this.audioCtx.state === 'suspended') {
-      this.audioCtx.resume().catch((err) => {
-        console.warn('AudioContext resume catch:', err);
-      });
+      this.audioCtx.resume().catch(() => {});
     }
     return this.audioCtx;
   }
@@ -45,8 +43,8 @@ class SoundEffectsEngine {
 
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + 0.08);
-    } catch (e) {
-      console.warn('Barcode beep audio error:', e);
+    } catch {
+      // Audio safety catch
     }
   }
 
@@ -76,8 +74,8 @@ class SoundEffectsEngine {
         osc.start(startTime);
         osc.stop(startTime + 0.25);
       });
-    } catch (e) {
-      console.warn('Sale success audio error:', e);
+    } catch {
+      // Audio safety catch
     }
   }
 
@@ -109,8 +107,8 @@ class SoundEffectsEngine {
 
       playBuzz(0);
       playBuzz(0.18);
-    } catch (e) {
-      console.warn('Warning audio error:', e);
+    } catch {
+      // Audio safety catch
     }
   }
 }

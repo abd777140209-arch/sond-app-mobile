@@ -24,8 +24,8 @@ export async function requestCameraPermissionOnDemand(): Promise<boolean> {
   if (typeof window !== 'undefined' && (window as any).AndroidInterface?.requestPermissions === 'function') {
     try {
       (window as any).AndroidInterface.requestPermissions(['android.permission.CAMERA']);
-    } catch (e) {
-      console.warn('Android Native Camera Bridge warning:', e);
+    } catch {
+      // Safe fallback
     }
   }
 
@@ -35,8 +35,7 @@ export async function requestCameraPermissionOnDemand(): Promise<boolean> {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       stream.getTracks().forEach(track => track.stop());
       granted = true;
-    } catch (e) {
-      console.warn('Camera permission denied or unavailable:', e);
+    } catch {
       granted = false;
     }
   }
@@ -53,8 +52,8 @@ export async function requestStoragePermissionOnDemand(): Promise<boolean> {
     try {
       const req = await Filesystem.requestPermissions();
       return req.publicStorage === 'granted';
-    } catch (e) {
-      console.warn('Capacitor storage permissions request error:', e);
+    } catch {
+      // Safe fallback
     }
   }
 
@@ -66,8 +65,8 @@ export async function requestStoragePermissionOnDemand(): Promise<boolean> {
         'android.permission.READ_MEDIA_IMAGES'
       ]);
       return true;
-    } catch (e) {
-      console.warn('Android Native Storage Bridge warning:', e);
+    } catch {
+      // Safe fallback
     }
   }
   return true;

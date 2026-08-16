@@ -22,8 +22,13 @@ import {
   CheckCircle2,
   AlertCircle,
   SlidersHorizontal,
-  X
+  X,
+  FileSpreadsheet,
+  Image as ImageIcon,
+  Paperclip,
+  Eye
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { Transaction, Invoice } from '../types';
 import { soundManager } from '../utils/sound';
 import { saveAndShareFile } from '../utils/fileExport';
@@ -83,6 +88,7 @@ export default function Transactions({
   const [expenseDesc, setExpenseDesc] = useState('');
   const [expensePaymentMethod, setExpensePaymentMethod] = useState<PaymentMethodKey>('cash');
   const [expenseRefNumber, setExpenseRefNumber] = useState('');
+  const [proofModalImage, setProofModalImage] = useState<string | null>(null);
   const [expenseError, setExpenseError] = useState('');
 
   const handleExpenseSubmit = (e: React.FormEvent) => {
@@ -110,43 +116,163 @@ export default function Transactions({
     soundManager.playSuccessChime();
   };
 
-  // Export current transactions ledger as PDF
+  // Export current transactions ledger as Excel (.xlsx) ككشف حساب تفصيلي
+  const handleExportExcel = async () => {
+    soundManager.playSuccessChime();
+
+    const data: Record<string, string | number>[] = filteredTransactions.map((t, index) => {
+      const typeLabel = 
+        t.type === 'sale' ? 'مبيعات' :
+        t.type === 'payment' ? 'تحصيل دين' :
+        t.type === 'expense' ? 'مصروفات' :
+        t.type === 'refund' ? 'مرتجع مبيعات' : 'دخل صيانة';
+
+      const isExpenseOrRefund = t.type === 'expense' || t.type === 'refund';
+      const inflow = !isExpenseOrRefund ? t.amount : 0;
+      const outflow = isExpenseOrRefund ? t.amount : 0;
+      const net = !isExpenseOrRefund ? t.amount : -t.amount;
+      const methodLabel = formatPaymentMethodLabel(t.paymentMethod);
+
+      return {
+        'م': index + 1,
+        'رقم المرجع / المعرف': t.referenceNumber || t.id.slice(0, 8),
+        'التاريخ والوقت': new Date(t.date).toLocaleString('ar-YE'),
+        'نوع القيد / الحركة': typeLabel,
+        'البيان والتفاصيل': t.description || '',
+        'طريقة الدفع': methodLabel,
+        'المقبوضات (+)': inflow,
+        'المدفوعات (-)': outflow,
+        'التأثير المالي الصافي': net
+      };
+    });
+
+    // صف الإجماليات
+    const totalInflow = filteredTransactions
+      .filter(t => t.type !== 'expense' && t.type !== 'refund')
+      .reduce((sum, t) => sum + t.amount, 0);
+    const totalOutflow = filteredTransactions
+      .filter(t => t.type === 'expense' || t.type === 'refund')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    data.push({
+      'م': 'الإجمالي',
+      'رقم المرجع / المعرف': `عدد القيود: ${filteredTransactions.length}`,
+      'التاريخ والوقت': '-',
+      'نوع القيد / الحركة': '-',
+      'البيان والتفاصيل': 'إجمالي الحركات المحددة',
+      'طريقة الدفع': '-',
+      'المقبوضات (+)': totalInflow,
+      'المدفوعات (-)': totalOutflow,
+      'التأثير المالي الصافي': totalInflow - totalOutflow
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+
+    worksheet['!cols'] = [
+      { wch: 6 },  // م
+      { wch: 18 }, // رقم المرجع
+      { wch: 22 }, // التاريخ والوقت
+      { wch: 16 }, // نوع القيد
+      { wch: 34 }, // البيان
+      { wch: 16 }, // طريقة الدفع
+      { wch: 18 }, // المقبوضات
+      { wch: 18 }, // المدفوعات
+      { wch: 22 }  // التأثير المالي
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'كشف حركة الصندوق');
+
+    const excelBase64 = XLSX.write(workbook, { bookType: 'xlsx', type: 'base64' });
+    const fileName = `كشف_حركة_الصندوق_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    await saveAndShareFile({
+      fileName,
+      data: excelBase64,
+      isBase64: true,
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      title: 'كشف حركة الصندوق Excel',
+      text: `كشف حركة الصندوق والخزينة (${filteredTransactions.length} حركة) من تطبيق سند المحاسبي`
+    });
+  };
+
+  // Export current transactions ledger as PDF ككشف محاسبي منظم
   const handleExportPDF = async () => {
     soundManager.playScanBeep();
 
-    const pdfItems = filteredTransactions.map((t) => {
+    const inflowTotal = totalSales + totalPayments + totalMaintenance;
+    const outflowTotal = totalExpenses + totalRefunds;
+
+    const customColumns = [
+      { key: 'index', label: 'م', width: '35px', align: 'center' as const },
+      { key: 'ref', label: 'رقم المرجع', width: '85px', align: 'center' as const },
+      { key: 'dateTime', label: 'التاريخ والوقت', width: '115px', align: 'center' as const },
+      { key: 'type', label: 'نوع الحركة', width: '85px', align: 'center' as const },
+      { key: 'description', label: 'البيان والتفاصيل', align: 'right' as const },
+      { key: 'method', label: 'طريقة الدفع', width: '85px', align: 'center' as const },
+      { key: 'inflow', label: 'مقبوضات (+)', width: '90px', align: 'center' as const },
+      { key: 'outflow', label: 'مدفوعات (-)', width: '90px', align: 'center' as const }
+    ];
+
+    const customRows: Record<string, string | number>[] = filteredTransactions.map((t, idx) => {
       const typeLabel = 
         t.type === 'expense' ? 'مصروف' :
         t.type === 'refund' ? 'مرتجع' :
         t.type === 'payment' ? 'تحصيل دين' :
         t.type === 'maintenance_income' ? 'صيانة' : 'مبيعات';
 
-      const prefix = (t.type === 'expense' || t.type === 'refund') ? '-' : '+';
+      const isOut = t.type === 'expense' || t.type === 'refund';
+      const methodLabel = formatPaymentMethodLabel(t.paymentMethod);
 
       return {
-        description: `${t.description} (${typeLabel}) - ${new Date(t.date).toLocaleDateString('ar-YE')} ${new Date(t.date).toLocaleTimeString('ar-YE', { hour: '2-digit', minute: '2-digit' })}`,
-        quantity: 1,
-        unitPrice: `${t.amount.toLocaleString()} ${currency}`,
-        amount: `${prefix}${t.amount.toLocaleString()} ${currency}`
+        index: idx + 1,
+        ref: t.referenceNumber || t.id.slice(0, 8),
+        dateTime: new Date(t.date).toLocaleDateString('ar-YE') + ' ' + new Date(t.date).toLocaleTimeString('ar-YE', { hour: '2-digit', minute: '2-digit' }),
+        type: typeLabel,
+        description: t.description || 'حركة مالية',
+        method: methodLabel,
+        inflow: !isOut ? `${t.amount.toLocaleString()} ${currency}` : '-',
+        outflow: isOut ? `${t.amount.toLocaleString()} ${currency}` : '-'
       };
     });
 
+    // إضافة صف الإجمالي النهائي المعتمد في ذيل جدول حركة الصندوق
+    customRows.push({
+      index: 'الإجمالي',
+      ref: `القيود: ${filteredTransactions.length}`,
+      dateTime: '—',
+      type: '—',
+      description: `صافي سيولة الخزينة: ${netCashFlow.toLocaleString()} ${currency}`,
+      method: '—',
+      inflow: `${inflowTotal.toLocaleString()} ${currency}`,
+      outflow: `${outflowTotal.toLocaleString()} ${currency}`
+    });
+
+    const summaryBoxes = [
+      { label: 'إجمالي المقبوضات (+)', value: `${inflowTotal.toLocaleString()} ${currency}`, color: '#059669', bg: '#ecfdf5' },
+      { label: 'إجمالي المصاريف والمرتجع (-)', value: `${outflowTotal.toLocaleString()} ${currency}`, color: '#dc2626', bg: '#fef2f2' },
+      { label: 'صافي سيولة الصندوق', value: `${netCashFlow.toLocaleString()} ${currency}`, color: '#0284c7', bg: '#f0f9ff' },
+      { label: 'عدد الحركات المقيدة', value: `${filteredTransactions.length} قيد مالي`, color: '#6366f1', bg: '#eef2ff' }
+    ];
+
     try {
       await generateAndSharePDF({
-        title: 'تقرير الحركة المالية والصندوق',
-        storeName: storeName || 'القيصر للأجهزة الذكية والصيانة والبرمجة',
+        title: 'كشف حركة الصندوق والخزينة العامة',
+        storeName: storeName || 'سند المحاسبي',
         invoiceNumber: `صندوق-${new Date().toISOString().slice(0, 10)}`,
-        customerName: 'تقرير حركة الصندوق والخزينة اليومية',
+        customerName: 'إدارة الرقابة المالية والمراجعة الحسابية',
         phone: '',
-        date: new Date().toLocaleDateString('ar-YE'),
-        paymentMethod: `إجمالي الحركات: ${filteredTransactions.length}`,
-        subtotal: `المقبوضات والصيانة: ${(totalSales + totalPayments + totalMaintenance).toLocaleString()} ${currency}`,
-        discount: `المصاريف والمرتجع: ${(totalExpenses + totalRefunds).toLocaleString()} ${currency}`,
+        date: new Date().toLocaleDateString('ar-YE') + ' ' + new Date().toLocaleTimeString('ar-YE', { hour: '2-digit', minute: '2-digit' }),
+        paymentMethod: `كشف تفصيلي لحركات الصندوق النقدية والإلكترونية`,
+        orientation: 'p',
+        customColumns,
+        customRows,
+        summaryBoxes,
+        subtotal: `المقبوضات: ${inflowTotal.toLocaleString()} ${currency}`,
+        discount: `المصاريف: ${outflowTotal.toLocaleString()} ${currency}`,
         totalAmount: `${netCashFlow.toLocaleString()} ${currency}`,
-        notes: `كشف تفصيلي بجميع الحركات المالية المقيدة بدفتر الصندوق.`,
-        items: pdfItems.length > 0 ? pdfItems : [
-          { description: 'لا توجد حركات مالية مسجلة', quantity: 0, unitPrice: '-', amount: '0' }
-        ]
+        notes: `كشف حركة الخزينة والصندوق المعتمد لكافة المقبوضات والمدفوعات المسجلة حتى تاريخه.`,
+        footerNote: '✨ كشف القيود وحركة الصندوق اليومية - نظام سند المحاسبي'
       });
     } catch (e) {
       console.error('PDF export failed:', e);
@@ -156,18 +282,20 @@ export default function Transactions({
   // Export current transactions ledger as CSV text
   const handleExportCSV = async () => {
     soundManager.playSuccessChime();
-    // Explicit UTF-8 BOM prefix (\ufeff) to prevent Arabic text encoding corruption in Mobile Excel
     let csv = '\ufeff';
-    csv += 'المعرف,التاريخ والوقت,نوع القيد,البيان والوصف,المبلغ\n';
+    csv += 'م,المعرف / المرجع,التاريخ والوقت,نوع القيد,البيان والوصف,طريقة الدفع,المبلغ,التأثير\n';
 
-    filteredTransactions.forEach(t => {
+    filteredTransactions.forEach((t, idx) => {
       const typeLabel = 
         t.type === 'sale' ? 'مبيعات' :
         t.type === 'payment' ? 'تحصيل دين' :
         t.type === 'expense' ? 'مصروفات' :
         t.type === 'refund' ? 'مرتجع' : 'صيانة';
 
-      csv += `"${t.id}","${new Date(t.date).toLocaleString('ar-YE')}","${typeLabel}","${t.description.replace(/"/g, '""')}","${t.amount}"\n`;
+      const isOut = t.type === 'expense' || t.type === 'refund';
+      const methodLabel = formatPaymentMethodLabel(t.paymentMethod);
+
+      csv += `"${idx + 1}","${t.referenceNumber || t.id}","${new Date(t.date).toLocaleString('ar-YE')}","${typeLabel}","${(t.description || '').replace(/"/g, '""')}","${methodLabel}","${t.amount}","${isOut ? '-' : '+'}"\n`;
     });
 
     const fileName = `كشف_الحركات_المالية_${new Date().toISOString().split('T')[0]}.csv`;
@@ -245,7 +373,15 @@ export default function Transactions({
               className="px-3.5 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-red-200"
             >
               <FileText className="w-4 h-4 text-red-600" />
-              <span>تصدير PDF</span>
+              <span>كشف PDF</span>
+            </button>
+
+            <button
+              onClick={handleExportExcel}
+              className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-emerald-200"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+              <span>كشف إكسل Excel</span>
             </button>
 
             <button
@@ -503,13 +639,25 @@ export default function Transactions({
                         </span>
                       </div>
 
-                      <div className="font-bold text-slate-900 text-xs flex justify-between items-center">
+                      <div className="font-bold text-slate-900 text-xs flex justify-between items-center flex-wrap gap-1">
                         <span>{t.description}</span>
-                        {t.referenceNumber && (
-                          <span className="text-[10px] font-mono text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                            #{t.referenceNumber}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {t.referenceNumber && (
+                            <span className="text-[10px] font-mono text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                              #{t.referenceNumber}
+                            </span>
+                          )}
+                          {t.proofImage && (
+                            <button
+                              type="button"
+                              onClick={() => setProofModalImage(t.proofImage!)}
+                              className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              <ImageIcon className="w-3 h-3 text-blue-600" />
+                              <span>السند</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       <div className="flex justify-between items-center pt-2 border-t border-slate-200/60 font-mono">
@@ -588,12 +736,25 @@ export default function Transactions({
                           )}
                           {visibleLedgerCols.description && (
                             <td className="py-3 font-medium text-slate-800">
-                              <span>{t.description}</span>
-                              {t.referenceNumber && (
-                                <span className="mr-2 font-mono text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                                  #{t.referenceNumber}
-                                </span>
-                              )}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span>{t.description}</span>
+                                {t.referenceNumber && (
+                                  <span className="font-mono text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                    #{t.referenceNumber}
+                                  </span>
+                                )}
+                                {t.proofImage && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setProofModalImage(t.proofImage!)}
+                                    className="px-1.5 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition"
+                                    title="معاينة وتكبير صورة السند / الإيداع"
+                                  >
+                                    <ImageIcon className="w-3 h-3 text-blue-600" />
+                                    <span>السند</span>
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           )}
                           {visibleLedgerCols.amount && (
@@ -729,7 +890,19 @@ export default function Transactions({
                           </td>
                         )}
                         {visibleInvoiceCols.actions && (
-                          <td className="py-3 pl-2 text-left flex justify-end gap-1.5">
+                          <td className="py-3 pl-2 text-left flex justify-end gap-1.5 items-center">
+                            {inv.proofImage && (
+                              <button
+                                type="button"
+                                onClick={() => setProofModalImage(inv.proofImage!)}
+                                className="px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold border border-emerald-200 text-[10px] flex items-center gap-1 transition cursor-pointer"
+                                title="عرض صورة السند / الإيداع المرفق"
+                              >
+                                <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>السند</span>
+                              </button>
+                            )}
+
                             <button
                               onClick={() => onViewInvoice(inv)}
                               className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 font-bold hover:bg-blue-100 transition text-[10px] flex items-center gap-1"
@@ -904,6 +1077,55 @@ export default function Transactions({
                   <span>ترحيل بند المصاريف</span>
                 </button>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Proof Image Fullscreen View Modal */}
+      <AnimatePresence>
+        {proofModalImage && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/85 backdrop-blur-xs p-3 sm:p-6">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl"
+            >
+              <div className="p-3.5 bg-slate-950 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+                <div className="flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs font-bold">صورة سند التحويل / إشعار الإيداع البنكي</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setProofModalImage(null)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-3 overflow-auto flex items-center justify-center bg-slate-950/60 max-h-[70vh]">
+                <img
+                  src={proofModalImage}
+                  alt="صورة السند بدقة كاملة"
+                  className="max-h-[65vh] w-auto object-contain rounded-xl shadow-lg border border-slate-800"
+                />
+              </div>
+
+              <div className="p-3 bg-slate-900 border-t border-slate-800 flex justify-between items-center gap-2">
+                <span className="text-[11px] text-slate-400 font-mono">
+                  إشعار تسديد / تحويل مالي
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setProofModalImage(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold cursor-pointer transition"
+                >
+                  إغلاق المعاينة
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

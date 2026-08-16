@@ -87,6 +87,21 @@ export default function App() {
       parsed.storeLogoUrl = savedLogo;
     }
 
+    const savedAddress = localStorage.getItem('smart_accounting_address') || localStorage.getItem('sanad_store_address');
+    if (savedAddress && !parsed.address) {
+      parsed.address = savedAddress;
+    }
+
+    const savedPhone = localStorage.getItem('smart_accounting_phone') || localStorage.getItem('sanad_store_phone');
+    if (savedPhone && !parsed.phone) {
+      parsed.phone = savedPhone;
+    }
+
+    const savedStoreName = localStorage.getItem('smart_accounting_store_name');
+    if (savedStoreName && !parsed.storeName) {
+      parsed.storeName = savedStoreName;
+    }
+
     const savedLayout = (localStorage.getItem('app_layout_preference') as 'mobile' | 'desktop') ||
                         (localStorage.getItem('app_interface_mode') as 'mobile' | 'desktop');
     if (savedLayout === 'desktop' || savedLayout === 'mobile') {
@@ -473,8 +488,8 @@ export default function App() {
             handleLicenseRevoked(checkRes.message, checkRes.data);
           }
         }
-      } catch (err) {
-        console.warn('Periodic license check warning:', err);
+      } catch {
+        // Safe check
       }
     };
 
@@ -491,13 +506,12 @@ export default function App() {
       try {
         const handle = CapacitorApp.addListener('appStateChange', (state) => {
           if (state.isActive) {
-            console.log('[App Resume] App returned to foreground. Waiting for server sync before re-checking...');
             setTimeout(checkActiveCloudLicense, 2000);
           }
         });
         unsubAppResume = () => { handle.then(h => h.remove()); };
-      } catch (e) {
-        console.warn('Capacitor App state change listener error:', e);
+      } catch {
+        // Fallback
       }
     }
 
@@ -576,7 +590,6 @@ export default function App() {
         if (localSched === 'monthly') intervalMs = 30 * 24 * 60 * 60 * 1000;
 
         if (now - lastLocalMs >= intervalMs) {
-          console.log(`[Scheduled Local Backup] Due for frequency (${localSched}). Creating silent local backup...`);
           const backupObj = { settings, products, customers, invoices, payments, transactions, exportedAt: nowIso };
           const jsonStr = JSON.stringify(backupObj, null, 2);
           const fileName = `sanad_backup_auto_${getBackupTimestamp()}.json`;
@@ -597,7 +610,6 @@ export default function App() {
         if (driveSched === 'monthly') intervalMs = 30 * 24 * 60 * 60 * 1000;
 
         if (now - lastDriveMs >= intervalMs) {
-          console.log(`[Scheduled Drive Backup] Due for frequency (${driveSched}). Syncing cloud drive backup...`);
           const backupObj = { settings, products, customers, invoices, payments, transactions, exportedAt: nowIso };
           const jsonStr = JSON.stringify(backupObj, null, 2);
           localStorage.setItem('sanad_drive_last_backup_data', jsonStr);
@@ -724,6 +736,18 @@ export default function App() {
     localStorage.setItem('smart_accounting_settings', JSON.stringify(newSettings));
     if (newSettings.storeLogoUrl) {
       localStorage.setItem('smart_accounting_company_logo', newSettings.storeLogoUrl);
+      localStorage.setItem('sanad_store_logo', newSettings.storeLogoUrl);
+    }
+    if (newSettings.address) {
+      localStorage.setItem('smart_accounting_address', newSettings.address);
+      localStorage.setItem('sanad_store_address', newSettings.address);
+    }
+    if (newSettings.phone) {
+      localStorage.setItem('smart_accounting_phone', newSettings.phone);
+      localStorage.setItem('sanad_store_phone', newSettings.phone);
+    }
+    if (newSettings.storeName) {
+      localStorage.setItem('smart_accounting_store_name', newSettings.storeName);
     }
     setSettings(newSettings);
     if (license.licenseKey) saveStoreSettings(license.licenseKey, newSettings);
@@ -758,6 +782,7 @@ export default function App() {
       date: saleData.date,
       paymentMethod: saleData.paymentMethod || (saleData.type === 'debt' ? 'debt' : 'cash'),
       referenceNumber: saleData.referenceNumber,
+      proofImage: saleData.proofImage,
       description: `مبيعات فاتورة ${nextInvoiceNum} لـ ${saleData.customerName}`
     };
 

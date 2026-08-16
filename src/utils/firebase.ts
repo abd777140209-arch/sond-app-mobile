@@ -342,8 +342,7 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
     }
 
     return { success: false, message: 'KEY_NOT_FOUND' };
-  } catch (error) {
-    console.warn('SaaS Verification fallback check:', error);
+  } catch {
     if (typeof localStorage !== 'undefined') {
       const rawLocal = localStorage.getItem('smart_accounting_license_v1');
       if (rawLocal && rawLocal.includes(cleanKey) && !rawLocal.includes('"status":"unlicensed"')) {
@@ -374,10 +373,7 @@ export function listenToLicenseOnCloud(
         // 🔒 CRITICAL: Only trigger 'deleted' if the server explicitly confirms document deletion (!isFromCache).
         // If snapshot is from local cache before server sync, DO NOT revoke license.
         if (!isFromCache) {
-          console.warn(`[License Realtime] Document ${cleanKey} confirmed DELETED on Cloud Server! Locking system...`);
           onStatusChange('deleted');
-        } else {
-          console.log(`[License Realtime] Document ${cleanKey} not in local cache yet (offline/resume). Keeping local active license.`);
         }
       } else {
         const data = docSnap.data() as CloudLicense;
@@ -389,13 +385,12 @@ export function listenToLicenseOnCloud(
           onStatusChange('active', data);
         }
       }
-    }, (error) => {
-      console.warn('Real-time license listener error:', error);
+    }, () => {
+      // Listener fallback
     });
 
     return unsubscribe;
-  } catch (err) {
-    console.warn('Failed to attach license snapshot listener:', err);
+  } catch {
     return () => {};
   }
 }
