@@ -81,7 +81,7 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
-        const maxDim = 1024;
+        const maxDim = 720;
         if (width > maxDim || height > maxDim) {
           if (width > height) {
             height = Math.round((height * maxDim) / width);
@@ -96,7 +96,7 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.65);
           setProofImage(compressedDataUrl);
           soundManager.playSuccessChime();
         }

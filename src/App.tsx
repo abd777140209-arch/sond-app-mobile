@@ -76,8 +76,14 @@ import {
   syncStoreSettings 
 } from './utils/firebaseSync';
 import { listenToLicenseOnCloud, checkLicenseOnCloud, CloudLicense } from './utils/firebase';
+import { safeStorage, cleanUpStorageQuota } from './utils/safeStorage';
 
 export default function App() {
+  // 🧹 Run storage cleanup on boot to ensure plenty of quota
+  useEffect(() => {
+    cleanUpStorageQuota();
+  }, []);
+
   const [settings, setSettings] = useState<SystemSettings>(() => {
     const data = localStorage.getItem('smart_accounting_settings');
     const parsed = data ? JSON.parse(data) : { ...DEFAULT_SETTINGS };
@@ -239,47 +245,47 @@ export default function App() {
   });
 
   useEffect(() => {
-    localStorage.setItem('smart_accounting_products', JSON.stringify(products));
+    safeStorage.setItem('smart_accounting_products', JSON.stringify(products));
   }, [products]);
 
   useEffect(() => {
-    localStorage.setItem('smart_accounting_customers', JSON.stringify(customers));
+    safeStorage.setItem('smart_accounting_customers', JSON.stringify(customers));
   }, [customers]);
 
   useEffect(() => {
-    localStorage.setItem('smart_accounting_invoices', JSON.stringify(invoices));
+    safeStorage.setItem('smart_accounting_invoices', JSON.stringify(invoices));
   }, [invoices]);
 
   useEffect(() => {
-    localStorage.setItem('smart_accounting_payments', JSON.stringify(payments));
+    safeStorage.setItem('smart_accounting_payments', JSON.stringify(payments));
   }, [payments]);
 
   useEffect(() => {
-    localStorage.setItem('smart_accounting_transactions', JSON.stringify(transactions));
+    safeStorage.setItem('smart_accounting_transactions', JSON.stringify(transactions));
   }, [transactions]);
 
   useEffect(() => {
-    localStorage.setItem('smart_accounting_maintenance', JSON.stringify(maintenanceOrders));
+    safeStorage.setItem('smart_accounting_maintenance', JSON.stringify(maintenanceOrders));
   }, [maintenanceOrders]);
 
   useEffect(() => {
-    localStorage.setItem('smart_accounting_employees', JSON.stringify(employees));
+    safeStorage.setItem('smart_accounting_employees', JSON.stringify(employees));
   }, [employees]);
 
   useEffect(() => {
-    localStorage.setItem('smart_accounting_payroll', JSON.stringify(payrollRecords));
+    safeStorage.setItem('smart_accounting_payroll', JSON.stringify(payrollRecords));
   }, [payrollRecords]);
 
   useEffect(() => {
-    localStorage.setItem('smart_accounting_users', JSON.stringify(users));
+    safeStorage.setItem('smart_accounting_users', JSON.stringify(users));
   }, [users]);
 
   useEffect(() => {
-    localStorage.setItem('smart_accounting_current_user', JSON.stringify(currentUser));
+    safeStorage.setItem('smart_accounting_current_user', JSON.stringify(currentUser));
   }, [currentUser]);
 
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
-    const data = localStorage.getItem('smart_accounting_audit_logs');
+    const data = safeStorage.getItem('smart_accounting_audit_logs');
     return data ? JSON.parse(data) : [
       {
         id: 'log-1',
@@ -294,7 +300,7 @@ export default function App() {
   });
 
   useEffect(() => {
-    localStorage.setItem('smart_accounting_audit_logs', JSON.stringify(auditLogs));
+    safeStorage.setItem('smart_accounting_audit_logs', JSON.stringify(auditLogs.slice(0, 50)));
   }, [auditLogs]);
 
   const addAuditLog = (actionType: string, actionLabel: string, details?: string) => {
@@ -612,8 +618,10 @@ export default function App() {
         if (now - lastDriveMs >= intervalMs) {
           const backupObj = { settings, products, customers, invoices, payments, transactions, exportedAt: nowIso };
           const jsonStr = JSON.stringify(backupObj, null, 2);
-          localStorage.setItem('sanad_drive_last_backup_data', jsonStr);
+          const fileName = `sanad_backup_drive_${getBackupTimestamp()}.json`;
+          const folder = settings.backupFolderPath || 'Documents/SanadAccounting';
 
+          await saveSilentBackupFile(fileName, jsonStr, folder);
           updatedSettings.lastDriveBackupDate = nowIso;
           updateNeeded = true;
         }
@@ -621,7 +629,7 @@ export default function App() {
 
       if (updateNeeded) {
         setSettings(updatedSettings);
-        localStorage.setItem('smart_accounting_settings', JSON.stringify(updatedSettings));
+        safeStorage.setItem('smart_accounting_settings', JSON.stringify(updatedSettings));
       }
     };
 
@@ -733,21 +741,18 @@ export default function App() {
   }, [activeTab, activeInvoice, showPinCheckModal, showPrivacyPinModal, showDeveloperModal]);
 
   const handleSaveSettings = (newSettings: SystemSettings) => {
-    localStorage.setItem('smart_accounting_settings', JSON.stringify(newSettings));
-    if (newSettings.storeLogoUrl) {
-      localStorage.setItem('smart_accounting_company_logo', newSettings.storeLogoUrl);
-      localStorage.setItem('sanad_store_logo', newSettings.storeLogoUrl);
+    safeStorage.setItem('smart_accounting_settings', JSON.stringify(newSettings));
+    if (newSettings.storeLogoUrl && newSettings.storeLogoUrl.length < 60000) {
+      safeStorage.setItem('smart_accounting_company_logo', newSettings.storeLogoUrl);
     }
     if (newSettings.address) {
-      localStorage.setItem('smart_accounting_address', newSettings.address);
-      localStorage.setItem('sanad_store_address', newSettings.address);
+      safeStorage.setItem('smart_accounting_address', newSettings.address);
     }
     if (newSettings.phone) {
-      localStorage.setItem('smart_accounting_phone', newSettings.phone);
-      localStorage.setItem('sanad_store_phone', newSettings.phone);
+      safeStorage.setItem('smart_accounting_phone', newSettings.phone);
     }
     if (newSettings.storeName) {
-      localStorage.setItem('smart_accounting_store_name', newSettings.storeName);
+      safeStorage.setItem('smart_accounting_store_name', newSettings.storeName);
     }
     setSettings(newSettings);
     if (license.licenseKey) saveStoreSettings(license.licenseKey, newSettings);

@@ -57,6 +57,7 @@ import { DEFAULT_CURRENCIES } from '../utils/seedData';
 import { soundManager } from '../utils/sound';
 import { loadLicenseLocally, saveLicenseLocally, generateHWID, LicenseInfo } from '../utils/licensing';
 import { activateLicenseOnCloud } from '../utils/firebase';
+import { safeStorage } from '../utils/safeStorage';
 
 interface SettingsProps {
   settings: SystemSettings;
@@ -387,7 +388,7 @@ export default function Settings({
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const maxDim = 320;
+      const maxDim = 240;
       let width = img.width;
       let height = img.height;
 
@@ -410,9 +411,7 @@ export default function Settings({
         ctx.drawImage(img, 0, 0, width, height);
         const compressedBase64 = canvas.toDataURL('image/png');
         setStoreLogoUrl(compressedBase64);
-        localStorage.setItem('smart_accounting_company_logo', compressedBase64);
-        localStorage.setItem('sanad_store_logo', compressedBase64);
-        localStorage.setItem('sanad_app_logo_timestamp', String(Date.now()));
+        safeStorage.setItem('smart_accounting_company_logo', compressedBase64);
         soundManager.playSuccessChime();
       }
     };
@@ -505,7 +504,7 @@ export default function Settings({
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const maxDim = 320;
+        const maxDim = 240;
         let width = img.width;
         let height = img.height;
 
@@ -528,8 +527,7 @@ export default function Settings({
           ctx.drawImage(img, 0, 0, width, height);
           const compressedBase64 = canvas.toDataURL('image/png');
           setStoreLogoUrl(compressedBase64);
-          localStorage.setItem('smart_accounting_company_logo', compressedBase64);
-          localStorage.setItem('sanad_store_logo', compressedBase64);
+          safeStorage.setItem('smart_accounting_company_logo', compressedBase64);
           soundManager.playSuccessChime();
         }
       };
@@ -542,22 +540,18 @@ export default function Settings({
     e.preventDefault();
     soundManager.playSuccessChime();
     
-    localStorage.setItem('sond_biometrics_enabled', isBiometricEnabled ? 'true' : 'false');
-    localStorage.setItem('SanadAccounting', backupFolderPath.trim() || 'Documents/SanadAccounting');
-    if (storeLogoUrl) {
-      localStorage.setItem('smart_accounting_company_logo', storeLogoUrl);
-      localStorage.setItem('sanad_store_logo', storeLogoUrl);
+    safeStorage.setItem('sond_biometrics_enabled', isBiometricEnabled ? 'true' : 'false');
+    safeStorage.setItem('SanadAccounting', backupFolderPath.trim() || 'Documents/SanadAccounting');
+    if (storeLogoUrl && storeLogoUrl.length < 60000) {
+      safeStorage.setItem('smart_accounting_company_logo', storeLogoUrl);
     } else {
-      localStorage.removeItem('smart_accounting_company_logo');
-      localStorage.removeItem('sanad_store_logo');
+      safeStorage.removeItem('smart_accounting_company_logo');
     }
 
-    localStorage.setItem('sanad_invoice_footer_note', invoiceFooterNote);
-    localStorage.setItem('smart_accounting_address', address.trim());
-    localStorage.setItem('sanad_store_address', address.trim());
-    localStorage.setItem('smart_accounting_phone', phone.trim());
-    localStorage.setItem('sanad_store_phone', phone.trim());
-    localStorage.setItem('smart_accounting_store_name', storeName.trim());
+    safeStorage.setItem('sanad_invoice_footer_note', invoiceFooterNote);
+    safeStorage.setItem('smart_accounting_address', address.trim());
+    safeStorage.setItem('smart_accounting_phone', phone.trim());
+    safeStorage.setItem('smart_accounting_store_name', storeName.trim());
 
     onSaveSettings({
       storeName: storeName.trim(),

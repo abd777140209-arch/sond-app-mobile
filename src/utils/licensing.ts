@@ -5,6 +5,7 @@
 
 import { soundManager } from './sound';
 import { normalizeHWID, isUnboundHwid } from './firebase';
+import { safeStorage } from './safeStorage';
 
 export interface LicenseInfo {
   licenseKey: string;
@@ -178,12 +179,12 @@ const STORAGE_KEY = 'smart_accounting_license_v1';
 export const saveLicenseLocally = (info: LicenseInfo) => {
   const jsonStr = JSON.stringify(info);
   const secureStr = obfuscate(jsonStr);
-  localStorage.setItem(STORAGE_KEY, secureStr);
+  safeStorage.setItem(STORAGE_KEY, secureStr);
 };
 
 // Load license info safely
 export const loadLicenseLocally = (): LicenseInfo => {
-  const secureStr = localStorage.getItem(STORAGE_KEY);
+  const secureStr = safeStorage.getItem(STORAGE_KEY);
   const hwid = generateHWID();
 
   if (!secureStr) {
