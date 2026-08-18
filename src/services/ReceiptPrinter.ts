@@ -282,11 +282,6 @@ export const buildSalesInvoiceThermalHTML = (
 
   const footerNote = invoiceData.notes || localStorage.getItem('sanad_invoice_footer_note') || '';
 
-  // Barcode decorative lines pattern
-  const barcodeBars = [2,1,3,1,2,4,1,3,2,1,3,4,1,2,1,3,2,4,1,1]
-    .map(w => `<div style="display:inline-block; width:${w}px; height:18px; background-color:#000; margin:0 0.5px;"></div>`)
-    .join('');
-
   // Resolved QR code (either generated PNG, or passed URL)
   const resolvedQr = qrPngUrl || invoiceData.qrCodeUrl || '';
 
@@ -421,10 +416,6 @@ export const buildSalesInvoiceThermalHTML = (
       <div class="badge">✓ تم الحفظ بنجاح في النظام المحاسبي للكمبيوتر</div>
       <div class="dev-tag">برمجة وتطوير م. عبدالمجيد المحواشي (الجمهورية اليمنية)</div>
 
-      <div class="barcode-container">
-        ${barcodeBars}
-      </div>
-
       ${resolvedQr ? `
         <div class="qr-box">
           <img src="${resolvedQr}" style="width: 72px; height: 72px; display: block; image-rendering: pixelated;" alt="QR Code" />
@@ -520,10 +511,6 @@ export const generateSalesInvoiceThermalPDF = async (
 
   const footerNote = invoiceData.notes || localStorage.getItem('sanad_invoice_footer_note') || '';
 
-  const barcodeBars = [2,1,3,1,2,4,1,3,2,1,3,4,1,2,1,3,2,4,1,1]
-    .map(w => `<div style="display:inline-block; width:${w * 1.5}px; height:20px; background-color:#000; margin:0 0.5px;"></div>`)
-    .join('');
-
   // إنشاء عنصر DOM معزول ومنسق بأعلى جودة
   const temporaryContainer = document.createElement('div');
   temporaryContainer.setAttribute('data-export-container', 'true');
@@ -616,10 +603,6 @@ export const generateSalesInvoiceThermalPDF = async (
 
     <div style="font-size: 10px; font-weight: 900; color: #059669; margin-top: 10px;">✓ تم الحفظ بنجاح في النظام المحاسبي للكمبيوتر</div>
     <div style="font-size: 9.5px; color: #6b7280; margin-top: 3px;">برمجة وتطوير م. عبدالمجيد المحواشي (الجمهورية اليمنية)</div>
-
-    <div style="margin: 10px 0 8px 0; text-align: center;">
-      ${barcodeBars}
-    </div>
 
     ${qrPngUrl ? `
       <div style="margin: 10px auto 4px auto; display: inline-block; padding: 6px; background: #ffffff; border: 1.5px solid #9ca3af; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">

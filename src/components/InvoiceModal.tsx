@@ -466,13 +466,6 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
             <p className="text-[9px] text-gray-500">
               برمجة وتطوير م. عبدالمجيد المحواشي (الجمهورية اليمنية)
             </p>
-            <div className="flex justify-center my-1">
-              <div className="w-28 h-4 flex gap-0.5 justify-center items-center opacity-70">
-                {[2,1,3,1,2,4,1,3,2,1,3,4,1,2,1,3,2,4,1,1].map((w, i) => (
-                  <div key={i} className="bg-black h-full" style={{ width: `${w}px` }}></div>
-                ))}
-              </div>
-            </div>
             <div className="flex flex-col items-center justify-center my-2 pt-1 border-t border-dashed border-gray-300">
               <div className="p-1 bg-white border border-gray-300 rounded-lg shadow-xs">
                 <QRCodeSVG
