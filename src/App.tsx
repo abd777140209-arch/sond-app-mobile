@@ -980,7 +980,7 @@ export default function App() {
 
     if (restored.settings && typeof restored.settings === 'object') {
       setSettings(restored.settings);
-      localStorage.setItem('smart_accounting_settings', JSON.stringify(restored.settings));
+      safeStorage.setItem('smart_accounting_settings', JSON.stringify(restored.settings));
       if (license.licenseKey) {
         saveStoreSettings(license.licenseKey, restored.settings);
       }
@@ -988,7 +988,7 @@ export default function App() {
     }
     if (Array.isArray(restored.products)) {
       setProducts(restored.products);
-      localStorage.setItem('smart_accounting_products', JSON.stringify(restored.products));
+      safeStorage.setItem('smart_accounting_products', JSON.stringify(restored.products));
       if (license.licenseKey) {
         restored.products.forEach((p: any) => p && p.id && saveStoreDocument(license.licenseKey, 'products', p.id, p));
       }
@@ -996,7 +996,7 @@ export default function App() {
     }
     if (Array.isArray(restored.customers)) {
       setCustomers(restored.customers);
-      localStorage.setItem('smart_accounting_customers', JSON.stringify(restored.customers));
+      safeStorage.setItem('smart_accounting_customers', JSON.stringify(restored.customers));
       if (license.licenseKey) {
         restored.customers.forEach((c: any) => c && c.id && saveStoreDocument(license.licenseKey, 'customers', c.id, c));
       }
@@ -1004,7 +1004,7 @@ export default function App() {
     }
     if (Array.isArray(restored.invoices)) {
       setInvoices(restored.invoices);
-      localStorage.setItem('smart_accounting_invoices', JSON.stringify(restored.invoices));
+      safeStorage.setItem('smart_accounting_invoices', JSON.stringify(restored.invoices));
       if (license.licenseKey) {
         restored.invoices.forEach((inv: any) => inv && inv.id && saveStoreDocument(license.licenseKey, 'invoices', inv.id, inv));
       }
@@ -1012,7 +1012,7 @@ export default function App() {
     }
     if (Array.isArray(restored.payments)) {
       setPayments(restored.payments);
-      localStorage.setItem('smart_accounting_payments', JSON.stringify(restored.payments));
+      safeStorage.setItem('smart_accounting_payments', JSON.stringify(restored.payments));
       if (license.licenseKey) {
         restored.payments.forEach((pay: any) => pay && pay.id && saveStoreDocument(license.licenseKey, 'payments', pay.id, pay));
       }
@@ -1020,7 +1020,7 @@ export default function App() {
     }
     if (Array.isArray(restored.transactions)) {
       setTransactions(restored.transactions);
-      localStorage.setItem('smart_accounting_transactions', JSON.stringify(restored.transactions));
+      safeStorage.setItem('smart_accounting_transactions', JSON.stringify(restored.transactions));
       if (license.licenseKey) {
         restored.transactions.forEach((tx: any) => tx && tx.id && saveStoreDocument(license.licenseKey, 'transactions', tx.id, tx));
       }
@@ -1028,7 +1028,7 @@ export default function App() {
     }
     if (Array.isArray(restored.maintenanceOrders)) {
       setMaintenanceOrders(restored.maintenanceOrders);
-      localStorage.setItem('smart_accounting_maintenance', JSON.stringify(restored.maintenanceOrders));
+      safeStorage.setItem('smart_accounting_maintenance', JSON.stringify(restored.maintenanceOrders));
       if (license.licenseKey) {
         restored.maintenanceOrders.forEach((m: any) => m && m.id && saveStoreDocument(license.licenseKey, 'maintenanceOrders', m.id, m));
       }
@@ -1036,7 +1036,7 @@ export default function App() {
     }
     if (Array.isArray(restored.employees)) {
       setEmployees(restored.employees);
-      localStorage.setItem('smart_accounting_employees', JSON.stringify(restored.employees));
+      safeStorage.setItem('smart_accounting_employees', JSON.stringify(restored.employees));
       if (license.licenseKey) {
         restored.employees.forEach((emp: any) => emp && emp.id && saveStoreDocument(license.licenseKey, 'employees', emp.id, emp));
       }
@@ -1044,7 +1044,7 @@ export default function App() {
     }
     if (Array.isArray(restored.payrollRecords)) {
       setPayrollRecords(restored.payrollRecords);
-      localStorage.setItem('smart_accounting_payroll', JSON.stringify(restored.payrollRecords));
+      safeStorage.setItem('smart_accounting_payroll', JSON.stringify(restored.payrollRecords));
       if (license.licenseKey) {
         restored.payrollRecords.forEach((pr: any) => pr && pr.id && saveStoreDocument(license.licenseKey, 'payrollRecords', pr.id, pr));
       }
@@ -1052,7 +1052,7 @@ export default function App() {
     }
     if (Array.isArray(restored.users)) {
       setUsers(restored.users);
-      localStorage.setItem('smart_accounting_users', JSON.stringify(restored.users));
+      safeStorage.setItem('smart_accounting_users', JSON.stringify(restored.users));
       hasRestoredAny = true;
     }
     return hasRestoredAny;

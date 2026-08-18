@@ -185,13 +185,8 @@ export async function saveSilentBackupFile(
       }
     }
   } else {
-    try {
-      localStorage.setItem(`sanad_auto_backup_${fileName}`, jsonString);
-      return `localStorage:sanad_auto_backup_${fileName}`;
-    } catch (e) {
-      console.warn('[Silent Backup] Web localStorage backup error:', e);
-      return null;
-    }
+    // On Web, do not pollute limited localStorage quota with multi-megabyte backup dumps
+    return 'web:in-memory';
   }
 }
 

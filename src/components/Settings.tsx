@@ -163,8 +163,8 @@ export default function Settings({
     setDeviceMode(mode);
     
     // Save preference to localStorage
-    localStorage.setItem('app_layout_preference', mode);
-    localStorage.setItem('app_interface_mode', mode);
+    safeStorage.setItem('app_layout_preference', mode);
+    safeStorage.setItem('app_interface_mode', mode);
     
     // Immediately toggle HTML class
     if (typeof document !== 'undefined') {
@@ -739,7 +739,7 @@ export default function Settings({
       .replace(/^Documents\//i, '')
       .replace(/^\/+|\/+$/g, '') || 'SanadAccounting';
 
-    localStorage.setItem('sanad_custom_save_folder', cleanFolder);
+    safeStorage.setItem('sanad_custom_save_folder', cleanFolder);
 
     try {
       if (onBackupData) {
@@ -1611,7 +1611,7 @@ export default function Settings({
                 value={invoiceFooterNote}
                 onChange={(e) => {
                   setInvoiceFooterNote(e.target.value);
-                  localStorage.setItem('sanad_invoice_footer_note', e.target.value);
+                  safeStorage.setItem('sanad_invoice_footer_note', e.target.value);
                 }}
                 placeholder="أدخل شروط الضمان وسياسة الاستبدال أو الملاحظات التي تظهر أسفل الفاتورة..."
                 className="w-full bg-white border border-slate-200 text-xs rounded-xl p-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition leading-relaxed"

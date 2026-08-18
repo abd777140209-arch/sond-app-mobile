@@ -35,6 +35,7 @@ import * as XLSX from 'xlsx';
 import { Product } from '../types';
 import { soundManager } from '../utils/sound';
 import { saveAndShareFile, exportToCSV } from '../utils/fileExport';
+import { safeStorage } from '../utils/safeStorage';
 import { generateAndSharePDF } from '../services/pdfService';
 import BarcodeLabelPrinterModal from './BarcodeLabelPrinterModal';
 import CameraBarcodeScannerModal from './CameraBarcodeScannerModal';
@@ -104,11 +105,7 @@ export default function Inventory({
   // Save categories helper
   const saveCategories = (newCats: string[]) => {
     setCategoriesList(newCats);
-    try {
-      localStorage.setItem('sanad_categories', JSON.stringify(newCats));
-    } catch (e) {
-      console.warn('Error saving categories:', e);
-    }
+    safeStorage.setItem('sanad_categories', JSON.stringify(newCats));
   };
 
   const handleAddCategory = (catName: string) => {

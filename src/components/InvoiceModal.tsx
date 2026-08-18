@@ -13,6 +13,7 @@ import { Invoice, SystemSettings, Customer } from '../types';
 import { soundManager } from '../utils/sound';
 import { formatPaymentMethodLabel } from '../utils/paymentMethods';
 import { requestStoragePermissionOnDemand } from '../utils/androidPermissions';
+import { safeStorage } from '../utils/safeStorage';
 import { saveAndShareFile } from '../utils/fileExport';
 import { openWhatsApp } from '../utils/nativeLauncher';
 import { printSalesInvoiceThermalHTML, generateSalesInvoiceThermalPDF, SalesInvoicePrintData } from '../services/ReceiptPrinter';
@@ -27,7 +28,7 @@ interface InvoiceModalProps {
 export default function InvoiceModal({ invoice, onClose, settings, customers }: InvoiceModalProps) {
   const [paperSize, setPaperSize] = useState<'80mm' | '58mm'>('80mm');
   const [autoDirectPrint, setAutoDirectPrint] = useState(() => {
-    return localStorage.getItem('auto_direct_print') === 'true';
+    return safeStorage.getItem('auto_direct_print') === 'true';
   });
 
   const [showWhatsAppForm, setShowWhatsAppForm] = useState(false);
@@ -166,7 +167,7 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
 
   const handleAutoPrintToggle = (checked: boolean) => {
     setAutoDirectPrint(checked);
-    localStorage.setItem('auto_direct_print', checked ? 'true' : 'false');
+    safeStorage.setItem('auto_direct_print', checked ? 'true' : 'false');
     soundManager.playScanBeep();
   };
 

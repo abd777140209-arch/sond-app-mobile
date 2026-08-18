@@ -19,6 +19,7 @@ import {
 import { soundManager } from '../utils/sound';
 import { openWhatsApp } from '../utils/nativeLauncher';
 import { LicenseInfo, saveLicenseLocally, generateHWID } from '../utils/licensing';
+import { safeStorage } from '../utils/safeStorage';
 import { isFirebaseConfigured, activateLicenseOnCloud } from '../utils/firebase';
 
 interface SaaSActivatorProps {
@@ -92,12 +93,12 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
 
     setTimeout(async () => {
       try {
-        localStorage.removeItem('smart_accounting_logged_out');
+        safeStorage.removeItem('smart_accounting_logged_out');
 
         if (enableBiometrics) {
-          localStorage.setItem('sond_biometrics_enabled', 'true');
+          safeStorage.setItem('sond_biometrics_enabled', 'true');
         } else {
-          localStorage.setItem('sond_biometrics_enabled', 'false');
+          safeStorage.setItem('sond_biometrics_enabled', 'false');
         }
 
         const currentHwid = generateHWID();
