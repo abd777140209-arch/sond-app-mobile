@@ -605,85 +605,93 @@ export default function StockAudit({
   };
 
   return (
-    <div className="space-y-6 pb-28">
+    <div className="space-y-4 sm:space-y-6 pb-28">
       
-      {/* Top Banner Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <ClipboardCheck className="w-6 h-6 text-blue-600" />
-            <span>جرد وحصر المنشأة والمخزون الميداني</span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            مطابقة الكميات الفعلية بالمستودع، حصر الفروقات والعجز، وتحديد البضائع الراكضة والأكثر ربحية.
-          </p>
+      {/* Top Header Card */}
+      <div className="p-3.5 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3.5">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+          <div>
+            <h2 className="text-sm sm:text-base md:text-lg font-bold text-slate-900 flex items-center gap-2">
+              <ClipboardCheck className="w-5 h-5 text-blue-600 shrink-0" />
+              <span>جرد وحصر المنشأة والمخزون الميداني</span>
+            </h2>
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+              مطابقة الكميات الفعلية بالمستودع، حصر الفروقات والعجز، وتحديد البضائع الراكضة والأكثر ربحية.
+            </p>
+          </div>
+
+          {/* Top Primary Actions */}
+          <div className="grid grid-cols-2 gap-2 w-full md:w-auto">
+            <button
+              onClick={handleBulkReconcile}
+              className="px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span className="truncate">تطبيق الجرد</span>
+            </button>
+
+            <button
+              onClick={() => {
+                soundManager.playSuccessChime();
+                setShowZaraAuditModal(true);
+              }}
+              className="px-3.5 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 active:scale-95 text-amber-900 font-extrabold text-xs border border-amber-300 shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5"
+              title="المساعد الذكي للجرد زارا"
+            >
+              <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+              <span className="truncate">مساعد زارا الذكي</span>
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Zara AI Assistant Button */}
-          <button
-            onClick={() => {
-              soundManager.playSuccessChime();
-              setShowZaraAuditModal(true);
-            }}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 font-extrabold text-xs border border-amber-300 shadow-xs transition cursor-pointer active:scale-95"
-            title="المساعد الذكي للجرد زارا"
-          >
-            <span className="text-sm">✨</span>
-            <div className="text-right">
-              <div className="leading-tight font-black">زارا - المساعد الذكي للجرد</div>
-              <div className="text-[9px] text-amber-700 font-bold">تحليل وتوجيه المخزون</div>
-            </div>
-          </button>
+        {/* Tools & Export Toolbar */}
+        <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={handlePrintAuditSheet}
+              className="px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition border border-indigo-200 cursor-pointer active:scale-95 flex items-center gap-1"
+              title="تصدير وطباعة كشف الجرد الميداني PDF"
+            >
+              <Printer className="w-3.5 h-3.5 text-indigo-600" />
+              <span>كشف PDF</span>
+            </button>
 
-          {/* Zara Voice Report Button */}
-          <button
-            onClick={handleSpeakZaraAudit}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-800 text-xs font-bold transition border border-sky-200 cursor-pointer active:scale-95"
-            title="استمع لتقرير الجرد بصوت زارا"
-          >
-            <span className="text-sm">🔊</span>
-            <span>التقرير الصوتي للجرد</span>
-          </button>
+            <button
+              onClick={handleExportExcel}
+              className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition border border-emerald-200 cursor-pointer active:scale-95 flex items-center gap-1"
+              title="تصدير كشف الجرد الفعلي بصيغة Excel (.xlsx)"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+              <span>إكسل Excel</span>
+            </button>
 
-          <button
-            onClick={handlePrintAuditSheet}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-sm cursor-pointer"
-            title="تصدير وطباعة كشف الجرد الميداني PDF"
-          >
-            <Printer className="w-4 h-4" />
-            <span>كشف جرد PDF</span>
-          </button>
+            <button
+              onClick={handleExportCSV}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition border border-slate-200 cursor-pointer active:scale-95 flex items-center gap-1"
+              title="تصدير كشف الجرد إلى ملف CSV"
+            >
+              <FileDown className="w-3.5 h-3.5 text-slate-600" />
+              <span>تصدير CSV</span>
+            </button>
 
-          {/* Export Excel (.xlsx) Button */}
-          <button
-            onClick={handleExportExcel}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold transition border border-emerald-300 cursor-pointer shadow-xs"
-            title="تصدير كشف الجرد الفعلي بصيغة Excel (.xlsx)"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            <span>كشف جرد Excel</span>
-          </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="px-2.5 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold transition border border-purple-200 cursor-pointer active:scale-95 flex items-center gap-1"
+              title="استيراد كشف الجرد الميداني وتحديث الكميات"
+            >
+              <FileUp className="w-3.5 h-3.5 text-purple-600" />
+              <span>استيراد CSV</span>
+            </button>
 
-          {/* Export CSV Button */}
-          <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold transition border border-slate-300 cursor-pointer shadow-xs"
-            title="تصدير كشف الجرد إلى ملف CSV"
-          >
-            <FileDown className="w-4 h-4 text-slate-600" />
-            <span>تصدير CSV</span>
-          </button>
-
-          {/* Import CSV Button */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 text-xs font-bold transition border border-purple-300 cursor-pointer shadow-xs"
-            title="استيراد كشف الجرد الميداني وتحديث الكميات بشكل جماعي"
-          >
-            <FileUp className="w-4 h-4 text-purple-600" />
-            <span>استيراد ملف الجرد</span>
-          </button>
+            <button
+              onClick={handleSpeakZaraAudit}
+              className="px-2.5 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-bold transition border border-sky-200 cursor-pointer active:scale-95 flex items-center gap-1"
+              title="استمع لتقرير الجرد بصوت زارا"
+            >
+              <Volume2 className="w-3.5 h-3.5 text-sky-600" />
+              <span>تقرير صوتي</span>
+            </button>
+          </div>
 
           <input
             type="file"
@@ -692,25 +700,21 @@ export default function StockAudit({
             accept=".csv, .txt"
             className="hidden"
           />
-          
-          <button
-            onClick={handleBulkReconcile}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition cursor-pointer active:scale-95"
-          >
-            <CheckCircle2 className="w-4 h-4" />
-            <span>تطبيق الجرد</span>
-          </button>
+
+          <span className="text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200 px-3 py-1 rounded-full">
+            {activeProducts.length} صنف بالمستودع
+          </span>
         </div>
       </div>
 
       {/* Audit Navigation Tabs */}
-      <div className="flex bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200 gap-2">
+      <div className="flex bg-slate-100 p-1 border border-slate-200 rounded-xl text-xs font-bold overflow-x-auto whitespace-nowrap scrollbar-none gap-1">
         <button
           onClick={() => setActiveAuditTab('reconciliation')}
-          className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+          className={`px-3.5 sm:px-4 py-2 rounded-lg transition shrink-0 flex items-center justify-center gap-1.5 cursor-pointer ${
             activeAuditTab === 'reconciliation'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
+              ? 'bg-white text-blue-600 shadow-xs'
+              : 'text-slate-500 hover:text-slate-800'
           }`}
         >
           <Boxes className="w-4 h-4" />
@@ -719,10 +723,10 @@ export default function StockAudit({
 
         <button
           onClick={() => setActiveAuditTab('stagnant')}
-          className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+          className={`px-3.5 sm:px-4 py-2 rounded-lg transition shrink-0 flex items-center justify-center gap-1.5 cursor-pointer ${
             activeAuditTab === 'stagnant'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
+              ? 'bg-white text-blue-600 shadow-xs'
+              : 'text-slate-500 hover:text-slate-800'
           }`}
         >
           <ArrowDownRight className="w-4 h-4" />
@@ -731,10 +735,10 @@ export default function StockAudit({
 
         <button
           onClick={() => setActiveAuditTab('profitable')}
-          className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+          className={`px-3.5 sm:px-4 py-2 rounded-lg transition shrink-0 flex items-center justify-center gap-1.5 cursor-pointer ${
             activeAuditTab === 'profitable'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
+              ? 'bg-white text-blue-600 shadow-xs'
+              : 'text-slate-500 hover:text-slate-800'
           }`}
         >
           <TrendingUp className="w-4 h-4" />
@@ -744,59 +748,59 @@ export default function StockAudit({
 
       {/* TAB 1: STOCK RECONCILIATION */}
       {activeAuditTab === 'reconciliation' && (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {/* Audit Stats Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+            <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
               <div>
-                <span className="text-xs text-slate-500 font-medium">أصناف تم تعديلها</span>
-                <div className="text-2xl font-black text-slate-900 mt-1">{itemsAuditedWithDiff} صنف</div>
+                <span className="text-[11px] sm:text-xs text-slate-500 font-medium">أصناف تم تعديلها</span>
+                <div className="text-xl sm:text-2xl font-black text-slate-900 mt-0.5 sm:mt-1">{itemsAuditedWithDiff} صنف</div>
               </div>
-              <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-600">
-                <ClipboardCheck className="w-6 h-6" />
+              <div className="p-2.5 sm:p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-600">
+                <ClipboardCheck className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+            <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
               <div>
-                <span className="text-xs text-slate-500 font-medium">إجمالي العجز المالي</span>
-                <div className="text-2xl font-black text-rose-600 mt-1 font-mono">
-                  -{totalDeficitValue.toLocaleString()} <span className="text-xs font-normal text-slate-400">{currency}</span>
+                <span className="text-[11px] sm:text-xs text-slate-500 font-medium">إجمالي العجز المالي</span>
+                <div className="text-xl sm:text-2xl font-black text-rose-600 mt-0.5 sm:mt-1 font-mono">
+                  -{totalDeficitValue.toLocaleString()} <span className="text-[10px] font-normal text-slate-400">{currency}</span>
                 </div>
                 <span className="text-[10px] text-rose-500 font-bold">عجز: {totalDeficitCount} قطعة</span>
               </div>
-              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-600">
-                <AlertTriangle className="w-6 h-6" />
+              <div className="p-2.5 sm:p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-600">
+                <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+            <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
               <div>
-                <span className="text-xs text-slate-500 font-medium">إجمالي الزيادة غير المسجلة</span>
-                <div className="text-2xl font-black text-emerald-600 mt-1 font-mono">
-                  +{totalSurplusValue.toLocaleString()} <span className="text-xs font-normal text-slate-400">{currency}</span>
+                <span className="text-[11px] sm:text-xs text-slate-500 font-medium">إجمالي الزيادة</span>
+                <div className="text-xl sm:text-2xl font-black text-emerald-600 mt-0.5 sm:mt-1 font-mono">
+                  +{totalSurplusValue.toLocaleString()} <span className="text-[10px] font-normal text-slate-400">{currency}</span>
                 </div>
                 <span className="text-[10px] text-emerald-600 font-bold">زيادة: {totalSurplusCount} قطعة</span>
               </div>
-              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600">
-                <Sparkles className="w-6 h-6" />
+              <div className="p-2.5 sm:p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600">
+                <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+            <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
               <div>
-                <span className="text-xs text-slate-500 font-medium">إجمالي الأصناف بالمستودع</span>
-                <div className="text-2xl font-black text-slate-900 mt-1">{activeProducts.length} صنف</div>
+                <span className="text-[11px] sm:text-xs text-slate-500 font-medium">أصناف المستودع</span>
+                <div className="text-xl sm:text-2xl font-black text-slate-900 mt-0.5 sm:mt-1">{activeProducts.length} صنف</div>
               </div>
-              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-600">
-                <Boxes className="w-6 h-6" />
+              <div className="p-2.5 sm:p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-600">
+                <Boxes className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
             </div>
           </div>
 
           {/* Search & Filter Bar */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2.5 sm:gap-3">
               <div className="relative flex-1 w-full">
                 <Search className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
@@ -804,8 +808,17 @@ export default function StockAudit({
                   placeholder="ابحث باسم السلعة أو الباركود لإجراء الحصر الميداني..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-4 pr-10 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-xs text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white"
+                  className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-600 focus:bg-white transition"
                 />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-md cursor-pointer"
+                    title="مسح البحث"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
               </div>
 
               <div className="flex items-center gap-2 flex-wrap w-full md:w-auto">
@@ -824,25 +837,25 @@ export default function StockAudit({
                 <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
                   <button
                     onClick={() => setFilterDiscrepancy('all')}
-                    className={`px-3 py-1 rounded-lg transition ${filterDiscrepancy === 'all' ? 'bg-blue-600 text-white font-bold' : 'text-slate-600'}`}
+                    className={`px-3 py-1 rounded-lg transition cursor-pointer ${filterDiscrepancy === 'all' ? 'bg-blue-600 text-white font-bold' : 'text-slate-600'}`}
                   >
                     الكل
                   </button>
                   <button
                     onClick={() => setFilterDiscrepancy('deficit')}
-                    className={`px-3 py-1 rounded-lg transition ${filterDiscrepancy === 'deficit' ? 'bg-rose-600 text-white font-bold' : 'text-slate-600'}`}
+                    className={`px-3 py-1 rounded-lg transition cursor-pointer ${filterDiscrepancy === 'deficit' ? 'bg-rose-600 text-white font-bold' : 'text-slate-600'}`}
                   >
                     عجز ⚠️
                   </button>
                   <button
                     onClick={() => setFilterDiscrepancy('surplus')}
-                    className={`px-3 py-1 rounded-lg transition ${filterDiscrepancy === 'surplus' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-600'}`}
+                    className={`px-3 py-1 rounded-lg transition cursor-pointer ${filterDiscrepancy === 'surplus' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-600'}`}
                   >
                     زيادة 📈
                   </button>
                   <button
                     onClick={() => setFilterDiscrepancy('match')}
-                    className={`px-3 py-1 rounded-lg transition ${filterDiscrepancy === 'match' ? 'bg-sky-600 text-white font-bold' : 'text-slate-600'}`}
+                    className={`px-3 py-1 rounded-lg transition cursor-pointer ${filterDiscrepancy === 'match' ? 'bg-sky-600 text-white font-bold' : 'text-slate-600'}`}
                   >
                     متطابق ✅
                   </button>

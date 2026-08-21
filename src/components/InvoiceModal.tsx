@@ -260,16 +260,16 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
   };
 
   return (
-    <div id="invoice_modal_overlay" className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-2 sm:p-4 print:bg-white print:absolute print:inset-0">
+    <div id="invoice_modal_overlay" className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-2 sm:p-4 print:bg-white print:absolute print:inset-0">
       
-      <div className="w-full max-w-sm max-h-[92vh] rounded-2xl bg-white text-black shadow-2xl border border-gray-200 overflow-hidden relative animate-fadeIn flex flex-col justify-between no-print">
+      <div className="w-full max-w-sm h-[92dvh] sm:h-auto sm:max-h-[88vh] rounded-2xl bg-white text-black shadow-2xl border border-gray-200 overflow-hidden relative animate-fadeIn flex flex-col no-print">
         
         {/* Modal Top Control Bar */}
-        <div className="p-3 bg-slate-900 text-white flex justify-between items-center border-b border-gray-800 shrink-0">
+        <div className="p-2.5 sm:p-3 bg-slate-900 text-white flex justify-between items-center border-b border-gray-800 shrink-0">
           <button
             id="return_to_pos_btn"
             onClick={onClose}
-            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
           >
             <ArrowRight className="w-4 h-4" />
             <span>رجوع للمبيعات</span>
@@ -295,7 +295,7 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
         </div>
 
         {/* Paper format selector */}
-        <div className="p-2.5 bg-slate-950 border-b border-gray-800 flex items-center justify-between text-xs text-gray-300 shrink-0">
+        <div className="p-2 bg-slate-950 border-b border-gray-800 flex items-center justify-between text-xs text-gray-300 shrink-0">
           <div className="flex items-center gap-1.5">
             <SlidersHorizontal className="w-3.5 h-3.5 text-[#C5A862]" />
             <span>العرض:</span>
@@ -328,19 +328,19 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
           id="invoice-printable-card" 
           data-export-container="true" 
           data-receipt-card="true"
-          className="p-4 bg-white overflow-y-auto font-sans flex-1 printable-invoice-card" 
+          className="p-3 sm:p-4 bg-white overflow-y-auto flex-1 min-h-0 font-sans printable-invoice-card" 
           style={{ direction: 'rtl', boxSizing: 'border-box' }}
         >
           
-          <div className="text-center space-y-1">
+          <div className="text-center space-y-0.5">
             {settings.storeLogoUrl && (
               <img 
                 src={settings.storeLogoUrl} 
                 alt={settings.storeName} 
-                className="w-12 h-12 mx-auto object-contain mb-1 rounded-lg"
+                className="w-11 h-11 mx-auto object-contain mb-1 rounded-lg"
               />
             )}
-            <h2 className="text-base font-extrabold tracking-tight text-gray-900">
+            <h2 className="text-sm sm:text-base font-extrabold tracking-normal text-gray-900">
               {settings.storeName}
             </h2>
             <p className="text-[10px] text-gray-500 font-bold">للأجهزة الذكية والصيانة والبرمجة</p>
@@ -466,27 +466,8 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
             <p className="text-[9px] text-gray-500">
               برمجة وتطوير م. عبدالمجيد المحواشي (الجمهورية اليمنية)
             </p>
-            <div className="flex flex-col items-center justify-center my-2 pt-1 border-t border-dashed border-gray-300">
-              <div className="p-1 bg-white border border-gray-300 rounded-lg shadow-xs">
-                <QRCodeSVG
-                  value={JSON.stringify({
-                    seller: settings.storeName,
-                    vatNumber: "300012345600003",
-                    timestamp: invoice.date,
-                    total: invoice.finalAmount,
-                    currency: settings.currency,
-                    invoiceNum: invoice.invoiceNumber
-                  })}
-                  size={72}
-                  level="M"
-                />
-              </div>
-              <span className="text-[8px] font-bold text-gray-500 mt-1 flex items-center gap-0.5">
-                <QrCode className="w-2.5 h-2.5 text-blue-600" /> رمز الفاتورة الإلكترونية المعتمد
-              </span>
-            </div>
 
-            <p className="text-[8px] text-gray-400 flex items-center justify-center gap-0.5">
+            <p className="text-[8px] text-gray-400 flex items-center justify-center gap-0.5 pt-1">
               سعدنا بزيارتكم الكريمة <Heart className="w-2 text-red-500 fill-red-500" /> طاب يومكم
             </p>
           </div>

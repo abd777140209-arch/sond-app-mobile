@@ -96,64 +96,64 @@ export default function Employees({
   return (
     <div className="space-y-6 pb-28">
       {/* Top Header Card */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <Users className="w-6 h-6 text-blue-600" />
+          <h2 className="text-sm sm:text-base md:text-lg font-bold text-slate-900 flex items-center gap-2">
+            <Users className="w-5 h-5 text-blue-600" />
             <span>إدارة الموظفين والرواتب والسُلف</span>
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
             تسجيل العمال، متابعة سلف العمال والمكافآت، وصرف الرواتب الشهرية وتثبيتها بالقيود.
           </p>
         </div>
 
         <button
           onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2.5 rounded-xl shadow-xs transition cursor-pointer text-xs"
+          className="w-full md:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold px-4 py-2.5 rounded-xl shadow-xs transition cursor-pointer text-xs"
         >
-          <UserPlus className="w-4 h-4" />
+          <UserPlus className="w-4 h-4 shrink-0" />
           <span>إضافة موظف جديد</span>
         </button>
       </div>
 
       {/* KPI Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4">
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <span className="text-xs text-slate-500 font-medium">إجمالي الموظفين</span>
-            <div className="text-2xl font-black text-slate-900 mt-1">{activeEmployees.length}</div>
+            <div className="text-xl sm:text-2xl font-black text-slate-900 mt-0.5 sm:mt-1">{activeEmployees.length}</div>
           </div>
-          <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-600">
-            <Users className="w-6 h-6" />
+          <div className="p-2.5 sm:p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-600">
+            <Users className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <span className="text-xs text-slate-500 font-medium">إجمالي الرواتب الشهرية</span>
-            <div className="text-2xl font-black text-emerald-600 mt-1 font-mono">
+            <div className="text-xl sm:text-2xl font-black text-emerald-600 mt-0.5 sm:mt-1 font-mono">
               {totalMonthlySalaries.toLocaleString()} <span className="text-xs text-slate-400 font-normal">{currency}</span>
             </div>
           </div>
-          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600">
-            <DollarSign className="w-6 h-6" />
+          <div className="p-2.5 sm:p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600">
+            <DollarSign className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <span className="text-xs text-slate-500 font-medium">إجمالي السُلف المتبقية</span>
-            <div className="text-2xl font-black text-amber-600 mt-1 font-mono">
+            <div className="text-xl sm:text-2xl font-black text-amber-600 mt-0.5 sm:mt-1 font-mono">
               {totalOutstandingAdvances.toLocaleString()} <span className="text-xs text-slate-400 font-normal">{currency}</span>
             </div>
           </div>
-          <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-600">
-            <Wallet className="w-6 h-6" />
+          <div className="p-2.5 sm:p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-600">
+            <Wallet className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
       </div>
 
-      {/* Search Input */}
+      {/* Search Input with quick clear */}
       <div className="relative">
         <Search className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
@@ -161,8 +161,17 @@ export default function Employees({
           placeholder="بحث بالاسم، المسمى الوظيفي أو رقم الهاتف..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-4 pr-10 py-3 rounded-xl bg-white border border-slate-300 text-xs text-slate-900 focus:outline-none focus:border-blue-600 shadow-xs"
+          className="w-full pl-9 pr-10 py-2.5 sm:py-3 rounded-xl bg-white border border-slate-300 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-600 shadow-xs"
         />
+        {searchTerm && (
+          <button
+            onClick={() => setSearchTerm('')}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-md cursor-pointer"
+            title="مسح البحث"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Employees Grid Cards */}
@@ -244,25 +253,6 @@ export default function Employees({
           </div>
         ))}
       </div>
-
-      {/* Floating Action Button (FAB) for Mobile */}
-      <motion.div 
-        drag
-        dragMomentum={false}
-        whileDrag={{ scale: 1.1 }}
-        className="fixed bottom-6 right-6 z-40 touch-none cursor-grab active:cursor-grabbing"
-      >
-        <button
-          onClick={() => {
-            soundManager.playScanBeep();
-            setShowAddModal(true);
-          }}
-          className="w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-2xl flex items-center justify-center transition cursor-pointer border-2 border-white"
-          title="إضافة موظف جديد (يمكنك سحبه وتحريكه)"
-        >
-          <UserPlus className="w-6 h-6" />
-        </button>
-      </motion.div>
 
       {/* Modal: Add Employee (Bottom Sheet) */}
       <AnimatePresence>

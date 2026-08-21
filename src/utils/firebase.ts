@@ -287,13 +287,18 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
           const norm1 = normalizeHWID(hwid1);
           const norm2 = normalizeHWID(hwid2);
 
-          const isBoundToCurrent = (normCurrent && (normCurrent === norm1 || normCurrent === norm2));
+          const isBoundToCurrent = (normCurrent && (
+            normCurrent === norm1 || 
+            normCurrent === norm2 ||
+            (norm1 && (norm1.includes(normCurrent) || normCurrent.includes(norm1))) ||
+            (norm2 && (norm2.includes(normCurrent) || normCurrent.includes(norm2)))
+          ));
           const hasEmptySlot = isUnboundHwid(hwid1) || isUnboundHwid(hwid2);
 
           if (normCurrent && !isBoundToCurrent && !hasEmptySlot) {
             return { 
               success: false, 
-              message: 'تم استهلاك الحد المسموح للأجهزة المربوطة بهذا الكود (2/2). يرجى التواصل مع الدعم', 
+              message: 'تم استهلاك الحد المسموح للأجهزة المربوطة بهذا الكود (2/2). يمكنك تحرير الأجهزة من بوابة المطور أو التواصل مع الدعم', 
               data: license 
             };
           }
@@ -429,7 +434,9 @@ export async function activateLicenseOnCloud(key: string, hwid: string, customer
           const norm1 = normalizeHWID(hwid1);
           const norm2 = normalizeHWID(hwid2);
 
-          const isBoundToCurrent = (normCurrent && (normCurrent === norm1 || normCurrent === norm2));
+          const isMatch1 = normCurrent && (normCurrent === norm1 || (norm1 && (norm1.includes(normCurrent) || normCurrent.includes(norm1))));
+          const isMatch2 = normCurrent && (normCurrent === norm2 || (norm2 && (norm2.includes(normCurrent) || normCurrent.includes(norm2))));
+          const isBoundToCurrent = isMatch1 || isMatch2;
 
           if (!isBoundToCurrent) {
             if (isUnboundHwid(hwid1)) {
@@ -439,9 +446,13 @@ export async function activateLicenseOnCloud(key: string, hwid: string, customer
             } else {
               return { 
                 success: false, 
-                message: 'تم استهلاك الحد المسموح للأجهزة المربوطة بهذا الكود (2/2). يرجى التواصل مع الدعم' 
+                message: 'تم استهلاك الحد المسموح للأجهزة المربوطة بهذا الكود (2/2). يرجى مسح أحد الأجهزة من بوابة المطور أو التواصل مع الدعم' 
               };
             }
+          } else {
+            // Already registered device - maintain or update existing slot to current full HWID
+            if (isMatch1) hwid1 = hwid;
+            else if (isMatch2) hwid2 = hwid;
           }
 
           const boundList = [hwid1, hwid2].filter(h => h && !isUnboundHwid(h));
@@ -477,7 +488,9 @@ export async function activateLicenseOnCloud(key: string, hwid: string, customer
       const norm1 = normalizeHWID(hwid1);
       const norm2 = normalizeHWID(hwid2);
 
-      const isBoundToCurrent = (normCurrent && (normCurrent === norm1 || normCurrent === norm2));
+      const isMatch1 = normCurrent && (normCurrent === norm1 || (norm1 && (norm1.includes(normCurrent) || normCurrent.includes(norm1))));
+      const isMatch2 = normCurrent && (normCurrent === norm2 || (norm2 && (norm2.includes(normCurrent) || normCurrent.includes(norm2))));
+      const isBoundToCurrent = isMatch1 || isMatch2;
 
       if (!isBoundToCurrent) {
         if (isUnboundHwid(hwid1)) {
@@ -487,9 +500,12 @@ export async function activateLicenseOnCloud(key: string, hwid: string, customer
         } else {
           return { 
             success: false, 
-            message: 'تم استهلاك الحد المسموح للأجهزة المربوطة بهذا الكود (2/2). يرجى التواصل مع الدعم' 
+            message: 'تم استهلاك الحد المسموح للأجهزة المربوطة بهذا الكود (2/2). يرجى مسح أحد الأجهزة من بوابة المطور أو التواصل مع الدعم' 
           };
         }
+      } else {
+        if (isMatch1) hwid1 = hwid;
+        else if (isMatch2) hwid2 = hwid;
       }
 
       const boundList = [hwid1, hwid2].filter(h => h && !isUnboundHwid(h));

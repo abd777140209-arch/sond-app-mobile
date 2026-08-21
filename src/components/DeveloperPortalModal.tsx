@@ -245,6 +245,33 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
     }
   };
 
+  // Developer action: Quick Clear All Linked Devices for a License Key
+  const handleClearDevicesQuick = async (licenseToClear: CloudLicense) => {
+    soundManager.playWarningBeep();
+    const customer = licenseToClear.customerName || licenseToClear.key;
+    if (!window.confirm(`هل أنت متأكد من رغبتك في مسح وتحرير جميع الأجهزة المربوطة بالكود (${licenseToClear.key}) للعميل (${customer})؟\n\nسيسمح هذا للعميل بإعادة تفعيل الكود على جهازين جديدين فوراً!`)) {
+      return;
+    }
+
+    try {
+      const success = await updateLicenseHwidsOnCloud(licenseToClear.key, '', '');
+      if (success) {
+        soundManager.playSuccessChime();
+        setStatusMessage({
+          text: `🧹 تم مسح وتحرير جميع الأجهزة المربوطة بالكود (${licenseToClear.key}) بنجاح! أصبح الكود متاحاً للربط الآن.`,
+          type: 'success'
+        });
+        await handleFetchCloudLicenses();
+      } else {
+        soundManager.playWarningBeep();
+        setStatusMessage({ text: `❌ فشل مسح الأجهزة المربوطة بالكود.`, type: 'error' });
+      }
+    } catch (e) {
+      console.error(e);
+      setStatusMessage({ text: `❌ حدث خطأ أثناء مسح الأجهزة المربوطة.`, type: 'error' });
+    }
+  };
+
   // Developer action: Update License Device IDs (HWID 1 & HWID 2)
   const handleUpdateHwid = async () => {
     if (!editingHwidLicense) return;
@@ -943,6 +970,16 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                                     >
                                       <Edit3 className="w-3 h-3 text-blue-400" />
                                       <span>تعديل HWID</span>
+                                    </button>
+
+                                    {/* Quick Clear Linked Devices Button */}
+                                    <button
+                                      onClick={() => handleClearDevicesQuick(lk)}
+                                      className="px-2 py-1 rounded bg-amber-950/80 hover:bg-amber-900 border border-amber-500/40 text-amber-300 hover:text-white text-[10px] font-bold transition flex items-center gap-1 cursor-pointer shadow-sm"
+                                      title="مسح وتحرير جميع الأجهزة المرتبطة بهذا الكود فوراً لتمكين العميل من ربط أجهزة جديدة"
+                                    >
+                                      <Laptop className="w-3 h-3 text-amber-400" />
+                                      <span>مسح الأجهزة 🧹</span>
                                     </button>
 
                                     <button

@@ -37,11 +37,15 @@ export function getSafeHtml2CanvasOptions(customOptions: Partial<Options> = {}):
           }
         });
 
-        // 3. Process all elements in clonedDoc to strip oklch from inline styles and normalize export tables
+        // 3. Process all elements in clonedDoc to strip oklch from inline styles and normalize export tables & Arabic text
         const allClonedElements = clonedDoc.querySelectorAll('*');
         allClonedElements.forEach((node) => {
           const el = node as HTMLElement;
           if (el.style) {
+            // Guarantee Arabic cursive rendering is never disconnected by letterSpacing
+            if (el.style.letterSpacing && el.style.letterSpacing !== 'normal') {
+              el.style.letterSpacing = 'normal';
+            }
             for (let i = el.style.length - 1; i >= 0; i--) {
               const propName = el.style[i];
               const propVal = el.style.getPropertyValue(propName);

@@ -68,15 +68,6 @@ export const NativeLayout: React.FC<NativeLayoutProps> = ({
         {children}
       </main>
 
-      {/* 3. Android Native Floating Action Button (FAB) */}
-      <button
-        onClick={onFabClick}
-        className="fixed bottom-20 left-5 z-40 bg-blue-600 active:bg-blue-700 text-white p-4 rounded-2xl shadow-lg shadow-blue-500/30 flex items-center justify-center transition-transform active:scale-95 touch-none"
-        aria-label="إضافة جديد"
-      >
-        <Plus className="w-6 h-6 stroke-[2.5]" />
-      </button>
-
       {/* 4. Android Native Bottom Navigation Bar */}
       <nav className="h-16 bg-white border-t border-slate-200 fixed bottom-0 left-0 right-0 z-30 flex items-center justify-around px-2 shadow-[0_-2px_10px_rgba(0,0,0,0.03)]">
         {navItems.map((item) => {

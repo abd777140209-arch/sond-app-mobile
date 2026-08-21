@@ -77,12 +77,26 @@ const getCanvasFingerprint = (): string => {
   }
 };
 
-// Generate deterministic Hardware ID (HWID) with multi-device binding support
+// Generate deterministic Hardware ID (HWID) with multi-device binding support and resilient multi-storage persistence
 export const generateHWID = (): string => {
   try {
-    const existing = localStorage.getItem('smart_accounting_hwid');
-    if (existing && existing.trim() !== '' && existing !== 'null' && existing !== 'undefined') {
-      return existing.trim();
+    // 0. Check multi-storage persistent cache first
+    const fromLocal = localStorage.getItem('smart_accounting_hwid');
+    if (fromLocal && fromLocal.trim() !== '' && fromLocal !== 'null' && fromLocal !== 'undefined') {
+      return fromLocal.trim();
+    }
+    const fromSafe = safeStorage.getItem('smart_accounting_hwid');
+    if (fromSafe && fromSafe.trim() !== '' && fromSafe !== 'null' && fromSafe !== 'undefined') {
+      try { localStorage.setItem('smart_accounting_hwid', fromSafe.trim()); } catch {}
+      return fromSafe.trim();
+    }
+    const fromBackup = localStorage.getItem('sanad_permanent_device_id');
+    if (fromBackup && fromBackup.trim() !== '' && fromBackup !== 'null' && fromBackup !== 'undefined') {
+      try {
+        localStorage.setItem('smart_accounting_hwid', fromBackup.trim());
+        safeStorage.setItem('smart_accounting_hwid', fromBackup.trim());
+      } catch {}
+      return fromBackup.trim();
     }
 
     // 1. Android Native ID (WebView)
@@ -99,7 +113,11 @@ export const generateHWID = (): string => {
               const shortNative = cleanNative.length > 12 ? cleanNative.substring(0, 12) : cleanNative;
               
               const hwid = `MHT-HWID-${shortNative}`;
-              localStorage.setItem('smart_accounting_hwid', hwid);
+              try {
+                localStorage.setItem('smart_accounting_hwid', hwid);
+                safeStorage.setItem('smart_accounting_hwid', hwid);
+                localStorage.setItem('sanad_permanent_device_id', hwid);
+              } catch {}
               return hwid;
             }
           } catch (e) {
@@ -109,17 +127,16 @@ export const generateHWID = (): string => {
       }
     }
 
-    // 2. Deterministic Web Canvas Fingerprint + Screen & Browser Specs
-    const canvasFp = getCanvasFingerprint();
+    // 2. Deterministic Browser Specs (Stable, excludes dynamic canvas variations across sessions)
     const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
     const screenWidth = typeof window !== 'undefined' && window.screen ? window.screen.width || 1080 : 1080;
     const screenHeight = typeof window !== 'undefined' && window.screen ? window.screen.height || 1920 : 1920;
     const colorDepth = typeof window !== 'undefined' && window.screen ? window.screen.colorDepth || 24 : 24;
     const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4;
-    const language = typeof navigator !== 'undefined' ? navigator.language || 'ar' : 'ar';
+    const language = typeof navigator !== 'undefined' ? (navigator.language || 'ar').split('-')[0] : 'ar';
     const timeZone = typeof Intl !== 'undefined' && Intl.DateTimeFormat ? Intl.DateTimeFormat().resolvedOptions().timeZone || '' : '';
 
-    const signature = `CANVAS:${canvasFp}|UA:${userAgent}|SCR:${screenWidth}x${screenHeight}x${colorDepth}|CPU:${cores}|LANG:${language}|TZ:${timeZone}`;
+    const signature = `UA:${userAgent}|SCR:${screenWidth}x${screenHeight}x${colorDepth}|CPU:${cores}|LANG:${language}|TZ:${timeZone}`;
 
     let hash = 0;
     for (let i = 0; i < signature.length; i++) {
@@ -130,13 +147,18 @@ export const generateHWID = (): string => {
 
     const hexHash = Math.abs(hash).toString(16).toUpperCase().padStart(8, '0');
     const hwid = `MHT-HWID-${hexHash}`;
-    localStorage.setItem('smart_accounting_hwid', hwid);
+    try {
+      localStorage.setItem('smart_accounting_hwid', hwid);
+      safeStorage.setItem('smart_accounting_hwid', hwid);
+      localStorage.setItem('sanad_permanent_device_id', hwid);
+    } catch {}
     return hwid;
   } catch (err) {
     console.error('HWID generation exception:', err);
     const fallback = 'MHT-HWID-DEV-WEB-2026';
     try {
       localStorage.setItem('smart_accounting_hwid', fallback);
+      safeStorage.setItem('smart_accounting_hwid', fallback);
     } catch {}
     return fallback;
   }
@@ -174,17 +196,30 @@ export const getExpiryDate = (type: 'weekly' | 'monthly' | 'yearly' | 'lifetime'
 };
 
 const STORAGE_KEY = 'smart_accounting_license_v1';
+const BACKUP_STORAGE_KEY = 'sanad_backup_license_record';
 
-// Save license info securely
+// Save license info securely with redundancy
 export const saveLicenseLocally = (info: LicenseInfo) => {
-  const jsonStr = JSON.stringify(info);
-  const secureStr = obfuscate(jsonStr);
-  safeStorage.setItem(STORAGE_KEY, secureStr);
+  try {
+    const jsonStr = JSON.stringify(info);
+    const secureStr = obfuscate(jsonStr);
+    safeStorage.setItem(STORAGE_KEY, secureStr);
+    try {
+      localStorage.setItem(STORAGE_KEY, secureStr);
+      localStorage.setItem(BACKUP_STORAGE_KEY, secureStr);
+    } catch {}
+  } catch (e) {
+    console.error('Error saving license locally:', e);
+  }
 };
 
-// Load license info safely
+// Load license info safely with multi-layer fallback
 export const loadLicenseLocally = (): LicenseInfo => {
-  const secureStr = safeStorage.getItem(STORAGE_KEY);
+  let secureStr = safeStorage.getItem(STORAGE_KEY);
+  if (!secureStr && typeof localStorage !== 'undefined') {
+    secureStr = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(BACKUP_STORAGE_KEY);
+  }
+
   const hwid = generateHWID();
 
   if (!secureStr) {
@@ -201,7 +236,12 @@ export const loadLicenseLocally = (): LicenseInfo => {
     return unlicensedLicense;
   }
 
-  const rawJson = deobfuscate(secureStr);
+  let rawJson = deobfuscate(secureStr);
+  if (!rawJson && typeof localStorage !== 'undefined') {
+    const backupStr = localStorage.getItem(BACKUP_STORAGE_KEY);
+    if (backupStr) rawJson = deobfuscate(backupStr);
+  }
+
   if (!rawJson) {
     return {
       licenseKey: '',
@@ -216,30 +256,19 @@ export const loadLicenseLocally = (): LicenseInfo => {
   try {
     const info: LicenseInfo = JSON.parse(rawJson);
     
-    // Allow activation and avoid strict lock when key is newly entered or trial
-    const isUnboundOrTrial = isUnboundHwid(info.hwid) || 
-      info.subscriptionType === 'trial' || 
-      !info.hwid || 
-      info.licenseKey === '' ||
-      info.licenseKey === 'MHTT-TRIAL-7DAY-FREE';
-
-    const isMatchedDevice = isUnboundOrTrial || 
-      info.hwid.split(',').some(h => normalizeHWID(h) === normalizeHWID(hwid));
-
-    if (!isMatchedDevice && info.status === 'active') {
-      return {
-        ...info,
-        status: 'unlicensed',
-        licenseKey: 'ERR-DEVICE-MISMATCH'
-      };
-    }
-
-    // Check expiry
-    if (info.expiresAt) {
+    // Check expiry first
+    if (info.expiresAt && info.subscriptionType !== 'lifetime') {
       const expDate = new Date(info.expiresAt);
       if (expDate < new Date()) {
         info.status = 'expired';
       }
+    }
+
+    // Once a license is saved and active locally, don't arbitrarily invalidate it
+    // because this local storage copy belongs to THIS device.
+    if (info.status === 'active' && info.licenseKey && !info.hwid) {
+      info.hwid = hwid;
+      saveLicenseLocally(info);
     }
 
     return info;

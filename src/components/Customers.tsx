@@ -453,179 +453,206 @@ export default function Customers({
       </div>
 
       {/* 2. MAIN LAYOUT: Full Width Customer Directory & Top Actions */}
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+        <div className="p-3.5 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3.5">
           
-          {/* Header & Action Buttons */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          {/* Header Title & Primary Action Buttons */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
             <div>
-              <h3 className="text-base font-bold text-slate-900">دليل كروت وحسابات العملاء</h3>
-              <p className="text-xs text-slate-400">مجموع الحسابات المعتمدة: {activeCustomers.length} عميل</p>
+              <h3 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
+                <Users className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
+                دليل كروت وحسابات العملاء والديون
+              </h3>
+              <p className="text-[11px] sm:text-xs text-slate-400">إجمالي العملاء المعتمدين: {activeCustomers.length} عميل</p>
             </div>
 
-            {/* Action Buttons: Add Customer & Pay Debt */}
-            <div className="flex items-center gap-2 flex-wrap">
+            {/* Main Primary Action Buttons Grid */}
+            <div className="grid grid-cols-2 gap-2 w-full md:w-auto">
               <button
+                id="btn_add_customer_main"
                 onClick={() => {
                   soundManager.playScanBeep();
                   setShowAddModal(true);
                 }}
-                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 transition flex items-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-md shadow-blue-500/20 transition flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <UserPlus className="w-4 h-4" />
-                <span>إضافة عميل جديد</span>
+                <UserPlus className="w-4 h-4 shrink-0" />
+                <span className="truncate">إضافة عميل</span>
               </button>
 
               <button
+                id="btn_pay_debt_main"
                 onClick={() => {
                   soundManager.playScanBeep();
                   setShowPaymentModal(true);
                 }}
-                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/20 transition flex items-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-md shadow-emerald-500/20 transition flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <CreditCard className="w-4 h-4" />
-                <span>سند قبض تسديد</span>
+                <CreditCard className="w-4 h-4 shrink-0" />
+                <span className="truncate">سند قبض تسديد</span>
               </button>
+            </div>
+          </div>
 
-              {/* Export Buttons Group: PDF, Excel, CSV */}
+          {/* Search Input Bar with Quick Clear */}
+          <div className="relative">
+            <input
+              id="customer_ledger_search"
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="ابحث باسم العميل أو رقم الهاتف للوصول السريع..."
+              className="w-full pr-10 pl-9 py-2 sm:py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition shadow-xs"
+            />
+            <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-md cursor-pointer"
+                title="مسح البحث"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Filter Chips & View Mode Switcher */}
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2.5 pt-1">
+            {/* Filter Pills */}
+            <div className="flex bg-slate-100 p-1 border border-slate-200 rounded-xl text-xs font-bold overflow-x-auto whitespace-nowrap scrollbar-none gap-1">
+              <button
+                onClick={() => setFilterType('all')}
+                className={`px-3 py-1 rounded-lg transition shrink-0 ${
+                  filterType === 'all' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                الكل ({activeCustomers.length})
+              </button>
+              <button
+                onClick={() => setFilterType('debtors')}
+                className={`px-3 py-1 rounded-lg transition shrink-0 ${
+                  filterType === 'debtors' ? 'bg-rose-500 text-white shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                المدينون ({debtorCustomers.length})
+              </button>
+              <button
+                onClick={() => setFilterType('overdue')}
+                className={`px-3 py-1 rounded-lg transition shrink-0 ${
+                  filterType === 'overdue' ? 'bg-purple-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                المتأخرون ⚠️ ({overdueCustomers.length})
+              </button>
+            </div>
+
+            {/* View Mode Switcher & Column Picker */}
+            <div className="flex items-center justify-end gap-1.5 self-end sm:self-auto">
+              <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold">
+                <button
+                  onClick={() => setViewMode('cards')}
+                  className={`px-2.5 py-1 rounded-lg transition ${
+                    viewMode === 'cards' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600'
+                  }`}
+                >
+                  كروت 📇
+                </button>
+                <button
+                  onClick={() => setViewMode('table')}
+                  className={`px-2.5 py-1 rounded-lg transition ${
+                    viewMode === 'table' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600'
+                  }`}
+                >
+                  جدول 📋
+                </button>
+              </div>
+
+              {/* Column Picker Button for Table View */}
+              {viewMode === 'table' && (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowColumnPicker(!showColumnPicker)}
+                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1 transition cursor-pointer"
+                    title="تحديد وإخفاء/إظهار أعمدة الجدول"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600" />
+                    <span>الأعمدة</span>
+                  </button>
+
+                  {showColumnPicker && (
+                    <div className="absolute left-0 mt-2 w-52 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 z-30 text-xs space-y-2">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <span className="font-bold text-slate-800">الأعمدة الظاهرة:</span>
+                        <button 
+                          onClick={() => setShowColumnPicker(false)}
+                          className="text-slate-400 hover:text-slate-600 p-0.5 rounded-md cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <div className="space-y-1.5 pt-1">
+                        {[
+                          { key: 'name', label: 'العميل' },
+                          { key: 'phone', label: 'رقم الهاتف' },
+                          { key: 'debtDueDate', label: 'تاريخ الاستحقاق' },
+                          { key: 'totalDebt', label: 'الرصيد / الدين' },
+                          { key: 'loyaltyPoints', label: 'نقاط الولاء' },
+                          { key: 'actions', label: 'إجراءات والتعديل' },
+                        ].map(col => (
+                          <label key={col.key} className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 p-1.5 rounded-lg transition">
+                            <input
+                              type="checkbox"
+                              checked={visibleColumns[col.key as keyof typeof visibleColumns]}
+                              onChange={(e) => setVisibleColumns(prev => ({ ...prev, [col.key]: e.target.checked }))}
+                              className="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer"
+                            />
+                            <span className="text-slate-700 font-medium">{col.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Unified Compact Export & Counter Toolbar Row */}
+          <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <button
                 onClick={handleExportCustomersPDF}
-                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-500/20 transition flex items-center gap-1.5 cursor-pointer"
+                className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 active:scale-95 transition flex items-center gap-1 cursor-pointer"
                 title="تصدير طباعة كشف مديونية العملاء PDF"
               >
-                <FileText className="w-4 h-4 text-white" />
-                <span>تصدير PDF</span>
+                <FileText className="w-3.5 h-3.5 text-rose-600" />
+                <span>كشف PDF</span>
               </button>
 
               <button
                 onClick={handleExportCustomersExcel}
-                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white shadow-md shadow-emerald-700/20 transition flex items-center gap-1.5 cursor-pointer"
+                className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 active:scale-95 transition flex items-center gap-1 cursor-pointer"
                 title="تصدير جدول مديونية العملاء Excel"
               >
-                <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
-                <span>تصدير Excel</span>
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                <span>إكسل Excel</span>
               </button>
 
               <button
                 onClick={handleExportCustomersCSV}
-                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer"
+                className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 active:scale-95 transition flex items-center gap-1 cursor-pointer"
                 title="تصدير ملف CSV"
               >
-                <Download className="w-4 h-4 text-amber-400" />
-                <span>تصدير CSV</span>
+                <Download className="w-3.5 h-3.5 text-slate-600" />
+                <span>CSV</span>
               </button>
-
-              <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold overflow-x-auto whitespace-nowrap scrollbar-none gap-1 max-w-full">
-                <button
-                  onClick={() => setFilterType('all')}
-                  className={`px-2.5 py-1 rounded-lg transition shrink-0 ${
-                    filterType === 'all' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  الكل
-                </button>
-                <button
-                  onClick={() => setFilterType('debtors')}
-                  className={`px-2.5 py-1 rounded-lg transition shrink-0 ${
-                    filterType === 'debtors' ? 'bg-rose-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  المدينون
-                </button>
-                <button
-                  onClick={() => setFilterType('overdue')}
-                  className={`px-2.5 py-1 rounded-lg transition shrink-0 ${
-                    filterType === 'overdue' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  المتأخرون ⚠️
-                </button>
-              </div>
-
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold">
-                  <button
-                    onClick={() => setViewMode('cards')}
-                    className={`px-2.5 py-1 rounded-lg transition ${
-                      viewMode === 'cards' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500'
-                    }`}
-                  >
-                    كروت 📇
-                  </button>
-                  <button
-                    onClick={() => setViewMode('table')}
-                    className={`px-2.5 py-1 rounded-lg transition ${
-                      viewMode === 'table' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500'
-                    }`}
-                  >
-                    جدول 📋
-                  </button>
-                </div>
-
-                {/* Column Picker Button for Table View */}
-                {viewMode === 'table' && (
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowColumnPicker(!showColumnPicker)}
-                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1.5 transition cursor-pointer"
-                      title="تحديد وإخفاء/إظهار أعمدة الجدول"
-                    >
-                      <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600" />
-                      <span>الأعمدة ⚙️</span>
-                    </button>
-
-                    {showColumnPicker && (
-                      <div className="absolute left-0 mt-2 w-52 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 z-30 text-xs space-y-2">
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                          <span className="font-bold text-slate-800">الأعمدة الظاهرة:</span>
-                          <button 
-                            onClick={() => setShowColumnPicker(false)}
-                            className="text-slate-400 hover:text-slate-600 p-0.5 rounded-md"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                        <div className="space-y-1.5 pt-1">
-                          {[
-                            { key: 'name', label: 'العميل' },
-                            { key: 'phone', label: 'رقم الهاتف' },
-                            { key: 'debtDueDate', label: 'تاريخ الاستحقاق' },
-                            { key: 'totalDebt', label: 'الرصيد / الدين' },
-                            { key: 'loyaltyPoints', label: 'نقاط الولاء' },
-                            { key: 'actions', label: 'إجراءات والتعديل' },
-                          ].map(col => (
-                            <label key={col.key} className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 p-1.5 rounded-lg transition">
-                              <input
-                                type="checkbox"
-                                checked={visibleColumns[col.key as keyof typeof visibleColumns]}
-                                onChange={(e) => setVisibleColumns(prev => ({ ...prev, [col.key]: e.target.checked }))}
-                                className="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer"
-                              />
-                              <span className="text-slate-700 font-medium">{col.label}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
             </div>
+
+            <span className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-100 px-3 py-1 rounded-full">
+              {filteredCustomers.length} عميل معروض
+            </span>
           </div>
-
-          {/* Search Input */}
-            <div className="relative">
-              <input
-                id="customer_ledger_search"
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="ابحث باسم العميل أو رقم الهاتف للوصول السريع..."
-                className="w-full pr-10 pl-4 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
-              />
-              <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            </div>
 
             {/* Content Display: Cards vs Table */}
             {viewMode === 'cards' ? (
@@ -986,25 +1013,6 @@ export default function Customers({
           onSaveTemplate={onSaveReminderTemplate}
         />
       )}
-
-      {/* FLOATING ACTION BUTTON (FAB) FOR MOBILE & QUICK ACCESS */}
-      <motion.div 
-        drag
-        dragMomentum={false}
-        whileDrag={{ scale: 1.1 }}
-        className="fixed bottom-6 right-6 z-40 flex flex-col gap-2 touch-none cursor-grab active:cursor-grabbing"
-      >
-        <button
-          onClick={() => {
-            soundManager.playScanBeep();
-            setShowAddModal(true);
-          }}
-          className="w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-2xl flex items-center justify-center transition cursor-pointer border-2 border-white dark:border-slate-800"
-          title="إضافة عميل جديد (يمكنك سحبه وتحريكه)"
-        >
-          <UserPlus className="w-6 h-6" />
-        </button>
-      </motion.div>
 
       {/* BOTTOM SHEET MODAL 1: ADD NEW CUSTOMER */}
       <AnimatePresence>

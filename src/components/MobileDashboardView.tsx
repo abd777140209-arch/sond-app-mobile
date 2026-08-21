@@ -35,7 +35,6 @@ import { Product, Customer, Invoice, Payment, Transaction, SystemSettings, Emplo
 import { soundManager } from '../utils/sound';
 import { Capacitor } from '@capacitor/core';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
-import FloatingCalculator from './FloatingCalculator';
 
 interface MobileDashboardViewProps {
   products: Product[];
@@ -340,7 +339,7 @@ export default function MobileDashboardView({
               </div>
             </button>
 
-            {/* 2. الصندوق (Cashbox / Treasury) */}
+            {/* 2. الحركة اليومية والصندوق (Daily Movement & Cashbox) */}
             <button
               id="mobile_btn_cashbox"
               onClick={() => handleNavClick('transactions')}
@@ -348,15 +347,15 @@ export default function MobileDashboardView({
             >
               <div className="flex justify-between items-start">
                 <div className="p-3 rounded-2xl bg-black/15 backdrop-blur-md text-slate-950">
-                  <Wallet className="w-6 h-6" />
+                  <TrendingUp className="w-6 h-6" />
                 </div>
                 <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-black/15 text-slate-950 backdrop-blur-md">
-                  المالية 💰
+                  اليومية 📊
                 </span>
               </div>
               <div>
-                <h3 className="font-black text-base text-slate-950 leading-tight">الصندوق</h3>
-                <p className="text-[10.5px] text-slate-900 font-bold mt-0.5">النقدية والرصيد والمصاريف</p>
+                <h3 className="font-black text-base text-slate-950 leading-tight">الحركة اليومية</h3>
+                <p className="text-[10.5px] text-slate-900 font-bold mt-0.5">المبيعات والصندوق والتقفيل</p>
               </div>
             </button>
 
@@ -532,11 +531,6 @@ export default function MobileDashboardView({
         </section>
 
       </main>
-
-      {/* FLOATING CALCULATOR BUTTON POSITIONED AT bottom: 80px FOR MOBILE */}
-      <div className="fixed bottom-[80px] right-4 z-50 no-print">
-        <FloatingCalculator />
-      </div>
 
       {/* 4. FIXED BOTTOM NAVIGATION BAR WITH 5 EVENLY SPACED OPTIONS (flex-1) */}
       <MobileBottomNavbar activeTab={activeTab} handleNavClick={handleNavClick} />

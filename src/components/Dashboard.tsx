@@ -582,8 +582,8 @@ export default function Dashboard({
               </span>
             </div>
             <div>
-              <div className="font-bold text-sm text-slate-900 dark:text-white">دفتر القيود والأرشيف</div>
-              <p className="text-[10px] text-slate-400">المصاريف وأرشيف الفواتير</p>
+              <div className="font-bold text-sm text-slate-900 dark:text-white">الحركة والمبيعات اليومية</div>
+              <p className="text-[10px] text-slate-400">مبيعات اليوم، الصندوق والتقفيل</p>
             </div>
           </button>
         </div>

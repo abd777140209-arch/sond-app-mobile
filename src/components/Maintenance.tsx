@@ -204,17 +204,17 @@ export default function Maintenance({
 
     const text = `*${storeName} - قسم الصيانة والخدمات الفنية* 📱\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
-      `مرحباً أ/ *${order.customerName}* 👋\n\n` +
+      `مرحباً أ/ *${order.customerName || 'العميل'}* 👋\n\n` +
       `*${statusHeader}*\n\n` +
-      `🏷️ رقم كرت الصيانة: *#${order.orderNumber}*\n` +
-      `💻 نوع الجهاز: *${order.deviceName}*\n` +
-      `🛠️ العطل المسجل: *${order.issueDescription}*\n` +
-      `💰 التكلفة المقدرة: *${order.cost.toLocaleString()} ${currency}*\n` +
+      `🏷️ رقم كرت الصيانة: *#${order.orderNumber || ''}*\n` +
+      `💻 نوع الجهاز: *${order.deviceName || ''}*\n` +
+      `🛠️ العطل المسجل: *${order.issueDescription || ''}*\n` +
+      `💰 التكلفة المقدرة: *${(order.cost || 0).toLocaleString()} ${currency}*\n` +
       `📌 التفاصيل: ${statusText}\n\n` +
       `🔗 يمكنك تتبع حالة جهازك مباشرة عبر رمز QR أو هذا الرابط:\n${trackingUrl}\n\n` +
       `مع تحيات فريق *${storeName}* ❤️`;
     
-    const cleanPhone = order.customerPhone.replace(/[^0-9]/g, '');
+    const cleanPhone = (order.customerPhone || '').replace(/[^0-9]/g, '');
     const finalPhone = cleanPhone.startsWith('77') || cleanPhone.startsWith('73') || cleanPhone.startsWith('71') || cleanPhone.startsWith('70') 
       ? '967' + cleanPhone
       : cleanPhone;
@@ -277,9 +277,9 @@ export default function Maintenance({
   const totalRepairing = orders.filter(o => o.status === 'repairing').length;
   const totalCompleted = orders.filter(o => o.status === 'completed').length;
   const completedOrders = orders.filter(o => o.status === 'delivered' || o.status === 'completed');
-  const totalIncome = completedOrders.reduce((sum, o) => sum + o.cost, 0);
+  const totalIncome = completedOrders.reduce((sum, o) => sum + (o.cost || 0), 0);
   const totalSpareParts = completedOrders.reduce((sum, o) => sum + (o.sparePartsCost || 0), 0);
-  const totalLaborFees = completedOrders.reduce((sum, o) => sum + (o.laborFee ?? Math.max(0, o.cost - (o.sparePartsCost || 0))), 0);
+  const totalLaborFees = completedOrders.reduce((sum, o) => sum + (o.laborFee ?? Math.max(0, (o.cost || 0) - (o.sparePartsCost || 0))), 0);
 
   return (
     <div id="maintenance_tab_view" className="space-y-3.5 md:space-y-6 pb-20 md:pb-28">
@@ -323,9 +323,9 @@ export default function Maintenance({
           <div>
             <span className="text-[10px] sm:text-xs font-bold text-purple-200">صافي ربح أجور اليد</span>
             <h3 className="text-sm sm:text-lg font-black text-emerald-300 mt-0.5">
-              {totalLaborFees.toLocaleString()} <span className="text-[10px] font-normal text-purple-200">{currency}</span>
+              {(totalLaborFees || 0).toLocaleString()} <span className="text-[10px] font-normal text-purple-200">{currency}</span>
             </h3>
-            <p className="text-[10px] text-purple-300 mt-0.5">قطع غيار: {totalSpareParts.toLocaleString()} {currency}</p>
+            <p className="text-[10px] text-purple-300 mt-0.5">قطع غيار: {(totalSpareParts || 0).toLocaleString()} {currency}</p>
           </div>
           <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-purple-800 text-purple-200">
             <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -334,56 +334,76 @@ export default function Maintenance({
       </div>
 
       {/* 2. HEADER ACTIONS & NEW ORDER MODAL/BUTTON */}
-      <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+      <div className="p-3.5 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3.5">
         
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
           <div>
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Wrench className="w-5 h-5 text-blue-600" />
+            <h2 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
+              <Wrench className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
               إدارة كروت وأوامر صيانة الأجهزة والبرمجيات
             </h2>
-            <p className="text-xs text-slate-400">متابعة الأجهزة المستلمة، التكلفة، ورسائل التحديث</p>
+            <p className="text-[11px] sm:text-xs text-slate-400">متابعة الأجهزة المستلمة، الفحص الأولي، التكلفة، وإشعارات الواتساب</p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={handleExportMonthlyMaintenancePDF}
-              disabled={isExportingPDF}
-              className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-purple-700 hover:bg-purple-800 text-white shadow-md transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-            >
-              {isExportingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              <span>{isExportingPDF ? 'جاري التصدير...' : '📄 تصدير التقرير الشهري (PDF)'}</span>
-            </button>
-
+          <div className="grid grid-cols-2 gap-2 w-full md:w-auto">
             <button
               onClick={() => {
                 setShowAddForm(!showAddForm);
                 soundManager.playScanBeep();
               }}
-              className="px-4 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 transition cursor-pointer flex items-center gap-1.5"
+              className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-md shadow-blue-500/20 transition cursor-pointer flex items-center justify-center gap-1.5"
             >
-              <Plus className="w-4 h-4" />
-              <span>فتح كرت صيانة جديد</span>
+              <Plus className="w-4 h-4 shrink-0" />
+              <span className="truncate">فتح كرت جديد</span>
+            </button>
+
+            <button
+              onClick={handleExportMonthlyMaintenancePDF}
+              disabled={isExportingPDF}
+              className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-purple-700 hover:bg-purple-800 active:scale-95 text-white shadow-md transition cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+            >
+              {isExportingPDF ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <Download className="w-4 h-4 shrink-0" />}
+              <span className="truncate">{isExportingPDF ? 'جاري التصدير...' : 'تقرير شهري PDF'}</span>
             </button>
           </div>
         </div>
 
-        {/* Filter & Search Controls */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 pt-2">
-          
-          <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold overflow-x-auto whitespace-nowrap scrollbar-none gap-1 max-w-full">
+        {/* Search Input Bar with Quick Clear */}
+        <div className="relative">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="ابحث برقم الكرت، اسم العميل، رقم الهاتف، أو موديل الجهاز..."
+            className="w-full pr-10 pl-9 py-2 sm:py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition shadow-xs"
+          />
+          <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-md cursor-pointer"
+              title="مسح البحث"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Filter & Status Controls */}
+        <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2.5 pt-1">
+          <div className="flex bg-slate-100 p-1 border border-slate-200 rounded-xl text-xs font-bold overflow-x-auto whitespace-nowrap scrollbar-none gap-1">
             {[
-              { id: 'all', label: 'الكل' },
-              { id: 'received', label: 'مستلم' },
-              { id: 'repairing', label: 'جاري الصيانة' },
-              { id: 'completed', label: 'جاهز للاستلام' },
-              { id: 'delivered', label: 'تم التسليم' }
+              { id: 'all', label: `الكل (${orders.length})` },
+              { id: 'received', label: `مستلم (${totalReceived})` },
+              { id: 'repairing', label: `جاري الصيانة (${totalRepairing})` },
+              { id: 'completed', label: 'جاهز للاستلام ✓' },
+              { id: 'delivered', label: 'تم التسليم 🤝' }
             ].map(f => (
               <button
                 key={f.id}
                 onClick={() => setStatusFilter(f.id as any)}
                 className={`px-3 py-1 rounded-lg transition shrink-0 ${
-                  statusFilter === f.id ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  statusFilter === f.id ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
                 {f.label}
@@ -391,17 +411,9 @@ export default function Maintenance({
             ))}
           </div>
 
-          <div className="relative w-full md:w-64">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ابحث برقم الكرت، الاسم، أو نوع الجهاز..."
-              className="w-full pr-9 pl-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
-            />
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          </div>
-
+          <span className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-100 px-3 py-1 rounded-full self-end sm:self-auto shrink-0">
+            {filteredOrders.length} كرت معروض
+          </span>
         </div>
 
         {/* MOBILE CARDS VIEW (block md:hidden) */}
@@ -441,12 +453,12 @@ export default function Maintenance({
 
                 <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-200/60 font-mono">
                   <div>
-                    <span className="text-[10px] text-slate-400 font-sans block">العميل: {order.customerName}</span>
-                    <span className="text-slate-600 dir-ltr text-[11px]">{order.customerPhone}</span>
+                    <span className="text-[10px] text-slate-400 font-sans block">العميل: {order.customerName || 'عميل'}</span>
+                    <span className="text-slate-600 dir-ltr text-[11px]">{order.customerPhone || 'بدون هاتف'}</span>
                   </div>
                   <div className="text-right">
                     <span className="text-[10px] text-slate-400 font-sans block">التكلفة:</span>
-                    <span className="font-bold text-blue-600 text-sm">{order.cost.toLocaleString()} {currency}</span>
+                    <span className="font-bold text-blue-600 text-sm">{(order.cost || 0).toLocaleString()} {currency}</span>
                   </div>
                 </div>
 
@@ -525,19 +537,19 @@ export default function Maintenance({
               ) : (
                 [...filteredOrders].reverse().map(order => {
                   const spareCost = order.sparePartsCost || 0;
-                  const labor = order.laborFee ?? Math.max(0, order.cost - spareCost);
+                  const labor = order.laborFee ?? Math.max(0, (order.cost || 0) - spareCost);
                   return (
                   <tr key={order.id} className="hover:bg-slate-50 transition">
                     <td className="py-3 pr-2 font-mono font-bold text-slate-900">
-                      #{order.orderNumber}
+                      #{order.orderNumber || ''}
                     </td>
                     <td className="py-3">
-                      <div className="font-bold text-slate-900">{order.customerName}</div>
-                      <div className="text-[10px] text-slate-400 font-mono">{order.customerPhone}</div>
+                      <div className="font-bold text-slate-900">{order.customerName || 'عميل'}</div>
+                      <div className="text-[10px] text-slate-400 font-mono">{order.customerPhone || ''}</div>
                     </td>
                     <td className="py-3">
-                      <div className="font-bold text-slate-800">{order.deviceName}</div>
-                      <div className="text-[10px] text-slate-400">{order.issueDescription}</div>
+                      <div className="font-bold text-slate-800">{order.deviceName || 'جهاز صيانة'}</div>
+                      <div className="text-[10px] text-slate-400">{order.issueDescription || ''}</div>
                       {renderChecklistBadges(order.checklist)}
                     </td>
                     <td className="py-3">
@@ -548,10 +560,10 @@ export default function Maintenance({
                     </td>
                     <td className="py-3 text-center font-mono">
                       <div className="font-bold text-blue-600 text-xs">
-                        {order.cost.toLocaleString()} {currency}
+                        {(order.cost || 0).toLocaleString()} {currency}
                       </div>
                       <div className="text-[10px] text-slate-500 font-sans">
-                        قطع: {spareCost.toLocaleString()} | يد: <span className="font-bold text-emerald-600">{labor.toLocaleString()}</span>
+                        قطع: {(spareCost || 0).toLocaleString()} | يد: <span className="font-bold text-emerald-600">{(labor || 0).toLocaleString()}</span>
                       </div>
                     </td>
                     <td className="py-3 text-center">
@@ -625,25 +637,6 @@ export default function Maintenance({
         </div>
 
       </div>
-
-      {/* FLOATING ACTION BUTTON (FAB) FOR NEW MAINTENANCE TICKET */}
-      <motion.div 
-        drag
-        dragMomentum={false}
-        whileDrag={{ scale: 1.1 }}
-        className="fixed bottom-6 right-6 z-40 touch-none cursor-grab active:cursor-grabbing"
-      >
-        <button
-          onClick={() => {
-            soundManager.playScanBeep();
-            setShowAddForm(true);
-          }}
-          className="w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-2xl flex items-center justify-center transition cursor-pointer border-2 border-white"
-          title="فتح كرت صيانة جديد (يمكنك سحبه وتحريكه)"
-        >
-          <Plus className="w-6 h-6" />
-        </button>
-      </motion.div>
 
       {/* BOTTOM SHEET MODAL: NEW MAINTENANCE TICKET */}
       {showAddForm && (
@@ -753,7 +746,7 @@ export default function Maintenance({
                   <div className="col-span-1 sm:col-span-2 flex justify-between items-center text-xs font-bold pt-1 border-t border-purple-200 text-purple-950">
                     <span>صافي أجور اليد والخدمة للورشة:</span>
                     <span className="font-black text-emerald-700 font-mono text-sm">
-                      {Math.max(0, cost - sparePartsCost).toLocaleString()} {currency}
+                      {(Math.max(0, (cost || 0) - (sparePartsCost || 0))).toLocaleString()} {currency}
                     </span>
                   </div>
                 </div>
@@ -1023,11 +1016,11 @@ export default function Maintenance({
           </div>
           <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
             <span className="text-xs font-sans font-bold text-slate-500 block">تكلفة قطع الغيار</span>
-            <span className="text-lg font-black text-rose-600">{totalSpareParts.toLocaleString()} {currency}</span>
+            <span className="text-lg font-black text-rose-600">{(totalSpareParts || 0).toLocaleString()} {currency}</span>
           </div>
           <div className="p-3 bg-purple-50 rounded-xl border border-purple-300">
             <span className="text-xs font-sans font-bold text-purple-800 block">صافي ربح أجور اليد</span>
-            <span className="text-lg font-black text-emerald-600">{totalLaborFees.toLocaleString()} {currency}</span>
+            <span className="text-lg font-black text-emerald-600">{(totalLaborFees || 0).toLocaleString()} {currency}</span>
           </div>
         </div>
 
@@ -1056,17 +1049,17 @@ export default function Maintenance({
               ) : (
                 orders.map((o, i) => {
                   const spare = o.sparePartsCost || 0;
-                  const labor = o.laborFee ?? Math.max(0, o.cost - spare);
+                  const labor = o.laborFee ?? Math.max(0, (o.cost || 0) - spare);
                   return (
                     <tr key={o.id} className={i % 2 === 0 ? 'bg-slate-50' : 'bg-white'}>
-                      <td className="p-2 border border-slate-300 font-mono font-bold">#{o.orderNumber}</td>
+                      <td className="p-2 border border-slate-300 font-mono font-bold">#{o.orderNumber || ''}</td>
                       <td className="p-2 border border-slate-300">
-                        <div className="font-bold">{o.customerName}</div>
-                        <div className="text-[9px] text-slate-500 font-mono">{o.customerPhone}</div>
+                        <div className="font-bold">{o.customerName || 'عميل'}</div>
+                        <div className="text-[9px] text-slate-500 font-mono">{o.customerPhone || ''}</div>
                       </td>
                       <td className="p-2 border border-slate-300">
-                        <div className="font-bold">{o.deviceName}</div>
-                        <div className="text-[9px] text-slate-500">{o.issueDescription}</div>
+                        <div className="font-bold">{o.deviceName || 'جهاز'}</div>
+                        <div className="text-[9px] text-slate-500">{o.issueDescription || ''}</div>
                       </td>
                       <td className="p-2 border border-slate-300 font-bold">{o.technicianName || 'الورشة'}</td>
                       <td className="p-2 border border-slate-300 text-center font-bold">
@@ -1074,8 +1067,8 @@ export default function Maintenance({
                          o.status === 'repairing' ? 'جاري الصيانة' :
                          o.status === 'completed' ? 'جاهز للاستلام' : 'تم التسليم'}
                       </td>
-                      <td className="p-2 border border-slate-300 text-center font-mono font-bold">{o.cost.toLocaleString()} {currency}</td>
-                      <td className="p-2 border border-slate-300 text-center font-mono font-bold text-emerald-700">{labor.toLocaleString()} {currency}</td>
+                      <td className="p-2 border border-slate-300 text-center font-mono font-bold">{(o.cost || 0).toLocaleString()} {currency}</td>
+                      <td className="p-2 border border-slate-300 text-center font-mono font-bold text-emerald-700">{(labor || 0).toLocaleString()} {currency}</td>
                     </tr>
                   );
                 })

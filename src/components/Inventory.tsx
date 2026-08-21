@@ -40,10 +40,29 @@ import { generateAndSharePDF } from '../services/pdfService';
 import BarcodeLabelPrinterModal from './BarcodeLabelPrinterModal';
 import CameraBarcodeScannerModal from './CameraBarcodeScannerModal';
 import ManageCategoriesModal from './ManageCategoriesModal';
+import BulkProductAddModal from './BulkProductAddModal';
+import SmartInvoiceScannerModal from './SmartInvoiceScannerModal';
 
 interface InventoryProps {
   products: Product[];
   onAddProduct: (product: Omit<Product, 'id'>) => void;
+  onBulkAddProducts?: (
+    productsToAdd: Array<{
+      name: string;
+      barcode: string;
+      costPrice: number;
+      sellingPrice: number;
+      stock: number;
+      minStock: number;
+      category: string;
+    }>,
+    purchaseMetadata?: {
+      supplierName?: string;
+      invoiceNumber?: string;
+      totalAmount?: number;
+      recordAsExpense?: boolean;
+    }
+  ) => void;
   onUpdateProduct: (product: Product) => void;
   onDeleteProduct: (productId: string) => void;
   currency: string;
@@ -55,6 +74,7 @@ interface InventoryProps {
 export default function Inventory({
   products,
   onAddProduct,
+  onBulkAddProducts,
   onUpdateProduct,
   onDeleteProduct,
   currency,
@@ -65,6 +85,8 @@ export default function Inventory({
   const [showLabelPrinterModal, setShowLabelPrinterModal] = useState(false);
   const [selectedBarcodeProductId, setSelectedBarcodeProductId] = useState<string>('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showBulkAddModal, setShowBulkAddModal] = useState(false);
+  const [showSmartInvoiceScannerModal, setShowSmartInvoiceScannerModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLowStock, setFilterLowStock] = useState(false);
 
@@ -83,7 +105,7 @@ export default function Inventory({
 
   // Camera Barcode Scanner States
   const [showCameraScanner, setShowCameraScanner] = useState(false);
-  const [scannerTarget, setScannerTarget] = useState<'ADD' | 'EDIT'>('ADD');
+  const [scannerTarget, setScannerTarget] = useState<'ADD' | 'EDIT' | 'SEARCH'>('ADD');
 
   // Dynamic Categories Management
   const DEFAULT_CATEGORIES = ['أجهزة', 'إكسسوارات', 'قطع صيانة', 'برمجيات', 'أخرى'];
@@ -135,11 +157,39 @@ export default function Inventory({
     }
   };
 
+  const handleBulkAddInternal = (
+    productsToAdd: Array<{
+      name: string;
+      barcode: string;
+      costPrice: number;
+      sellingPrice: number;
+      stock: number;
+      minStock: number;
+      category: string;
+    }>,
+    purchaseMetadata?: {
+      supplierName?: string;
+      invoiceNumber?: string;
+      totalAmount?: number;
+      recordAsExpense?: boolean;
+    }
+  ) => {
+    if (onBulkAddProducts) {
+      onBulkAddProducts(productsToAdd, purchaseMetadata);
+    } else {
+      productsToAdd.forEach(p => {
+        onAddProduct(p);
+      });
+    }
+  };
+
   const handleScanSuccess = (scannedCode: string) => {
     if (scannerTarget === 'ADD') {
       setBarcode(scannedCode);
     } else if (scannerTarget === 'EDIT' && editingProduct) {
       setEditingProduct({ ...editingProduct, barcode: scannedCode });
+    } else if (scannerTarget === 'SEARCH') {
+      setSearchQuery(scannedCode);
     }
   };
 
@@ -560,128 +610,211 @@ export default function Inventory({
 
       </div>
 
-      {/* 2. SEARCH & FILTER BAR */}
-      <div className="lg:col-span-12 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-          <div>
-            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Search className="w-4 h-4 text-blue-600" />
-              البحث المباشر والتصفية الذكية للأصناف
-            </h2>
-            <p className="text-xs text-slate-400">ابحث باسم السلعة أو امسح الباركود بالليزر لتصفية المستودع</p>
+      {/* 2. SEARCH, ACTION BUTTONS & FILTER TOOLBAR */}
+      <div className="lg:col-span-12 p-3 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3.5">
+        
+        {/* ROW 1: PRIMARY ACTION BUTTONS (3-COL GRID ON MOBILE, NEVER OVERFLOWS) */}
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
+          {/* 1. إضافة صنف فردي */}
+          <button
+            id="btn_add_single_product"
+            onClick={() => {
+              setShowAddModal(true);
+              soundManager.playScanBeep();
+            }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-2 sm:py-2.5 px-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs shadow-sm shadow-blue-500/20 transition cursor-pointer"
+          >
+            <PlusCircle className="w-4 h-4 shrink-0" />
+            <span className="text-[11px] sm:text-xs text-center leading-tight truncate">إضافة صنف</span>
+          </button>
+
+          {/* 2. مسح فاتورة بالذكاء الاصطناعي */}
+          <button
+            id="btn_smart_invoice_ocr"
+            onClick={() => {
+              setShowSmartInvoiceScannerModal(true);
+              soundManager.playScanBeep();
+            }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-2 sm:py-2.5 px-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 active:scale-95 text-white font-bold text-xs shadow-sm shadow-emerald-600/20 transition cursor-pointer"
+            title="تصوير فاتورة المشتريات الورقية واستخراج الأصناف بالذكاء الاصطناعي"
+          >
+            <Sparkles className="w-4 h-4 text-emerald-200 animate-pulse shrink-0" />
+            <span className="text-[11px] sm:text-xs text-center leading-tight truncate">فاتورة OCR 📸</span>
+          </button>
+
+          {/* 3. إضافة عدة أصناف دفعة واحدة */}
+          <button
+            id="btn_bulk_add_products"
+            onClick={() => {
+              setShowBulkAddModal(true);
+              soundManager.playScanBeep();
+            }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-2 sm:py-2.5 px-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs shadow-sm shadow-indigo-600/20 transition cursor-pointer"
+            title="إدخال عدة بضائع وسلع دفعة واحدة في جدول مجمع"
+          >
+            <FileSpreadsheet className="w-4 h-4 shrink-0" />
+            <span className="text-[11px] sm:text-xs text-center leading-tight truncate">إدخال مجمع 📑</span>
+          </button>
+        </div>
+
+        {/* ROW 2: SEARCH INPUT WITH CAMERA SCAN BUTTON & CLEAR */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <input
+              id="top_inventory_search_input"
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="🔎 ابحث بالاسم، الموديل، التصنيف، أو امسح الباركود..."
+              className="w-full pr-9 pl-8 py-2.5 text-xs sm:text-sm rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+            />
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-full"
+                title="مسح البحث"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => {
-                setShowAddModal(true);
-                soundManager.playScanBeep();
-              }}
-              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 transition flex items-center gap-1 cursor-pointer"
-            >
-              <PlusCircle className="w-3.5 h-3.5" />
-              <span>إضافة سلعة جديدة</span>
-            </button>
+          <button
+            type="button"
+            onClick={() => {
+              setScannerTarget('SEARCH');
+              setShowCameraScanner(true);
+              soundManager.playScanBeep();
+            }}
+            className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition shrink-0 cursor-pointer active:scale-95"
+            title="مسح باركود بالليزر/الكاميرا للبحث المباشر"
+          >
+            <Camera className="w-4 h-4 text-blue-600" />
+          </button>
+        </div>
 
-            {/* Category Filter Pills */}
-            <div className="flex bg-slate-100 border border-slate-200 rounded-xl p-1 text-xs font-bold overflow-x-auto whitespace-nowrap scrollbar-none gap-1 max-w-full">
-              <button
-                onClick={() => setSelectedCategoryFilter('الكل')}
-                className={`px-2.5 py-1 rounded-lg transition shrink-0 ${
-                  selectedCategoryFilter === 'الكل' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'
-                }`}
-              >
-                الكل
-              </button>
-              {categoriesList.map(cat => (
+        {/* ROW 3: CATEGORY PILLS HORIZONTAL SCROLL + LOW STOCK TOGGLE */}
+        <div className="flex items-center justify-between gap-2 overflow-hidden">
+          {/* Categories Horizontal Scroll */}
+          <div className="flex items-center gap-1 overflow-x-auto whitespace-nowrap scrollbar-none py-0.5 flex-1">
+            <button
+              onClick={() => setSelectedCategoryFilter('الكل')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition shrink-0 cursor-pointer ${
+                selectedCategoryFilter === 'الكل'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              الكل ({activeProductsList.length})
+            </button>
+            {categoriesList.map(cat => {
+              const count = activeProductsList.filter(p => p.category === cat).length;
+              return (
                 <button
                   key={cat}
                   onClick={() => setSelectedCategoryFilter(cat)}
-                  className={`px-2.5 py-1 rounded-lg transition shrink-0 ${
-                    selectedCategoryFilter === cat ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition shrink-0 cursor-pointer ${
+                    selectedCategoryFilter === cat
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  {cat}
+                  {cat} {count > 0 ? `(${count})` : ''}
                 </button>
-              ))}
-            </div>
-
+              );
+            })}
             <button
-              onClick={() => setFilterLowStock(!filterLowStock)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                filterLowStock 
-                  ? 'bg-rose-600 text-white shadow-sm' 
-                  : 'bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100'
-              }`}
+              onClick={() => setShowManageCategoriesModal(true)}
+              className="p-1 rounded-lg bg-slate-100 text-slate-500 hover:text-slate-800 hover:bg-slate-200 transition shrink-0 cursor-pointer"
+              title="إدارة وتعديل التصنيفات"
             >
-              <AlertTriangle className="w-3.5 h-3.5" />
-              <span>المنتهية والمنخفضة فقط</span>
+              <Tag className="w-3.5 h-3.5" />
             </button>
+          </div>
 
-            {/* زر تصدير كشف PDF معتمد */}
-            <button
-              id="inventory_export_pdf_btn"
-              onClick={handleExportPDF}
-              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
-              title="تصدير كشف جرد المستودع كملف PDF معتمد"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>كشف PDF 📄</span>
-            </button>
+          {/* Filter Low Stock Button */}
+          <button
+            onClick={() => setFilterLowStock(!filterLowStock)}
+            className={`px-2 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 shrink-0 cursor-pointer ${
+              filterLowStock 
+                ? 'bg-rose-600 text-white shadow-xs' 
+                : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+            }`}
+            title="تصفية السلع المنتهية أو المنخفضة عن حد الأمان"
+          >
+            <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+            <span className="hidden sm:inline">النواقص</span>
+            <span className="text-[10px] bg-rose-200 text-rose-900 px-1.5 py-0.5 rounded-full font-black">
+              {lowStockItemsCount}
+            </span>
+          </button>
+        </div>
 
-            {/* زر تصدير إكسل Excel */}
-            <button
-              id="inventory_export_excel_btn"
-              onClick={handleExportExcel}
-              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
-              title="تصدير بيانات السلع والمخزون كملف إكسل Excel (.xlsx)"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>تصدير إكسل (Excel) 📊</span>
-            </button>
+        {/* ROW 4: CLEAN COMPACT TOOLS & EXPORT BAR */}
+        <div className="flex items-center justify-between gap-1.5 pt-2 border-t border-slate-100 flex-wrap text-xs">
+          <div className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+            <span>الأدوات والتصدير:</span>
+          </div>
 
-            <button
-              onClick={handleExportCSV}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-700 hover:bg-slate-800 text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm"
-              title="تصدير بيانات الجرد كملف CSV"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>CSV</span>
-            </button>
-
-            <button
-              onClick={handleVoiceZara}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm"
-              title="قراءة ملخص الجرد صوتياً عبر المساعد الذكي زارا"
-            >
-              <Volume2 className="w-3.5 h-3.5" />
-              <span>قراءة صوتية (زارا)</span>
-            </button>
-
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* طباعة ملصقات الباركود */}
             <button
               onClick={() => {
                 soundManager.playScanBeep();
                 setShowLabelPrinterModal(true);
               }}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition flex items-center gap-1.5 cursor-pointer"
+              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition flex items-center gap-1 cursor-pointer active:scale-95"
+              title="طباعة ملصقات الباركود على طابعات البلوتوث والحرارية"
             >
-              <Printer className="w-3.5 h-3.5 text-blue-600" />
-              <span>طباعة ملصقات الباركود (بلوتوث) 🖨️</span>
+              <Printer className="w-3 h-3 text-blue-600" />
+              <span>طباعة باركود 🖨️</span>
+            </button>
+
+            {/* تصدير كشف PDF معتمد */}
+            <button
+              id="inventory_export_pdf_btn"
+              onClick={handleExportPDF}
+              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition flex items-center gap-1 cursor-pointer active:scale-95"
+              title="تصدير كشف جرد المستودع كملف PDF معتمد"
+            >
+              <FileText className="w-3 h-3 text-rose-600" />
+              <span>كشف PDF</span>
+            </button>
+
+            {/* تصدير إكسل Excel */}
+            <button
+              id="inventory_export_excel_btn"
+              onClick={handleExportExcel}
+              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition flex items-center gap-1 cursor-pointer active:scale-95"
+              title="تصدير بيانات السلع والمخزون كملف إكسل Excel (.xlsx)"
+            >
+              <FileSpreadsheet className="w-3 h-3 text-emerald-600" />
+              <span>إكسل 📊</span>
+            </button>
+
+            {/* CSV */}
+            <button
+              onClick={handleExportCSV}
+              className="px-2 py-1 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition flex items-center gap-1 cursor-pointer"
+              title="تصدير بيانات الجرد كملف CSV"
+            >
+              <Download className="w-3 h-3 text-slate-500" />
+              <span>CSV</span>
+            </button>
+
+            {/* زارا صوتي */}
+            <button
+              onClick={handleVoiceZara}
+              className="px-2 py-1 rounded-lg text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 transition flex items-center gap-1 cursor-pointer"
+              title="قراءة ملخص الجرد صوتياً عبر المساعد الذكي زارا"
+            >
+              <Volume2 className="w-3 h-3 text-purple-600" />
+              <span>زارا 🎙️</span>
             </button>
           </div>
         </div>
 
-        <div className="relative">
-          <input
-            id="top_inventory_search_input"
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="🔎 ابحث بالاسم، الموديل، التصنيف، أو امسح رمز الباركود بالليزر..."
-            className="w-full pr-10 pl-4 py-3 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
-          />
-          <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-        </div>
       </div>
 
       {/* 3. INVENTORY PRODUCTS TABLE & CARDS (FULL WIDTH) */}
@@ -690,26 +823,28 @@ export default function Inventory({
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5">
             <h3 className="text-base font-bold text-slate-900">سجل بضائع ومحتويات المستودع</h3>
             <div className="flex items-center gap-2 flex-wrap">
-              <button
-                id="header_inventory_pdf_btn"
-                onClick={handleExportPDF}
-                className="px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition flex items-center gap-1 cursor-pointer"
-                title="تصدير كشف PDF"
-              >
-                <FileText className="w-3.5 h-3.5 text-rose-600" />
-                <span>كشف PDF</span>
-              </button>
-              <button
-                id="header_inventory_excel_btn"
-                onClick={handleExportExcel}
-                className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition flex items-center gap-1 cursor-pointer"
-                title="تصدير إكسل Excel"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                <span>إكسل Excel</span>
-              </button>
+              <div className="hidden sm:flex items-center gap-1.5">
+                <button
+                  id="header_inventory_pdf_btn"
+                  onClick={handleExportPDF}
+                  className="px-2 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition flex items-center gap-1 cursor-pointer"
+                  title="تصدير كشف PDF"
+                >
+                  <FileText className="w-3 h-3 text-rose-600" />
+                  <span>PDF</span>
+                </button>
+                <button
+                  id="header_inventory_excel_btn"
+                  onClick={handleExportExcel}
+                  className="px-2 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition flex items-center gap-1 cursor-pointer"
+                  title="تصدير إكسل Excel"
+                >
+                  <FileSpreadsheet className="w-3 h-3 text-emerald-600" />
+                  <span>Excel</span>
+                </button>
+              </div>
               <span className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-100 px-3 py-1 rounded-full">
-                {filteredProducts.length} صنف مسجل
+                {filteredProducts.length} صنف معروض
               </span>
             </div>
           </div>
@@ -911,25 +1046,6 @@ export default function Inventory({
         initialProductId={selectedBarcodeProductId}
       />
 
-      {/* FLOATING ACTION BUTTON (FAB) FOR ADDING PRODUCT */}
-      <motion.div 
-        drag
-        dragMomentum={false}
-        whileDrag={{ scale: 1.1 }}
-        className="fixed bottom-6 right-6 z-40 touch-none cursor-grab active:cursor-grabbing"
-      >
-        <button
-          onClick={() => {
-            soundManager.playScanBeep();
-            setShowAddModal(true);
-          }}
-          className="w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-2xl flex items-center justify-center transition cursor-pointer border-2 border-white"
-          title="إضافة منتج جديد (يمكنك سحبه وتحريكه)"
-        >
-          <PlusCircle className="w-6 h-6" />
-        </button>
-      </motion.div>
-
       {/* BOTTOM SHEET MODAL: ADD NEW PRODUCT */}
       <AnimatePresence>
         {showAddModal && (
@@ -966,6 +1082,35 @@ export default function Inventory({
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
                 >
                   <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Quick mode switches */}
+              <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-2xl text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setShowBulkAddModal(true);
+                    soundManager.playScanBeep();
+                  }}
+                  className="p-2 rounded-xl bg-white text-indigo-700 shadow-xs hover:bg-indigo-50 border border-indigo-100 flex items-center justify-center gap-1.5 transition cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>إدخال عدة أصناف (جدول)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setShowSmartInvoiceScannerModal(true);
+                    soundManager.playScanBeep();
+                  }}
+                  className="p-2 rounded-xl bg-emerald-50 text-emerald-800 shadow-xs hover:bg-emerald-100 border border-emerald-200 flex items-center justify-center gap-1.5 transition cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
+                  <span>تصوير فاتورة (OCR) 📸</span>
                 </button>
               </div>
 
@@ -1317,6 +1462,27 @@ export default function Inventory({
         onAddCategory={handleAddCategory}
         onUpdateCategory={handleUpdateCategory}
         onDeleteCategory={handleDeleteCategory}
+      />
+
+      {/* BULK PRODUCT ADD MODAL (جدول إدخال عدة أصناف دفعة واحدة) */}
+      <BulkProductAddModal
+        isOpen={showBulkAddModal}
+        onClose={() => setShowBulkAddModal(false)}
+        existingProducts={products}
+        categoriesList={categoriesList}
+        currency={currency}
+        onBulkAddProducts={handleBulkAddInternal}
+        onOpenSmartInvoiceScanner={() => setShowSmartInvoiceScannerModal(true)}
+      />
+
+      {/* SMART INVOICE OCR SCANNER MODAL (مسح فاتورة كاملة بالذكاء الاصطناعي) */}
+      <SmartInvoiceScannerModal
+        isOpen={showSmartInvoiceScannerModal}
+        onClose={() => setShowSmartInvoiceScannerModal(false)}
+        existingProducts={products}
+        categoriesList={categoriesList}
+        currency={currency}
+        onBulkAddProducts={handleBulkAddInternal}
       />
 
     </div>

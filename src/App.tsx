@@ -22,7 +22,8 @@ import {
   ShieldAlert,
   Database,
   Download,
-  Upload
+  Upload,
+  Calculator
 } from 'lucide-react';
 
 import { Product, Customer, Invoice, Payment, Transaction, SystemSettings, MaintenanceOrder, Employee, PayrollRecord, UserAccount, AuditLog } from './types';
@@ -389,6 +390,8 @@ export default function App() {
     const hash = window.location.hash.toLowerCase();
     return path === '/admin' || path.endsWith('/admin') || search.includes('admin') || hash.includes('admin');
   });
+
+  const [showCalculator, setShowCalculator] = useState<boolean>(false);
 
   useEffect(() => {
     const checkAdminRoute = () => {
@@ -863,6 +866,73 @@ export default function App() {
     if (license.licenseKey) saveStoreDocument(license.licenseKey, 'products', newProduct.id, newProduct);
   };
 
+  const handleBulkAddProducts = (
+    productsToAdd: Omit<Product, 'id'>[],
+    purchaseMetadata?: {
+      supplierName?: string;
+      invoiceNumber?: string;
+      totalAmount?: number;
+      recordAsExpense?: boolean;
+    }
+  ) => {
+    const timestamp = Date.now();
+    const newItems: Product[] = [];
+    const updatedProducts = [...products];
+
+    productsToAdd.forEach((pData, idx) => {
+      // Check if product with same barcode exists
+      const existingIndex = updatedProducts.findIndex(
+        p => p.isDeleted !== true && p.barcode.trim() === pData.barcode.trim()
+      );
+
+      if (existingIndex >= 0) {
+        // Increment stock and update cost/sell price
+        const existing = updatedProducts[existingIndex];
+        const updated: Product = {
+          ...existing,
+          stock: (existing.stock || 0) + (pData.stock || 0),
+          costPrice: pData.costPrice > 0 ? pData.costPrice : existing.costPrice,
+          sellingPrice: pData.sellingPrice > 0 ? pData.sellingPrice : existing.sellingPrice,
+          category: pData.category || existing.category
+        };
+        updatedProducts[existingIndex] = updated;
+        if (license.licenseKey) saveStoreDocument(license.licenseKey, 'products', updated.id, updated);
+      } else {
+        // Create new product
+        const newProd: Product = {
+          id: `p-${timestamp}-${idx}`,
+          ...pData
+        };
+        newItems.push(newProd);
+        updatedProducts.push(newProd);
+        if (license.licenseKey) saveStoreDocument(license.licenseKey, 'products', newProd.id, newProd);
+      }
+    });
+
+    setProducts(updatedProducts);
+
+    // Record purchase expense transaction if requested
+    if (purchaseMetadata?.recordAsExpense && purchaseMetadata.totalAmount && purchaseMetadata.totalAmount > 0) {
+      const expenseTx: Transaction = {
+        id: `t-${timestamp}`,
+        type: 'expense',
+        amount: purchaseMetadata.totalAmount,
+        date: new Date().toISOString(),
+        paymentMethod: 'cash',
+        referenceNumber: purchaseMetadata.invoiceNumber,
+        description: `مشتريات بضاعة ومخزون${purchaseMetadata.supplierName ? ` من مورد: ${purchaseMetadata.supplierName}` : ''}${purchaseMetadata.invoiceNumber ? ` (فاتورة ${purchaseMetadata.invoiceNumber})` : ''} - عدد ${productsToAdd.length} صنف`
+      };
+      setTransactions(prev => [...prev, expenseTx]);
+      if (license.licenseKey) saveStoreDocument(license.licenseKey, 'transactions', expenseTx.id, expenseTx);
+    }
+
+    addAuditLog(
+      'inventory_bulk_add',
+      `إضافة مجمعة للمخزن (${productsToAdd.length} صنف)`,
+      purchaseMetadata?.invoiceNumber ? `رقم الفاتورة: ${purchaseMetadata.invoiceNumber}` : undefined
+    );
+  };
+
   const handleUpdateProduct = (updatedProduct: Product) => {
     setProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
     if (license.licenseKey) saveStoreDocument(license.licenseKey, 'products', updatedProduct.id, updatedProduct);
@@ -882,6 +952,67 @@ export default function App() {
     const updated = { ...prod, stock: newStock };
     setProducts(prev => prev.map(p => p.id === productId ? updated : p));
     if (license.licenseKey) saveStoreDocument(license.licenseKey, 'products', productId, updated);
+  };
+
+  const handleRefundInvoice = (invoiceId: string) => {
+    const invoice = invoices.find(inv => inv.id === invoiceId);
+    if (!invoice) return;
+    if (invoice.status === 'refunded') {
+      soundManager.playWarningBeep();
+      return;
+    }
+
+    const updatedInvoice: Invoice = {
+      ...invoice,
+      status: 'refunded'
+    };
+
+    // Restore products stock
+    const updatedProducts = products.map(p => {
+      const soldItem = invoice.items?.find(item => item.productId === p.id);
+      return soldItem ? { ...p, stock: (p.stock || 0) + (soldItem.quantity || 1) } : p;
+    });
+
+    // Update customer debt if it was debt invoice
+    let updatedCustomer: Customer | null = null;
+    if (invoice.type === 'debt' && invoice.customerId) {
+      const c = customers.find(cust => cust.id === invoice.customerId);
+      if (c) {
+        updatedCustomer = { ...c, totalDebt: Math.max(0, c.totalDebt - invoice.finalAmount) };
+      }
+    }
+
+    // Register a refund transaction in transactions
+    const refundTx: Transaction = {
+      id: `t-${Date.now()}`,
+      type: 'refund',
+      amount: invoice.finalAmount,
+      date: new Date().toISOString(),
+      paymentMethod: invoice.paymentMethod || (invoice.type === 'debt' ? 'debt' : 'cash'),
+      referenceNumber: invoice.invoiceNumber,
+      description: `مرتجع مبيعات فاتورة #${invoice.invoiceNumber} - العميل: ${invoice.customerName}`
+    };
+
+    setInvoices(prev => prev.map(inv => inv.id === invoiceId ? updatedInvoice : inv));
+    setProducts(updatedProducts);
+    if (updatedCustomer) {
+      setCustomers(prev => prev.map(c => c.id === updatedCustomer!.id ? updatedCustomer! : c));
+    }
+    setTransactions(prev => [refundTx, ...prev]);
+
+    if (license.licenseKey) {
+      saveStoreDocument(license.licenseKey, 'invoices', invoiceId, updatedInvoice);
+      saveStoreDocument(license.licenseKey, 'transactions', refundTx.id, refundTx);
+      updatedProducts.forEach(p => saveStoreDocument(license.licenseKey, 'products', p.id, p));
+      if (updatedCustomer) saveStoreDocument(license.licenseKey, 'customers', updatedCustomer.id, updatedCustomer);
+    }
+
+    soundManager.playSuccessChime();
+    addAuditLog(
+      'invoice_refunded',
+      `استرجاع فاتورة مبيعات #${invoice.invoiceNumber}`,
+      `العميل: ${invoice.customerName} - المبلغ: ${invoice.finalAmount} ${settings.currency} (تمت إعادة الكميات للمخزن بنجاح)`
+    );
   };
 
   const handleAddExpense = (amount: number, description: string, paymentMethod: string = 'cash', referenceNumber?: string) => {
@@ -1158,14 +1289,17 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Quick Backup Button */}
+          {/* Calculator Button replacing download button in header */}
           <button
-            onClick={handleBackupData}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 text-xs font-bold transition cursor-pointer shadow-2xs"
-            title="أخذ نسخة احتياطية وحفظها في ذاكرة الهاتف / الويب"
+            onClick={() => {
+              soundManager.playScanBeep();
+              setShowCalculator(true);
+            }}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-200 text-xs font-bold transition cursor-pointer shadow-2xs active:scale-95"
+            title="فتح الآلة الحاسبة السريعة"
           >
-            <Download className="w-3.5 h-3.5 text-blue-600" />
-            <span className="hidden xs:inline font-bold">نسخ احتياطي</span>
+            <Calculator className="w-3.5 h-3.5 text-sky-600" />
+            <span className="hidden xs:inline font-bold">الحاسبة</span>
           </button>
 
           {/* Developer Modal Button */}
@@ -1333,6 +1467,7 @@ export default function App() {
               <Inventory
                 products={products}
                 onAddProduct={handleAddProduct}
+                onBulkAddProducts={handleBulkAddProducts}
                 onUpdateProduct={handleUpdateProduct}
                 onDeleteProduct={handleDeleteProduct}
                 currency={settings.currency}
@@ -1372,7 +1507,7 @@ export default function App() {
                 invoices={invoices}
                 onAddExpense={handleAddExpense}
                 onDeleteTransaction={handleDeleteTransaction}
-                onRefundInvoice={() => {}}
+                onRefundInvoice={handleRefundInvoice}
                 onViewInvoice={setActiveInvoice}
                 currency={settings.currency}
                 isPrivacyMode={isPrivacyMode}
@@ -1520,29 +1655,34 @@ export default function App() {
         />
       )}
 
-      <FloatingCalculator />
+      <FloatingCalculator
+        isOpen={showCalculator}
+        onClose={() => setShowCalculator(false)}
+      />
 
       {/* 🎙️ Sanad AI Voice Assistant Floating Button */}
-      <div className="fixed bottom-24 left-6 z-50 no-print">
-        <button
-          onClick={() => {
-            soundManager.playScanBeep();
-            setShowSanadAssistant(!showSanadAssistant);
-          }}
-          className={`p-3.5 rounded-full shadow-2xl transition-all duration-300 flex items-center justify-center cursor-pointer border-2 border-white dark:border-slate-800 ${
-            showSanadAssistant
-              ? 'bg-rose-600 hover:bg-rose-700 text-white scale-110'
-              : 'bg-gradient-to-r from-emerald-500 to-teal-700 hover:from-emerald-600 hover:to-teal-800 text-slate-950 shadow-emerald-500/30 hover:scale-105 font-black'
-          }`}
-          title="مساعد سند الذكي (صوتي ونصي)"
-        >
-          <span className="relative flex items-center justify-center">
-            <span className="text-sm font-black flex items-center gap-1 text-white">
-              🎙️ <span className="hidden sm:inline text-xs font-bold">سند الذكي</span>
+      {!activeInvoice && (
+        <div className="fixed bottom-24 left-6 z-40 no-print">
+          <button
+            onClick={() => {
+              soundManager.playScanBeep();
+              setShowSanadAssistant(!showSanadAssistant);
+            }}
+            className={`p-3.5 rounded-full shadow-2xl transition-all duration-300 flex items-center justify-center cursor-pointer border-2 border-white dark:border-slate-800 ${
+              showSanadAssistant
+                ? 'bg-rose-600 hover:bg-rose-700 text-white scale-110'
+                : 'bg-gradient-to-r from-emerald-500 to-teal-700 hover:from-emerald-600 hover:to-teal-800 text-slate-950 shadow-emerald-500/30 hover:scale-105 font-black'
+            }`}
+            title="مساعد سند الذكي (صوتي ونصي)"
+          >
+            <span className="relative flex items-center justify-center">
+              <span className="text-sm font-black flex items-center gap-1 text-white">
+                🎙️ <span className="hidden sm:inline text-xs font-bold">سند الذكي</span>
+              </span>
             </span>
-          </span>
-        </button>
-      </div>
+          </button>
+        </div>
+      )}
 
       {/* 🎙️ Sanad AI Voice Assistant Modal */}
       {showSanadAssistant && (

@@ -147,10 +147,11 @@ export default function Navigation({
     },
     {
       id: 'transactions',
-      label: 'القيود والتحصيلات',
-      sublabel: 'دفتر المصروفات وأرشيف الحركات',
+      label: 'الحركة والمبيعات اليومية',
+      sublabel: 'سجل المبيعات، الصندوق واليومية الكاملة',
       icon: History,
-      color: 'blue'
+      color: 'blue',
+      badge: 'اليومية 📊'
     },
     {
       id: 'reports',
@@ -346,14 +347,19 @@ export default function Navigation({
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
             }`}
           >
-            <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${
-              activeTab === 'transactions'
-                ? 'bg-blue-600 text-white'
-                : 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white'
-            }`}>
-              <History className="w-4 h-4" />
+            <div className="flex items-center gap-3">
+              <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                activeTab === 'transactions'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white'
+              }`}>
+                <History className="w-4 h-4" />
+              </div>
+              <span>الحركة والمبيعات اليومية</span>
             </div>
-            <span>القيود والتحصيلات</span>
+            <span className="px-1.5 py-0.5 text-[8.5px] font-extrabold bg-blue-100 text-blue-800 border border-blue-300 rounded-md">
+              اليومية 📊
+            </span>
           </button>
 
           {/* Profit Reports */}

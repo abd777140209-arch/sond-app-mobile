@@ -323,7 +323,7 @@ export const buildSalesInvoiceThermalHTML = (
           line-height: 1.45;
         }
         .logo { max-width: 52px; max-height: 52px; margin: 0 auto 4px auto; display: block; border-radius: 8px; }
-        .header { font-size: 16px; font-weight: 900; margin-bottom: 2px; color: #000000; letter-spacing: -0.2px; }
+        .header { font-size: 16px; font-weight: 900; margin-bottom: 2px; color: #000000; letter-spacing: normal !important; }
         .sub-header { font-size: 10.5px; margin-bottom: 2px; color: #374151; font-weight: 700; }
         .contact { font-size: 9.5px; color: #4b5563; margin-bottom: 4px; font-family: monospace; font-weight: 600; }
         .line-dashed { border-bottom: 1.5px dashed #6b7280; margin: 8px 0; }
@@ -415,13 +415,6 @@ export const buildSalesInvoiceThermalHTML = (
 
       <div class="badge">✓ تم الحفظ بنجاح في النظام المحاسبي للكمبيوتر</div>
       <div class="dev-tag">برمجة وتطوير م. عبدالمجيد المحواشي (الجمهورية اليمنية)</div>
-
-      ${resolvedQr ? `
-        <div class="qr-box">
-          <img src="${resolvedQr}" style="width: 72px; height: 72px; display: block; image-rendering: pixelated;" alt="QR Code" />
-        </div>
-        <div class="qr-label">رمز الفاتورة الإلكترونية المعتمد</div>
-      ` : ''}
 
       <div class="footer-greeting">سعدنا بزيارتكم الكريمة ❤️ طاب يومكم</div>
     </body>
@@ -531,7 +524,7 @@ export const generateSalesInvoiceThermalPDF = async (
 
   temporaryContainer.innerHTML = `
     ${invoiceData.storeLogoUrl ? `<img src="${invoiceData.storeLogoUrl}" style="max-width: 56px; max-height: 56px; margin: 0 auto 6px auto; display: block; border-radius: 8px;" alt="Logo" />` : ''}
-    <div style="font-size: 18px; font-weight: 900; color: #000000; margin-bottom: 2px; letter-spacing: -0.3px;">${shopName}</div>
+    <div style="font-size: 18px; font-weight: 900; color: #000000; margin-bottom: 2px; letter-spacing: normal; word-spacing: normal;">${shopName}</div>
     <div style="font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 3px;">للأجهزة الذكية والصيانة والبرمجة</div>
     ${invoiceData.storeAddress || invoiceData.storePhone ? `
       <div style="font-size: 11px; color: #4b5563; margin-bottom: 6px; font-weight: 600;">
@@ -603,13 +596,6 @@ export const generateSalesInvoiceThermalPDF = async (
 
     <div style="font-size: 10px; font-weight: 900; color: #059669; margin-top: 10px;">✓ تم الحفظ بنجاح في النظام المحاسبي للكمبيوتر</div>
     <div style="font-size: 9.5px; color: #6b7280; margin-top: 3px;">برمجة وتطوير م. عبدالمجيد المحواشي (الجمهورية اليمنية)</div>
-
-    ${qrPngUrl ? `
-      <div style="margin: 10px auto 4px auto; display: inline-block; padding: 6px; background: #ffffff; border: 1.5px solid #9ca3af; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
-        <img src="${qrPngUrl}" style="width: 80px; height: 80px; display: block; image-rendering: pixelated;" alt="QR Code" />
-      </div>
-      <div style="font-size: 9.5px; font-weight: 800; color: #374151; margin-top: 3px;">رمز الفاتورة الإلكترونية المعتمد</div>
-    ` : ''}
 
     <div style="font-size: 10.5px; color: #4b5563; margin-top: 12px; margin-bottom: 4px; font-weight: 800;">
       سعدنا بزيارتكم الكريمة ❤️ طاب يومكم

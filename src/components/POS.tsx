@@ -29,7 +29,9 @@ import {
   CheckCircle2,
   Eye,
   Paperclip,
-  Maximize2
+  Maximize2,
+  Tag,
+  RotateCcw
 } from 'lucide-react';
 import { Product, Customer, Invoice, InvoiceItem, InvoiceType, SystemSettings } from '../types';
 import { soundManager } from '../utils/sound';
@@ -258,75 +260,28 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
     });
   };
 
-  // Typo Guard for custom price edit in cart
+  // Custom price edit in cart (supports selling higher or cheaper freely without blocking popups)
   const handleEditItemPrice = (productId: string, newPrice: number) => {
-    const targetProduct = activeProducts.find(p => p.id === productId);
-    if (!targetProduct) return;
-
-    const currentItem = cart.find(i => i.productId === productId);
-    if (!currentItem) return;
-
-    if (targetProduct.sellingPrice > 0) {
-      const ratio = newPrice / targetProduct.sellingPrice;
-      if (ratio < 0.5 || ratio > 2.0) {
-        soundManager.playWarningBeep();
-        setTypoGuardDetails({
-          title: 'درع حماية الأخطاء: تفاوات كبير في السعر',
-          itemName: currentItem.name,
-          expectedValue: targetProduct.sellingPrice,
-          enteredValue: newPrice,
-          reason: `السعر المدخل (${newPrice} ${currency}) يختلف بأكثر من 50% عن السعر الافتراضي للسلعة (${targetProduct.sellingPrice} ${currency}).`,
-          currency: currency,
-          onConfirm: () => {
-            applyItemPriceChange(productId, newPrice);
-          },
-          onCancel: () => {}
-        });
-        setTypoGuardModalOpen(true);
-        return;
-      }
-    }
-
-    applyItemPriceChange(productId, newPrice);
-  };
-
-  const applyItemPriceChange = (productId: string, newPrice: number) => {
     setCart(prevCart => prevCart.map(item => {
       if (item.productId === productId) {
+        const safePrice = Math.max(0, newPrice);
         return {
           ...item,
-          sellingPrice: newPrice,
-          total: newPrice * item.quantity
+          sellingPrice: safePrice,
+          total: safePrice * item.quantity
         };
       }
       return item;
     }));
   };
 
-  // Typo Guard for Discount Input
-  const handleDiscountInputChange = (value: number) => {
-    const cartSubtotal = cart.reduce((sum, item) => sum + item.total, 0);
-    
-    // Check if discount is more than 30% of subtotal
-    if (cartSubtotal > 0 && value > cartSubtotal * 0.3) {
-      soundManager.playWarningBeep();
-      setTypoGuardDetails({
-        title: 'درع حماية الأخطاء: خصم مرتفع جداً',
-        itemName: 'خصم الفاتورة الكلي',
-        expectedValue: Math.round(cartSubtotal * 0.1),
-        enteredValue: value,
-        reason: `مبلغ الخصم المدخل (${value} ${currency}) يتجاوز 30% من إجمالي الفاتورة (${cartSubtotal} ${currency}).`,
-        currency: currency,
-        onConfirm: () => {
-          setDiscountInput(value);
-        },
-        onCancel: () => {}
-      });
-      setTypoGuardModalOpen(true);
-      return;
-    }
+  const applyItemPriceChange = (productId: string, newPrice: number) => {
+    handleEditItemPrice(productId, newPrice);
+  };
 
-    setDiscountInput(value);
+  // Discount Input Handler
+  const handleDiscountInputChange = (value: number) => {
+    setDiscountInput(Math.max(0, value));
   };
 
   const removeCartItem = (productId: string) => {
@@ -798,53 +753,142 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
             </div>
 
             {/* Cart Items List */}
-            <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+            <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1">
               {cart.length === 0 ? (
                 <div className="py-12 text-center text-slate-400 text-xs">
                   السلة فارغة حالياً. امسح الباركود أو اختر أصنافاً من الكاتلوج أو عبر المساعد الصوتي.
                 </div>
               ) : (
-                cart.map(item => (
-                  <div key={item.productId} className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
-                    <div className="flex-1">
-                      <div className="font-bold text-slate-900 text-xs">{item.name}</div>
-                      <div className="text-[11px] text-slate-500 font-mono mt-0.5 flex items-center gap-1">
-                        <input
-                          type="number"
-                          value={item.sellingPrice}
-                          onChange={(e) => handleEditItemPrice(item.productId, Number(e.target.value))}
-                          className="w-16 px-1 py-0.5 bg-white border border-slate-300 rounded text-center text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          title="تعديل السعر المباشر للسلعة"
-                        />
-                        <span>× {item.quantity} =</span>
-                        <span className="font-bold text-blue-600">{item.total.toLocaleString()} {currency}</span>
+                cart.map(item => {
+                  const originalProduct = activeProducts.find(p => p.id === item.productId);
+                  const defaultPrice = originalProduct?.sellingPrice ?? item.sellingPrice;
+                  const costPrice = originalProduct?.costPrice ?? 0;
+                  const isModifiedPrice = item.sellingPrice !== defaultPrice;
+                  const isBelowCost = costPrice > 0 && item.sellingPrice < costPrice;
+                  const priceDiff = item.sellingPrice - defaultPrice;
+
+                  return (
+                    <div 
+                      key={item.productId} 
+                      className={`p-3 rounded-2xl border transition space-y-2 ${
+                        isModifiedPrice 
+                          ? 'bg-sky-50/40 border-sky-200 dark:border-sky-800/60' 
+                          : 'bg-white border-slate-200 shadow-2xs'
+                      }`}
+                    >
+                      {/* Header row: Product Title, Badges, Remove Button */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-slate-900 text-xs sm:text-sm leading-snug break-words">
+                            {item.name}
+                          </div>
+
+                          {/* Custom price badges & quick restore */}
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            {isModifiedPrice && (
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 ${
+                                priceDiff < 0 
+                                  ? 'bg-emerald-100 text-emerald-800' 
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}>
+                                {priceDiff < 0 ? (
+                                  <>🏷️ تخفيض: {Math.abs(priceDiff).toLocaleString()} {currency}</>
+                                ) : (
+                                  <>📈 سعر خاص: +{priceDiff.toLocaleString()} {currency}</>
+                                )}
+                              </span>
+                            )}
+
+                            {isModifiedPrice && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  soundManager.playScanBeep();
+                                  handleEditItemPrice(item.productId, defaultPrice);
+                                }}
+                                className="text-[10px] text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 hover:underline cursor-pointer bg-blue-50 px-1.5 py-0.5 rounded transition"
+                                title="استرجاع السعر الافتراضي الأصلي من الكاتلوج"
+                              >
+                                <RotateCcw className="w-2.5 h-2.5" />
+                                <span>استعادة ({defaultPrice.toLocaleString()} {currency})</span>
+                              </button>
+                            )}
+
+                            {isBelowCost && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700" title="السعر المدخل أقل من سعر التكلفة">
+                                ⚠️ أقل من التكلفة ({costPrice.toLocaleString()} {currency})
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Remove item button */}
+                        <button
+                          type="button"
+                          onClick={() => removeCartItem(item.productId)}
+                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer shrink-0"
+                          title="حذف من السلة"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Controls row: Selling Price Edit + Quantity Controls + Line Total */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-slate-100/80">
+                        {/* Price Input with Tag */}
+                        <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-xl border border-slate-200">
+                          <label className="text-[11px] font-bold text-slate-600 whitespace-nowrap flex items-center gap-1">
+                            <Tag className="w-3 h-3 text-blue-600" />
+                            <span>السعر:</span>
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={item.sellingPrice === 0 ? '' : item.sellingPrice}
+                            onChange={(e) => {
+                              const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                              handleEditItemPrice(item.productId, isNaN(val) ? 0 : val);
+                            }}
+                            placeholder="0"
+                            className="w-20 sm:w-24 px-1.5 py-0.5 bg-white border border-slate-300 focus:border-blue-500 rounded-lg text-center text-xs font-black font-mono text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 transition"
+                            title="تعديل سعر بيع الحبة بحرية (أغلى أو أرخص)"
+                          />
+                          <span className="text-[10px] font-bold text-slate-400">{currency}</span>
+                        </div>
+
+                        {/* Quantity and Line Total */}
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center bg-slate-100 rounded-xl p-0.5 border border-slate-200">
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(item.productId, -1)}
+                              className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-white hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold transition active:scale-95 cursor-pointer shadow-2xs"
+                              title="إنقاص الكمية"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <span className="w-7 sm:w-8 text-center font-black text-xs font-mono text-slate-900">{item.quantity}</span>
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(item.productId, 1)}
+                              className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center font-bold transition active:scale-95 cursor-pointer shadow-2xs"
+                              title="زيادة الكمية"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                          </div>
+
+                          <div className="text-left font-mono min-w-[70px]">
+                            <div className="text-xs sm:text-sm font-black text-blue-700">
+                              {item.total.toLocaleString()} {currency}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => updateQuantity(item.productId, -1)}
-                        className="w-6 h-6 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center font-bold"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <span className="w-6 text-center font-bold text-xs font-mono">{item.quantity}</span>
-                      <button
-                        onClick={() => updateQuantity(item.productId, 1)}
-                        className="w-6 h-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center font-bold"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-
-                      <button
-                        onClick={() => removeCartItem(item.productId)}
-                        className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition mr-1"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
