@@ -165,15 +165,16 @@ export const generateAndSharePDF = async (data: PDFData) => {
     `;
   }
 
-  // رندرة صناديق الإحصائيات والإجماليات بنمط شريطي مدمج وأنيق
+  // رندرة صناديق الإحصائيات والإجماليات بنمط بطاقات واضحة ومميزة في رأس الكشف
   let summaryBoxesHtml = '';
   if (data.summaryBoxes && data.summaryBoxes.length > 0) {
+    const boxCount = data.summaryBoxes.length;
     summaryBoxesHtml = `
-      <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 7px 12px; justify-content: space-between; align-items: center;">
+      <div style="display: grid; grid-template-columns: repeat(${Math.min(boxCount, 6)}, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px;">
         ${data.summaryBoxes.map(b => `
-          <div style="display: flex; align-items: center; gap: 6px; font-size: ${isLandscape ? '11px' : '11.5px'}; line-height: 1.5;">
-            <span style="color: #64748b; font-weight: 600;">${b.label}:</span>
-            <span style="font-weight: 800; color: ${b.color || '#0f172a'};">${b.value}</span>
+          <div style="background: ${b.bg || '#f8fafc'}; border: 1.5px solid #cbd5e1; border-radius: 6px; padding: 6px 8px; text-align: center; display: flex; flex-direction: column; justify-content: center; gap: 3px;">
+            <span style="color: #64748b; font-size: 10.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${b.label}</span>
+            <span style="font-weight: 800; font-size: 12.5px; color: ${b.color || '#0f172a'}; direction: ltr; display: inline-block;">${b.value}</span>
           </div>
         `).join('')}
       </div>
@@ -290,7 +291,6 @@ export const generateAndSharePDF = async (data: PDFData) => {
       backgroundColor: '#ffffff'
     }));
 
-    const imgData = canvas.toDataURL('image/png');
     const doc = new jsPDF({
       orientation: isLandscape ? 'l' : 'p',
       unit: 'mm',
@@ -300,28 +300,43 @@ export const generateAndSharePDF = async (data: PDFData) => {
     const pageWidth = isLandscape ? 297 : 210;
     const pageHeight = isLandscape ? 210 : 297;
     
-    // Fit to single page if within reasonable scale (up to 55% overflow)
-    let imgWidth = pageWidth;
-    let imgHeight = (canvas.height * imgWidth) / canvas.width;
+    // حساب ارتفاع الصفحة بالبكسل بالنسبة لحجم الـ Canvas
+    const pxPerPage = (canvas.width * pageHeight) / pageWidth;
 
-    if (imgHeight > pageHeight && imgHeight <= pageHeight * 1.55) {
-      // Auto scale down proportionally to fit 1 single neat page
-      const scaleDown = pageHeight / imgHeight;
-      imgWidth = pageWidth * scaleDown;
-      imgHeight = pageHeight;
-      const xOffset = (pageWidth - imgWidth) / 2;
-      doc.addImage(imgData, 'PNG', xOffset, 0, imgWidth, imgHeight);
+    if (canvas.height <= pxPerPage * 1.05) {
+      // مستند من صفحة واحدة
+      const imgData = canvas.toDataURL('image/jpeg', 0.96);
+      const imgHeight = (canvas.height * pageWidth) / canvas.width;
+      doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, imgHeight, undefined, 'FAST');
     } else {
-      doc.addImage(imgData, 'PNG', 0, 0, imgWidth, Math.min(imgHeight, pageHeight));
+      // مستند متعدد الصفحات: تجزئة الـ Canvas بدقة 1:1 لكل صفحة A4 لمنع أي انضغاط أو تشوه في الصفحة الأولى أو الصفحات التالية
+      const totalPages = Math.ceil(canvas.height / pxPerPage);
 
-      if (imgHeight > pageHeight) {
-        let heightLeft = imgHeight - pageHeight;
-        let position = -pageHeight;
-        while (heightLeft > 0) {
+      for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
+        if (pageIdx > 0) {
           doc.addPage();
-          doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-          heightLeft -= pageHeight;
-          position -= pageHeight;
+        }
+
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = Math.round(pxPerPage);
+        const ctx = pageCanvas.getContext('2d');
+
+        if (ctx) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+
+          const srcY = Math.round(pageIdx * pxPerPage);
+          const srcH = Math.min(Math.round(pxPerPage), canvas.height - srcY);
+
+          ctx.drawImage(
+            canvas,
+            0, srcY, canvas.width, srcH,
+            0, 0, pageCanvas.width, srcH
+          );
+
+          const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.96);
+          doc.addImage(pageImgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
         }
       }
     }

@@ -80,11 +80,7 @@ import { listenToLicenseOnCloud, checkLicenseOnCloud, CloudLicense } from './uti
 import { safeStorage, cleanUpStorageQuota } from './utils/safeStorage';
 
 export default function App() {
-  // 🧹 Run storage cleanup on boot to ensure plenty of quota
-  useEffect(() => {
-    cleanUpStorageQuota();
-  }, []);
-
+  // 1. All Component State Initializations
   const [settings, setSettings] = useState<SystemSettings>(() => {
     const data = localStorage.getItem('smart_accounting_settings');
     const parsed = data ? JSON.parse(data) : { ...DEFAULT_SETTINGS };
@@ -117,37 +113,6 @@ export default function App() {
 
     return parsed;
   });
-
-  // 🖥️📱 Listener for System Interface Mode changes (Instant Application across dimensions, screens & tables)
-  useEffect(() => {
-    const applyInterfaceMode = () => {
-      const mode = (localStorage.getItem('app_layout_preference') as 'mobile' | 'desktop') ||
-                   (localStorage.getItem('app_interface_mode') as 'mobile' | 'desktop') ||
-                   settings.deviceMode || 'mobile';
-
-      setSettings(prev => ({ ...prev, deviceMode: mode }));
-
-      if (typeof document !== 'undefined') {
-        if (mode === 'desktop') {
-          document.documentElement.classList.add('mode-desktop');
-          document.documentElement.classList.remove('mode-mobile');
-        } else {
-          document.documentElement.classList.add('mode-mobile');
-          document.documentElement.classList.remove('mode-desktop');
-        }
-      }
-    };
-
-    applyInterfaceMode();
-
-    window.addEventListener('app_layout_changed', applyInterfaceMode);
-    window.addEventListener('app_interface_mode_changed', applyInterfaceMode);
-
-    return () => {
-      window.removeEventListener('app_layout_changed', applyInterfaceMode);
-      window.removeEventListener('app_interface_mode_changed', applyInterfaceMode);
-    };
-  }, []);
 
   const [products, setProducts] = useState<Product[]>(() => {
     const data = localStorage.getItem('smart_accounting_products');
@@ -245,46 +210,6 @@ export default function App() {
     return DEFAULT_USERS[0];
   });
 
-  useEffect(() => {
-    safeStorage.setItem('smart_accounting_products', JSON.stringify(products));
-  }, [products]);
-
-  useEffect(() => {
-    safeStorage.setItem('smart_accounting_customers', JSON.stringify(customers));
-  }, [customers]);
-
-  useEffect(() => {
-    safeStorage.setItem('smart_accounting_invoices', JSON.stringify(invoices));
-  }, [invoices]);
-
-  useEffect(() => {
-    safeStorage.setItem('smart_accounting_payments', JSON.stringify(payments));
-  }, [payments]);
-
-  useEffect(() => {
-    safeStorage.setItem('smart_accounting_transactions', JSON.stringify(transactions));
-  }, [transactions]);
-
-  useEffect(() => {
-    safeStorage.setItem('smart_accounting_maintenance', JSON.stringify(maintenanceOrders));
-  }, [maintenanceOrders]);
-
-  useEffect(() => {
-    safeStorage.setItem('smart_accounting_employees', JSON.stringify(employees));
-  }, [employees]);
-
-  useEffect(() => {
-    safeStorage.setItem('smart_accounting_payroll', JSON.stringify(payrollRecords));
-  }, [payrollRecords]);
-
-  useEffect(() => {
-    safeStorage.setItem('smart_accounting_users', JSON.stringify(users));
-  }, [users]);
-
-  useEffect(() => {
-    safeStorage.setItem('smart_accounting_current_user', JSON.stringify(currentUser));
-  }, [currentUser]);
-
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
     const data = safeStorage.getItem('smart_accounting_audit_logs');
     return data ? JSON.parse(data) : [
@@ -300,10 +225,48 @@ export default function App() {
     ];
   });
 
-  useEffect(() => {
-    safeStorage.setItem('smart_accounting_audit_logs', JSON.stringify(auditLogs.slice(0, 50)));
-  }, [auditLogs]);
+  const [isPrivacyMode, setIsPrivacyMode] = useState<boolean>(() => {
+    return localStorage.getItem('smart_accounting_privacy_mode') === 'true';
+  });
+  const [showPrivacyPinModal, setShowPrivacyPinModal] = useState<boolean>(false);
+  const [showSanadAssistant, setShowSanadAssistant] = useState<boolean>(false);
 
+  const [isCashierMode, setIsCashierMode] = useState<boolean>(() => {
+    return localStorage.getItem('smart_accounting_cashier_mode') === 'true';
+  });
+
+  const [showPinCheckModal, setShowPinCheckModal] = useState<boolean>(false);
+  const [pendingProtectedTab, setPendingProtectedTab] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string>('dashboard');
+
+  const [isDevAdminRoute, setIsDevAdminRoute] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const path = window.location.pathname.toLowerCase();
+    const search = window.location.search.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    return path === '/admin' || path.endsWith('/admin') || search.includes('admin') || hash.includes('admin');
+  });
+
+  const [showDeveloperModal, setShowDeveloperModal] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const path = window.location.pathname.toLowerCase();
+    const search = window.location.search.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    return path === '/admin' || path.endsWith('/admin') || search.includes('admin') || hash.includes('admin');
+  });
+
+  const [showCalculator, setShowCalculator] = useState<boolean>(false);
+  const [license, setLicense] = useState<LicenseInfo>(() => loadLicenseLocally());
+  const isActivated = license.status === 'active' || license.status === 'trial';
+  const [showRevokedModal, setShowRevokedModal] = useState<boolean>(false);
+
+  const [isBiometricLocked, setIsBiometricLocked] = useState<boolean>(() => {
+    return localStorage.getItem('sond_biometrics_enabled') === 'true';
+  });
+
+  const [activeInvoice, setActiveInvoice] = useState<Invoice | null>(null);
+
+  // 2. Helper Handlers
   const addAuditLog = (actionType: string, actionLabel: string, details?: string) => {
     const newLog: AuditLog = {
       id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -345,21 +308,6 @@ export default function App() {
     addAuditLog('audit_cleared', 'مسح سجل الأنشطة والتدقيق', 'قام المدير بمسح السجل القديم');
   };
 
-  const [isPrivacyMode, setIsPrivacyMode] = useState<boolean>(() => {
-    return localStorage.getItem('smart_accounting_privacy_mode') === 'true';
-  });
-  const [showPrivacyPinModal, setShowPrivacyPinModal] = useState<boolean>(false);
-  const [showSanadAssistant, setShowSanadAssistant] = useState<boolean>(false);
-
-  const [isCashierMode, setIsCashierMode] = useState<boolean>(() => {
-    return localStorage.getItem('smart_accounting_cashier_mode') === 'true';
-  });
-
-  const [showPinCheckModal, setShowPinCheckModal] = useState<boolean>(false);
-  const [pendingProtectedTab, setPendingProtectedTab] = useState<string | null>(null);
-
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
-
   const handleTabSelect = (tab: string) => {
     const protectedList = settings.protectedSections || ['settings', 'reports'];
     const isTabProtected = protectedList.includes(tab);
@@ -375,23 +323,112 @@ export default function App() {
     }
   };
 
-  const [isDevAdminRoute, setIsDevAdminRoute] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    const path = window.location.pathname.toLowerCase();
-    const search = window.location.search.toLowerCase();
-    const hash = window.location.hash.toLowerCase();
-    return path === '/admin' || path.endsWith('/admin') || search.includes('admin') || hash.includes('admin');
-  });
+  const handleLogout = () => {
+    soundManager.playWarningBeep();
+    localStorage.setItem('smart_accounting_logged_out', 'true');
+    const updated: LicenseInfo = {
+      licenseKey: '',
+      status: 'unlicensed',
+      activatedAt: '',
+      expiresAt: '',
+      hwid: license.hwid,
+      subscriptionType: 'trial',
+      customerName: 'غير مرخص'
+    };
+    saveLicenseLocally(updated);
+    setLicense(updated);
+    setActiveTab('dashboard');
+  };
 
-  const [showDeveloperModal, setShowDeveloperModal] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    const path = window.location.pathname.toLowerCase();
-    const search = window.location.search.toLowerCase();
-    const hash = window.location.hash.toLowerCase();
-    return path === '/admin' || path.endsWith('/admin') || search.includes('admin') || hash.includes('admin');
-  });
+  // 3. Side Effects
+  // 🧹 Run storage cleanup on boot
+  useEffect(() => {
+    cleanUpStorageQuota();
+  }, []);
 
-  const [showCalculator, setShowCalculator] = useState<boolean>(false);
+  // 🖥️📱 Listener for System Interface Mode changes
+  useEffect(() => {
+    const applyInterfaceMode = () => {
+      const mode = (localStorage.getItem('app_layout_preference') as 'mobile' | 'desktop') ||
+                   (localStorage.getItem('app_interface_mode') as 'mobile' | 'desktop') ||
+                   settings.deviceMode || 'mobile';
+
+      setSettings(prev => prev.deviceMode === mode ? prev : { ...prev, deviceMode: mode });
+
+      if (typeof document !== 'undefined') {
+        if (mode === 'desktop') {
+          document.documentElement.classList.add('mode-desktop');
+          document.documentElement.classList.remove('mode-mobile');
+        } else {
+          document.documentElement.classList.add('mode-mobile');
+          document.documentElement.classList.remove('mode-desktop');
+        }
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      if (settings.deviceMode === 'desktop') {
+        document.documentElement.classList.add('mode-desktop');
+        document.documentElement.classList.remove('mode-mobile');
+      } else {
+        document.documentElement.classList.add('mode-mobile');
+        document.documentElement.classList.remove('mode-desktop');
+      }
+    }
+
+    window.addEventListener('app_layout_changed', applyInterfaceMode);
+    window.addEventListener('app_interface_mode_changed', applyInterfaceMode);
+
+    return () => {
+      window.removeEventListener('app_layout_changed', applyInterfaceMode);
+      window.removeEventListener('app_interface_mode_changed', applyInterfaceMode);
+    };
+  }, [settings.deviceMode]);
+
+  // Local Storage Persistence Effects
+  useEffect(() => {
+    safeStorage.setItem('smart_accounting_products', JSON.stringify(products));
+  }, [products]);
+
+  useEffect(() => {
+    safeStorage.setItem('smart_accounting_customers', JSON.stringify(customers));
+  }, [customers]);
+
+  useEffect(() => {
+    safeStorage.setItem('smart_accounting_invoices', JSON.stringify(invoices));
+  }, [invoices]);
+
+  useEffect(() => {
+    safeStorage.setItem('smart_accounting_payments', JSON.stringify(payments));
+  }, [payments]);
+
+  useEffect(() => {
+    safeStorage.setItem('smart_accounting_transactions', JSON.stringify(transactions));
+  }, [transactions]);
+
+  useEffect(() => {
+    safeStorage.setItem('smart_accounting_maintenance', JSON.stringify(maintenanceOrders));
+  }, [maintenanceOrders]);
+
+  useEffect(() => {
+    safeStorage.setItem('smart_accounting_employees', JSON.stringify(employees));
+  }, [employees]);
+
+  useEffect(() => {
+    safeStorage.setItem('smart_accounting_payroll', JSON.stringify(payrollRecords));
+  }, [payrollRecords]);
+
+  useEffect(() => {
+    safeStorage.setItem('smart_accounting_users', JSON.stringify(users));
+  }, [users]);
+
+  useEffect(() => {
+    safeStorage.setItem('smart_accounting_current_user', JSON.stringify(currentUser));
+  }, [currentUser]);
+
+  useEffect(() => {
+    safeStorage.setItem('smart_accounting_audit_logs', JSON.stringify(auditLogs.slice(0, 50)));
+  }, [auditLogs]);
 
   useEffect(() => {
     const checkAdminRoute = () => {
@@ -410,11 +447,7 @@ export default function App() {
     return () => window.removeEventListener('popstate', checkAdminRoute);
   }, []);
 
-  const [license, setLicense] = useState<LicenseInfo>(() => loadLicenseLocally());
-  const isActivated = license.status === 'active' || license.status === 'trial';
-  const [showRevokedModal, setShowRevokedModal] = useState<boolean>(false);
-
-  // 🔒 Real-time Firestore License Enforcement (Auto-Locks immediately if Developer deletes or suspends license)
+  // 🔒 Real-time Firestore License Enforcement
   useEffect(() => {
     if (!license.licenseKey || license.status === 'unlicensed' || isDevAdminRoute) {
       return;
@@ -431,7 +464,7 @@ export default function App() {
       const isSuspended = reason === 'KEY_SUSPENDED' || reason === 'suspended';
 
       const revokedLicense: LicenseInfo = {
-        licenseKey: currentKey, // Keep licenseKey intact so real-time listener stays active for auto-restoration upon cloud renewal
+        licenseKey: currentKey,
         status: isExpired ? 'expired' : 'unlicensed',
         activatedAt: license.activatedAt,
         expiresAt: cloudData?.expiresAt || license.expiresAt,
@@ -446,12 +479,10 @@ export default function App() {
       setShowRevokedModal(true);
     };
 
-    // 1. Attach Real-Time Firestore Snapshot Listener
     const unsubRealtime = listenToLicenseOnCloud(currentKey, (status, cloudData) => {
       if (status === 'deleted' || status === 'suspended' || status === 'expired') {
         handleLicenseRevoked(status, cloudData);
       } else if (status === 'active' && cloudData) {
-        // If license was previously revoked/expired and developer renewed/activated it on Cloud:
         if (license.status === 'expired' || license.status === 'unlicensed') {
           const activeLic: LicenseInfo = {
             licenseKey: cloudData.key,
@@ -471,7 +502,6 @@ export default function App() {
       }
     });
 
-    // 2. Periodic Active Verification Check (every 30 seconds when online)
     const checkActiveCloudLicense = async () => {
       if (typeof navigator !== 'undefined' && !navigator.onLine) return;
       try {
@@ -502,14 +532,12 @@ export default function App() {
       }
     };
 
-    // Initial check after short delay (1.5s) to allow network and Capacitor App Resume sync to stabilize
     const initialTimer = setTimeout(() => {
       checkActiveCloudLicense();
     }, 1500);
 
     const intervalId = setInterval(checkActiveCloudLicense, 30000);
 
-    // 3. Handle Capacitor App Resume (when returning from background)
     let unsubAppResume: (() => void) | null = null;
     if (Capacitor.isNativePlatform()) {
       try {
@@ -531,29 +559,8 @@ export default function App() {
       if (unsubAppResume) unsubAppResume();
     };
   }, [license.licenseKey, license.status, isDevAdminRoute]);
-  const [isBiometricLocked, setIsBiometricLocked] = useState<boolean>(() => {
-    return localStorage.getItem('sond_biometrics_enabled') === 'true';
-  });
 
-  const handleLogout = () => {
-    soundManager.playWarningBeep();
-    localStorage.setItem('smart_accounting_logged_out', 'true');
-    const updated: LicenseInfo = {
-      licenseKey: '',
-      status: 'unlicensed',
-      activatedAt: '',
-      expiresAt: '',
-      hwid: license.hwid,
-      subscriptionType: 'trial',
-      customerName: 'غير مرخص'
-    };
-    saveLicenseLocally(updated);
-    setLicense(updated);
-    setActiveTab('dashboard');
-  };
-
-  const [activeInvoice, setActiveInvoice] = useState<Invoice | null>(null);
-
+  // Firestore Sync Effect
   useEffect(() => {
     if (!license.licenseKey || !isActivated) return;
 
@@ -590,11 +597,10 @@ export default function App() {
       let updateNeeded = false;
       const updatedSettings = { ...settings };
 
-      // 1. Local Backup Schedule Check
       const localSched = settings.localBackupSchedule || 'daily';
       if (localSched !== 'off') {
         const lastLocalMs = settings.lastLocalBackupDate ? new Date(settings.lastLocalBackupDate).getTime() : 0;
-        let intervalMs = 24 * 60 * 60 * 1000; // daily
+        let intervalMs = 24 * 60 * 60 * 1000;
         if (localSched === 'weekly') intervalMs = 7 * 24 * 60 * 60 * 1000;
         if (localSched === 'monthly') intervalMs = 30 * 24 * 60 * 60 * 1000;
 
@@ -610,11 +616,10 @@ export default function App() {
         }
       }
 
-      // 2. Drive Backup Schedule Check
       const driveSched = settings.driveBackupSchedule || 'weekly';
       if (driveSched !== 'off') {
         const lastDriveMs = settings.lastDriveBackupDate ? new Date(settings.lastDriveBackupDate).getTime() : 0;
-        let intervalMs = 7 * 24 * 60 * 60 * 1000; // weekly
+        let intervalMs = 7 * 24 * 60 * 60 * 1000;
         if (driveSched === 'daily') intervalMs = 24 * 60 * 60 * 1000;
         if (driveSched === 'monthly') intervalMs = 30 * 24 * 60 * 60 * 1000;
 
@@ -666,7 +671,6 @@ export default function App() {
   // 📱 التعامل مع زر الرجوع لإنهاء/إغلاق القوائم أو العودة للرئيسية في أندرويد
   useEffect(() => {
     const handleAndroidBack = async () => {
-      // إرسال حدث مخصص لإغلاق النوافذ الفرعية المفتوحة (مثل المساعد الصوتي، نافذة زارا، أو الجرد)
       window.dispatchEvent(new CustomEvent('android-modal-close'));
 
       if (showDeveloperModal) {
@@ -691,7 +695,6 @@ export default function App() {
         return;
       }
 
-      // إذا كان المستخدم في الشاشة الرئيسية ولا توجد نوافذ مفتوحة، يصغّر التطبيق
       try {
         await CapacitorApp.minimizeApp();
       } catch (e) {
@@ -936,6 +939,21 @@ export default function App() {
   const handleUpdateProduct = (updatedProduct: Product) => {
     setProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
     if (license.licenseKey) saveStoreDocument(license.licenseKey, 'products', updatedProduct.id, updatedProduct);
+  };
+
+  const handleRestoreProducts = (newProductList: Product[]) => {
+    setProducts(newProductList);
+    safeStorage.setItem('smart_accounting_products', JSON.stringify(newProductList));
+    if (license.licenseKey) {
+      newProductList.forEach(prod => {
+        saveStoreDocument(license.licenseKey, 'products', prod.id, prod);
+      });
+    }
+    addAuditLog(
+      'inventory_csv_restore',
+      `استعادة / استيراد أصناف المخزن من ملف (${newProductList.length} صنف)`,
+      `تم استعادة وتحديث قاعدة بيانات المستودع بنجاح`
+    );
   };
 
   const handleDeleteProduct = (productId: string) => {
@@ -1470,6 +1488,7 @@ export default function App() {
                 onBulkAddProducts={handleBulkAddProducts}
                 onUpdateProduct={handleUpdateProduct}
                 onDeleteProduct={handleDeleteProduct}
+                onRestoreProducts={handleRestoreProducts}
                 currency={settings.currency}
                 storeName={settings.storeName}
                 storeLogoUrl={settings.storeLogoUrl}

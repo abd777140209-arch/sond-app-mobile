@@ -528,23 +528,36 @@ export default function StockAudit({
     try {
       const todayStr = new Date().toLocaleDateString('ar-YE');
 
+      const totalSystemPieces = activeProducts.reduce((sum, p) => sum + (p.stock || 0), 0);
+      const totalPhysicalPieces = activeProducts.reduce((sum, p) => sum + (physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : (p.stock || 0)), 0);
+      const totalPhysicalCostValue = activeProducts.reduce((sum, p) => {
+        const phys = physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : (p.stock || 0);
+        return sum + (phys * (p.costPrice || 0));
+      }, 0);
+      const totalPhysicalSellingValue = activeProducts.reduce((sum, p) => {
+        const phys = physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : (p.stock || 0);
+        return sum + (phys * (p.sellingPrice || 0));
+      }, 0);
+
       const customColumns = [
-        { key: 'index', label: 'م', width: '35px', align: 'center' as const },
+        { key: 'index', label: 'م', width: '32px', align: 'center' as const },
         { key: 'name', label: 'اسم الصنف / السلعة', align: 'right' as const },
-        { key: 'barcode', label: 'الباركود', width: '90px', align: 'center' as const },
-        { key: 'category', label: 'التصنيف', width: '85px', align: 'center' as const },
-        { key: 'systemStock', label: 'النظام', width: '55px', align: 'center' as const },
-        { key: 'physicalStock', label: 'الفعلي', width: '55px', align: 'center' as const },
-        { key: 'diff', label: 'الفارق', width: '60px', align: 'center' as const },
-        { key: 'costPrice', label: 'سعر الشراء', width: '80px', align: 'center' as const },
-        { key: 'sellingPrice', label: 'سعر البيع', width: '80px', align: 'center' as const },
-        { key: 'status', label: 'حالة المطابقة', width: '85px', align: 'center' as const }
+        { key: 'barcode', label: 'الباركود', width: '85px', align: 'center' as const },
+        { key: 'category', label: 'التصنيف', width: '75px', align: 'center' as const },
+        { key: 'systemStock', label: 'النظام', width: '50px', align: 'center' as const },
+        { key: 'physicalStock', label: 'الفعلي', width: '50px', align: 'center' as const },
+        { key: 'diff', label: 'الفارق', width: '55px', align: 'center' as const },
+        { key: 'costPrice', label: 'سعر الشراء', width: '75px', align: 'center' as const },
+        { key: 'sellingPrice', label: 'سعر البيع', width: '75px', align: 'center' as const },
+        { key: 'totalCost', label: 'إجمالي القيمة', width: '85px', align: 'center' as const },
+        { key: 'status', label: 'حالة المطابقة', width: '80px', align: 'center' as const }
       ];
 
       const customRows: Record<string, string | number>[] = activeProducts.map((p, idx) => {
         const physical = physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : p.stock;
         const diff = physical - p.stock;
         const statusStr = diff === 0 ? '✅ مطابق' : diff > 0 ? `+${diff} زيادة` : `${diff} عجز`;
+        const itemTotalCost = physical * (p.costPrice || 0);
 
         return {
           index: idx + 1,
@@ -556,29 +569,33 @@ export default function StockAudit({
           diff: diff > 0 ? `+${diff}` : diff,
           costPrice: isPrivacyMode ? '***' : `${p.costPrice.toLocaleString()} ${currency}`,
           sellingPrice: `${p.sellingPrice.toLocaleString()} ${currency}`,
+          totalCost: isPrivacyMode ? '***' : `${itemTotalCost.toLocaleString()} ${currency}`,
           status: statusStr
         };
       });
 
-      // إضافة صف الإجمالي النهائي
+      // إضافة صف الإجمالي النهائي الشامل
       customRows.push({
         index: 'الإجمالي',
         name: `إجمالي الأصناف: ${activeProducts.length} صنف`,
         barcode: '—',
         category: '—',
-        systemStock: activeProducts.reduce((sum, p) => sum + p.stock, 0),
-        physicalStock: activeProducts.reduce((sum, p) => sum + (physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : p.stock), 0),
+        systemStock: totalSystemPieces,
+        physicalStock: totalPhysicalPieces,
         diff: itemsAuditedWithDiff > 0 ? `${itemsAuditedWithDiff} صنف فيه فرق` : '0',
         costPrice: '—',
         sellingPrice: '—',
+        totalCost: isPrivacyMode ? '***' : `${totalPhysicalCostValue.toLocaleString()} ${currency}`,
         status: itemsAuditedWithDiff > 0 ? '⚠️ يحتاج تسوية' : '✅ مطابق بالكامل'
       });
 
       const summaryBoxes = [
-        { label: 'الأصناف', value: `${activeProducts.length} صنف`, color: '#0284c7' },
-        { label: 'المتطابقة', value: `${activeProducts.length - itemsAuditedWithDiff} صنف`, color: '#059669' },
-        { label: 'عجز ميداني', value: isPrivacyMode ? '***' : `${totalDeficitValue.toLocaleString()} ${currency}`, color: '#dc2626' },
-        { label: 'فائض ميداني', value: isPrivacyMode ? '***' : `${totalSurplusValue.toLocaleString()} ${currency}`, color: '#16a34a' }
+        { label: 'عدد الأصناف', value: `${activeProducts.length} صنف`, color: '#0284c7' },
+        { label: 'القطع الفعلية', value: `${totalPhysicalPieces} قطعة`, color: '#4f46e5' },
+        { label: 'إجمالي قيمة البضاعة (رأس المال)', value: isPrivacyMode ? '***' : `${totalPhysicalCostValue.toLocaleString()} ${currency}`, color: '#0f172a' },
+        { label: 'القيمة البيعية الإجمالية', value: `${totalPhysicalSellingValue.toLocaleString()} ${currency}`, color: '#059669' },
+        { label: 'عجز ميداني', value: isPrivacyMode ? '***' : (totalDeficitValue > 0 ? `${totalDeficitValue.toLocaleString()} ${currency}` : '0'), color: '#dc2626' },
+        { label: 'فائض ميداني', value: isPrivacyMode ? '***' : (totalSurplusValue > 0 ? `${totalSurplusValue.toLocaleString()} ${currency}` : '0'), color: '#16a34a' }
       ];
 
       await generateAndSharePDF({
@@ -588,15 +605,15 @@ export default function StockAudit({
         customerName: 'إدارة المستودعات والجرد الميداني',
         phone: '',
         date: todayStr + ' ' + new Date().toLocaleTimeString('ar-YE', { hour: '2-digit', minute: '2-digit' }),
-        paymentMethod: 'كشف مطابقة المخزون الفعلي',
+        paymentMethod: 'كشف مطابقة المخزون الفعلي مع تقييم البضاعة',
         orientation: 'l',
         customColumns,
         customRows,
         summaryBoxes,
-        subtotal: `${activeProducts.length} صنف مسجل`,
+        subtotal: isPrivacyMode ? '***' : `إجمالي قيمة البضاعة (سعر الشراء): ${totalPhysicalCostValue.toLocaleString()} ${currency}`,
         discount: totalDeficitValue > 0 ? `عجز: ${totalDeficitValue.toLocaleString()} ${currency}` : 'مطابق',
-        totalAmount: `${activeProducts.length} صنف`,
-        notes: `كشف مطابقة وجرد ميداني رسمي لكافة كميات المستودع. الأصناف التي تحتوي على فروقات: ${itemsAuditedWithDiff} صنف.`,
+        totalAmount: isPrivacyMode ? '***' : `${totalPhysicalCostValue.toLocaleString()} ${currency}`,
+        notes: `كشف مطابقة وجرد ميداني رسمي لكافة كميات المستودع (${activeProducts.length} صنف، ${totalPhysicalPieces} قطعة فعلية). الأصناف التي تحتوي على فروقات: ${itemsAuditedWithDiff} صنف.`,
         footerNote: '✨ كشف الجرد المعتمد - نظام سند المحاسبي'
       });
     } catch (e) {

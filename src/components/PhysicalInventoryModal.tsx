@@ -108,22 +108,24 @@ export function PhysicalInventoryModal({
       const todayStr = new Date().toLocaleDateString('ar-YE');
 
       const customColumns = [
-        { key: 'index', label: 'م', width: '35px', align: 'center' as const },
+        { key: 'index', label: 'م', width: '32px', align: 'center' as const },
         { key: 'name', label: 'اسم الصنف / السلعة', align: 'right' as const },
-        { key: 'barcode', label: 'الباركود', width: '90px', align: 'center' as const },
-        { key: 'category', label: 'التصنيف', width: '80px', align: 'center' as const },
-        { key: 'systemStock', label: 'النظام', width: '55px', align: 'center' as const },
-        { key: 'physicalStock', label: 'الفعلي', width: '55px', align: 'center' as const },
-        { key: 'diff', label: 'الفارق', width: '60px', align: 'center' as const },
-        { key: 'costPrice', label: 'سعر الشراء', width: '80px', align: 'center' as const },
-        { key: 'sellingPrice', label: 'سعر البيع', width: '80px', align: 'center' as const },
-        { key: 'status', label: 'الحالة', width: '85px', align: 'center' as const }
+        { key: 'barcode', label: 'الباركود', width: '85px', align: 'center' as const },
+        { key: 'category', label: 'التصنيف', width: '75px', align: 'center' as const },
+        { key: 'systemStock', label: 'النظام', width: '50px', align: 'center' as const },
+        { key: 'physicalStock', label: 'الفعلي', width: '50px', align: 'center' as const },
+        { key: 'diff', label: 'الفارق', width: '55px', align: 'center' as const },
+        { key: 'costPrice', label: 'سعر الشراء', width: '75px', align: 'center' as const },
+        { key: 'sellingPrice', label: 'سعر البيع', width: '75px', align: 'center' as const },
+        { key: 'totalCost', label: 'إجمالي القيمة', width: '85px', align: 'center' as const },
+        { key: 'status', label: 'الحالة', width: '80px', align: 'center' as const }
       ];
 
-      const customRows = filteredProducts.map((p, idx) => {
+      const customRows: Record<string, string | number>[] = filteredProducts.map((p, idx) => {
         const physical = physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : p.stock;
         const diff = physical - p.stock;
         const statusStr = diff === 0 ? '✅ مطابق' : diff > 0 ? `+${diff} زيادة` : `${diff} عجز`;
+        const itemValuation = physical * (p.costPrice || 0);
 
         return {
           index: idx + 1,
@@ -133,18 +135,38 @@ export function PhysicalInventoryModal({
           systemStock: p.stock,
           physicalStock: physical,
           diff: diff > 0 ? `+${diff}` : diff,
-          costPrice: `${p.costPrice.toLocaleString()} ${currency}`,
-          sellingPrice: `${p.sellingPrice.toLocaleString()} ${currency}`,
+          costPrice: `${(p.costPrice || 0).toLocaleString()} ${currency}`,
+          sellingPrice: `${(p.sellingPrice || 0).toLocaleString()} ${currency}`,
+          totalCost: `${itemValuation.toLocaleString()} ${currency}`,
           status: statusStr
         };
       });
 
+      const totalSysPieces = filteredProducts.reduce((sum, p) => sum + (p.stock || 0), 0);
+      const totalActPieces = filteredProducts.reduce((sum, p) => sum + (physicalCounts[p.id] !== undefined ? physicalCounts[p.id] : (p.stock || 0)), 0);
+
+      // صف الإجمالي النهائي
+      customRows.push({
+        index: 'الإجمالي',
+        name: `إجمالي الأصناف: ${filteredProducts.length} صنف`,
+        barcode: '—',
+        category: '—',
+        systemStock: totalSysPieces,
+        physicalStock: totalActPieces,
+        diff: (stats.deficit > 0 || stats.surplus > 0) ? `عجز: ${stats.deficit} / فائض: ${stats.surplus}` : '0',
+        costPrice: '—',
+        sellingPrice: '—',
+        totalCost: `${stats.totalValuation.toLocaleString()} ${currency}`,
+        status: stats.matched === stats.totalItems ? '✅ مطابق بالكامل' : '⚠️ يحتاج تسوية'
+      });
+
       const summaryBoxes = [
         { label: 'إجمالي الأصناف', value: `${activeProducts.length} صنف`, color: '#0284c7', bg: '#f0f9ff' },
+        { label: 'القطع الفعلية', value: `${totalActPieces} قطعة`, color: '#4f46e5', bg: '#eef2ff' },
         { label: 'الأصناف المتطابقة', value: `${stats.matched} صنف`, color: '#059669', bg: '#ecfdf5' },
         { label: 'إجمالي العجز', value: `${stats.deficit} قطعة`, color: '#dc2626', bg: '#fef2f2' },
         { label: 'إجمالي الفائض', value: `${stats.surplus} قطعة`, color: '#16a34a', bg: '#f0fdf4' },
-        { label: 'تقييم المخزون الفعلي', value: `${stats.totalValuation.toLocaleString()} ${currency}`, color: '#0f172a', bg: '#f8fafc' }
+        { label: 'إجمالي قيمة البضاعة (رأس المال)', value: `${stats.totalValuation.toLocaleString()} ${currency}`, color: '#0f172a', bg: '#f8fafc' }
       ];
 
       await generateAndSharePDF({

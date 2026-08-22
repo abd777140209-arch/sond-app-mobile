@@ -14,6 +14,16 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, './src'),
       },
     },
+    optimizeDeps: {
+      include: [
+        'react',
+        'react-dom',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+        'motion/react',
+        'lucide-react',
+      ],
+    },
     build: {
       chunkSizeWarningLimit: 6000,
       rollupOptions: {

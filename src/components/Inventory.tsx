@@ -14,22 +14,24 @@ import {
   Trash2, 
   AlertTriangle, 
   Layers, 
-  DollarSign,
-  Barcode,
-  Check,
-  X,
-  Filter,
-  CheckCircle2,
-  Tag,
-  Printer,
-  Eye,
-  EyeOff,
-  Camera,
-  Settings,
-  Download,
-  Volume2,
-  FileSpreadsheet,
-  FileText
+  DollarSign, 
+  Barcode, 
+  Check, 
+  X, 
+  Filter, 
+  CheckCircle2, 
+  Tag, 
+  Printer, 
+  Eye, 
+  EyeOff, 
+  Camera, 
+  Settings, 
+  Download, 
+  Volume2, 
+  FileSpreadsheet, 
+  FileText,
+  RotateCcw,
+  UploadCloud
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Product } from '../types';
@@ -42,6 +44,7 @@ import CameraBarcodeScannerModal from './CameraBarcodeScannerModal';
 import ManageCategoriesModal from './ManageCategoriesModal';
 import BulkProductAddModal from './BulkProductAddModal';
 import SmartInvoiceScannerModal from './SmartInvoiceScannerModal';
+import CsvRestoreProductsModal from './CsvRestoreProductsModal';
 
 interface InventoryProps {
   products: Product[];
@@ -65,6 +68,7 @@ interface InventoryProps {
   ) => void;
   onUpdateProduct: (product: Product) => void;
   onDeleteProduct: (productId: string) => void;
+  onRestoreProducts?: (newProductList: Product[]) => void;
   currency: string;
   storeName?: string;
   storeLogoUrl?: string;
@@ -77,6 +81,7 @@ export default function Inventory({
   onBulkAddProducts,
   onUpdateProduct,
   onDeleteProduct,
+  onRestoreProducts,
   currency,
   storeName = 'سند',
   storeLogoUrl,
@@ -87,6 +92,7 @@ export default function Inventory({
   const [showAddModal, setShowAddModal] = useState(false);
   const [showBulkAddModal, setShowBulkAddModal] = useState(false);
   const [showSmartInvoiceScannerModal, setShowSmartInvoiceScannerModal] = useState(false);
+  const [showCsvRestoreModal, setShowCsvRestoreModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLowStock, setFilterLowStock] = useState(false);
 
@@ -443,14 +449,14 @@ export default function Inventory({
       status: lowCount > 0 ? `⚠️ ${lowCount} بحاجة طلب` : '✅ مكتمل'
     });
 
-    // شريط إحصائيات مدمج وسريع
+    // شريط إحصائيات وبطاقات الإجماليات
     const summaryBoxes = [
-      { label: 'الأصناف', value: `${listToExport.length} صنف`, color: '#0284c7' },
+      { label: 'عدد الأصناف', value: `${listToExport.length} صنف`, color: '#0284c7' },
       { label: 'إجمالي القطع', value: `${totalPiecesCount} قطعة`, color: '#4f46e5' },
-      { label: 'رأس المال', value: isPrivacyMode ? '***' : `${totalCostSum.toLocaleString()} ${currency}`, color: '#0f172a' },
-      { label: 'القيمة البيعية', value: `${totalSellingSum.toLocaleString()} ${currency}`, color: '#059669' },
+      { label: 'إجمالي قيمة البضاعة (رأس المال)', value: isPrivacyMode ? '***' : `${totalCostSum.toLocaleString()} ${currency}`, color: '#0f172a' },
+      { label: 'القيمة البيعية للمخزون', value: `${totalSellingSum.toLocaleString()} ${currency}`, color: '#059669' },
       { label: 'الأرباح المتوقعة', value: isPrivacyMode ? '***' : `${totalProfitSum.toLocaleString()} ${currency}`, color: '#16a34a' },
-      { label: 'نواقص', value: `${lowCount} صنف`, color: lowCount > 0 ? '#dc2626' : '#16a34a' }
+      { label: 'الأصناف الناقصة', value: `${lowCount} صنف`, color: lowCount > 0 ? '#dc2626' : '#16a34a' }
     ];
 
     try {
@@ -461,14 +467,14 @@ export default function Inventory({
         customerName: 'إدارة المستودعات ومراقبة المخزون',
         phone: '',
         date: new Date().toLocaleDateString('ar-YE') + ' ' + new Date().toLocaleTimeString('ar-YE', { hour: '2-digit', minute: '2-digit' }),
-        paymentMethod: `كشف تفصيلي بأسعار الشراء والبيع والإجماليات`,
+        paymentMethod: `كشف تفصيلي بأسعار الشراء والبيع وإجمالي قيمة البضاعة`,
         orientation: 'l', // نمط أفقي (Landscape) لضمان اتساع ووضوح جميع الأعمدة بدقة
         customColumns,
         customRows,
         summaryBoxes,
-        subtotal: isPrivacyMode ? `إجمالي البيع: ${totalSellingSum.toLocaleString()} ${currency}` : `التكلفة: ${totalCostSum.toLocaleString()} ${currency}`,
+        subtotal: isPrivacyMode ? '***' : `إجمالي قيمة البضاعة (الشراء): ${totalCostSum.toLocaleString()} ${currency}`,
         discount: '0',
-        totalAmount: `${totalSellingSum.toLocaleString()} ${currency}`,
+        totalAmount: isPrivacyMode ? '***' : `${totalCostSum.toLocaleString()} ${currency}`,
         notes: `كشف جرد رسمي مدقق (${listToExport.length} صنف، ${totalPiecesCount} قطعة مخزنية).`,
         footerNote: '✨ كشف جرد المستودع المعتمد - نظام سند المحاسبي'
       });
@@ -754,10 +760,24 @@ export default function Inventory({
         {/* ROW 4: CLEAN COMPACT TOOLS & EXPORT BAR */}
         <div className="flex items-center justify-between gap-1.5 pt-2 border-t border-slate-100 flex-wrap text-xs">
           <div className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
-            <span>الأدوات والتصدير:</span>
+            <span>الأدوات والاستيراد:</span>
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap">
+            {/* استعادة واستيراد الأصناف من CSV */}
+            <button
+              id="inventory_restore_csv_btn"
+              onClick={() => {
+                soundManager.playScanBeep();
+                setShowCsvRestoreModal(true);
+              }}
+              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition flex items-center gap-1 cursor-pointer active:scale-95"
+              title="استعادة واستيراد أصناف وبضائع المخزن من ملف CSV أو Excel"
+            >
+              <RotateCcw className="w-3 h-3 text-indigo-600" />
+              <span>استعادة الأصناف CSV 📥</span>
+            </button>
+
             {/* طباعة ملصقات الباركود */}
             <button
               onClick={() => {
@@ -800,7 +820,7 @@ export default function Inventory({
               title="تصدير بيانات الجرد كملف CSV"
             >
               <Download className="w-3 h-3 text-slate-500" />
-              <span>CSV</span>
+              <span>تصدير CSV</span>
             </button>
 
             {/* زارا صوتي */}
@@ -824,6 +844,18 @@ export default function Inventory({
             <h3 className="text-base font-bold text-slate-900">سجل بضائع ومحتويات المستودع</h3>
             <div className="flex items-center gap-2 flex-wrap">
               <div className="hidden sm:flex items-center gap-1.5">
+                <button
+                  id="header_inventory_restore_csv_btn"
+                  onClick={() => {
+                    soundManager.playScanBeep();
+                    setShowCsvRestoreModal(true);
+                  }}
+                  className="px-2 py-1 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition flex items-center gap-1 cursor-pointer"
+                  title="استعادة واستيراد الأصناف من ملف CSV"
+                >
+                  <RotateCcw className="w-3 h-3 text-indigo-600" />
+                  <span>استعادة CSV</span>
+                </button>
                 <button
                   id="header_inventory_pdf_btn"
                   onClick={handleExportPDF}
@@ -1483,6 +1515,18 @@ export default function Inventory({
         categoriesList={categoriesList}
         currency={currency}
         onBulkAddProducts={handleBulkAddInternal}
+      />
+
+      {/* CSV / EXCEL RESTORE & IMPORT MODAL (استعادة واستيراد الأصناف من ملف) */}
+      <CsvRestoreProductsModal
+        isOpen={showCsvRestoreModal}
+        onClose={() => setShowCsvRestoreModal(false)}
+        existingProducts={products}
+        categoriesList={categoriesList}
+        currency={currency}
+        onBulkAddProducts={handleBulkAddInternal}
+        onUpdateProduct={onUpdateProduct}
+        onRestoreProducts={onRestoreProducts}
       />
 
     </div>
