@@ -312,8 +312,11 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
     }
   }
 
-  // 2. WEB SHARE API (MOBILE CHROME WITH FILE SHARING SUPPORT)
-  if (typeof navigator !== 'undefined' && (navigator as any).canShare && (navigator as any).share) {
+  const isMobileBrowser = typeof navigator !== 'undefined' && /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent || '');
+  const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
+
+  // 2. WEB SHARE API (FOR TOP-LEVEL MOBILE WEB BROWSERS WITH NATIVE SHARE SUPPORT)
+  if (!isInIframe && isMobileBrowser && typeof navigator !== 'undefined' && (navigator as any).canShare && (navigator as any).share) {
     try {
       const blob = isBase64 
         ? base64ToBlob(cleanData, mimeType)
@@ -330,11 +333,11 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
         return true;
       }
     } catch {
-      // Fallback to blob download
+      // Fallback to direct blob download
     }
   }
 
-  // 3. DESKTOP / WINDOWS / ELECTRON / BROWSER (SINGLE FILE DOWNLOAD LINK)
+  // 3. DESKTOP / WINDOWS / ELECTRON / STANDARD BROWSER (INSTANT DIRECT BLOB DOWNLOAD)
   try {
     const blob = isBase64 
       ? base64ToBlob(cleanData, mimeType)
@@ -353,7 +356,7 @@ export async function saveAndShareFile(options: SaveAndShareOptions): Promise<bo
         document.body.removeChild(link);
       }
       URL.revokeObjectURL(blobUrl);
-    }, 3000);
+    }, 1500);
 
     return true;
   } catch {

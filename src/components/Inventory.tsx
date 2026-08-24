@@ -31,7 +31,9 @@ import {
   FileSpreadsheet, 
   FileText,
   RotateCcw,
-  UploadCloud
+  UploadCloud,
+  Bell,
+  Sliders
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Product } from '../types';
@@ -45,6 +47,7 @@ import ManageCategoriesModal from './ManageCategoriesModal';
 import BulkProductAddModal from './BulkProductAddModal';
 import SmartInvoiceScannerModal from './SmartInvoiceScannerModal';
 import CsvRestoreProductsModal from './CsvRestoreProductsModal';
+import BulkMinStockModal from './BulkMinStockModal';
 
 interface InventoryProps {
   products: Product[];
@@ -93,6 +96,8 @@ export default function Inventory({
   const [showBulkAddModal, setShowBulkAddModal] = useState(false);
   const [showSmartInvoiceScannerModal, setShowSmartInvoiceScannerModal] = useState(false);
   const [showCsvRestoreModal, setShowCsvRestoreModal] = useState(false);
+  const [showBulkMinStockModal, setShowBulkMinStockModal] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLowStock, setFilterLowStock] = useState(false);
 
@@ -386,6 +391,8 @@ export default function Inventory({
 
   // 📄 تصدير كشف جرد المستودع والمخزون بصيغة PDF معتمدة ومرتبة ككشف محاسبي
   const handleExportPDF = async () => {
+    if (isExportingPdf) return;
+    setIsExportingPdf(true);
     soundManager.playScanBeep();
     const listToExport = filteredProducts.length > 0 ? filteredProducts : activeProductsList;
     const totalPiecesCount = listToExport.reduce((sum, p) => sum + (p.stock || 0), 0);
@@ -478,8 +485,11 @@ export default function Inventory({
         notes: `كشف جرد رسمي مدقق (${listToExport.length} صنف، ${totalPiecesCount} قطعة مخزنية).`,
         footerNote: '✨ كشف جرد المستودع المعتمد - نظام سند المحاسبي'
       });
+      soundManager.playSuccessChime();
     } catch (e) {
       console.error('Inventory PDF Export Error:', e);
+    } finally {
+      setIsExportingPdf(false);
     }
   };
 
@@ -543,6 +553,43 @@ export default function Inventory({
       window.speechSynthesis.speak(utterance);
     } else {
       alert(`🤖 المساعد زارا: إجمالي الأصناف ${activeProductsList.length} صنف، بقيمة تكلفة ${totalCostValue.toLocaleString()} ${currency}`);
+    }
+  };
+
+  // 🔔 تطبيق وضبط حد تنبيه النواقص لجميع الأصناف دفعة واحدة
+  const handleApplyBulkMinStock = (
+    newMinStock: number, 
+    scope: 'all' | 'category' | 'filtered', 
+    targetCategory?: string
+  ) => {
+    let targetIds = new Set<string>();
+    if (scope === 'all') {
+      targetIds = new Set(activeProductsList.map(p => p.id));
+    } else if (scope === 'category') {
+      targetIds = new Set(
+        activeProductsList
+          .filter(p => targetCategory === 'الكل' || p.category === targetCategory)
+          .map(p => p.id)
+      );
+    } else if (scope === 'filtered') {
+      targetIds = new Set(filteredProducts.map(p => p.id));
+    }
+
+    const updatedList = products.map(p => {
+      if (targetIds.has(p.id)) {
+        return { ...p, minStock: newMinStock };
+      }
+      return p;
+    });
+
+    if (onRestoreProducts) {
+      onRestoreProducts(updatedList);
+    } else {
+      products.forEach(p => {
+        if (targetIds.has(p.id)) {
+          onUpdateProduct({ ...p, minStock: newMinStock });
+        }
+      });
     }
   };
 
@@ -778,6 +825,20 @@ export default function Inventory({
               <span>استعادة الأصناف CSV 📥</span>
             </button>
 
+            {/* ضبط حد تنبيه النواقص لجميع الأصناف دفعة واحدة */}
+            <button
+              id="inventory_bulk_min_stock_btn"
+              onClick={() => {
+                soundManager.playScanBeep();
+                setShowBulkMinStockModal(true);
+              }}
+              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition flex items-center gap-1 cursor-pointer active:scale-95"
+              title="تحديد وضبط رقم التنبيه لنفاد الكمية (الحد الأدنى) لكل الأصناف دفعة واحدة"
+            >
+              <Bell className="w-3 h-3 text-amber-600" />
+              <span>حد التنبيه للكل 🔔</span>
+            </button>
+
             {/* طباعة ملصقات الباركود */}
             <button
               onClick={() => {
@@ -795,11 +856,20 @@ export default function Inventory({
             <button
               id="inventory_export_pdf_btn"
               onClick={handleExportPDF}
-              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition flex items-center gap-1 cursor-pointer active:scale-95"
+              disabled={isExportingPdf}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1 cursor-pointer active:scale-95 ${
+                isExportingPdf
+                  ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                  : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+              }`}
               title="تصدير كشف جرد المستودع كملف PDF معتمد"
             >
-              <FileText className="w-3 h-3 text-rose-600" />
-              <span>كشف PDF</span>
+              {isExportingPdf ? (
+                <div className="w-3 h-3 border-2 border-rose-600 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <FileText className="w-3 h-3 text-rose-600" />
+              )}
+              <span>{isExportingPdf ? 'جاري التصدير...' : 'كشف PDF'}</span>
             </button>
 
             {/* تصدير إكسل Excel */}
@@ -857,13 +927,34 @@ export default function Inventory({
                   <span>استعادة CSV</span>
                 </button>
                 <button
+                  id="header_inventory_bulk_min_stock_btn"
+                  onClick={() => {
+                    soundManager.playScanBeep();
+                    setShowBulkMinStockModal(true);
+                  }}
+                  className="px-2 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition flex items-center gap-1 cursor-pointer"
+                  title="تحديد وضبط رقم التنبيه لنفاد الكمية (الحد الأدنى) لكل الأصناف دفعة واحدة"
+                >
+                  <Bell className="w-3 h-3 text-amber-600" />
+                  <span>حد التنبيه 🔔</span>
+                </button>
+                <button
                   id="header_inventory_pdf_btn"
                   onClick={handleExportPDF}
-                  className="px-2 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition flex items-center gap-1 cursor-pointer"
+                  disabled={isExportingPdf}
+                  className={`px-2 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                    isExportingPdf
+                      ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                      : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+                  }`}
                   title="تصدير كشف PDF"
                 >
-                  <FileText className="w-3 h-3 text-rose-600" />
-                  <span>PDF</span>
+                  {isExportingPdf ? (
+                    <div className="w-3 h-3 border-2 border-rose-600 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <FileText className="w-3 h-3 text-rose-600" />
+                  )}
+                  <span>{isExportingPdf ? 'جاري التصدير...' : 'PDF'}</span>
                 </button>
                 <button
                   id="header_inventory_excel_btn"
@@ -1527,6 +1618,17 @@ export default function Inventory({
         onBulkAddProducts={handleBulkAddInternal}
         onUpdateProduct={onUpdateProduct}
         onRestoreProducts={onRestoreProducts}
+      />
+
+      {/* BULK LOW STOCK ALERT THRESHOLD MODAL (ضبط وتحديد حد التنبيه لكل الأصناف دفعة واحدة) */}
+      <BulkMinStockModal
+        isOpen={showBulkMinStockModal}
+        onClose={() => setShowBulkMinStockModal(false)}
+        products={products}
+        categories={['الكل', ...categoriesList]}
+        currentFilteredCount={filteredProducts.length}
+        filteredProductIds={filteredProducts.map(p => p.id)}
+        onApplyBulkMinStock={handleApplyBulkMinStock}
       />
 
     </div>
