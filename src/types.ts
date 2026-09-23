@@ -129,6 +129,60 @@ export interface CurrencyRate {
 
 export type BackupFrequency = 'off' | 'daily' | 'weekly' | 'monthly';
 
+export type ESCInternationalizationProfile = 
+  | 'truetype' // استخدم خط TrueType (حل جذري لمنع الرموز العشوائية)
+  | 'standard_lang' // تهيئة نموذجية للغة المختارة
+  | 'goojprt_pt210' // Goojprt PT-210
+  | 'star' // Star
+  | 'utf8_configured' // تم تكوينه بالفعل على أنه UTF-8
+  | 'utf8_esc_gs_t128' // ESC GS t 128
+  | 'utf8_esc_9_0x01'; // ESC 9 0x01
+
+export interface ThermalPrinterSettings {
+  printerModel: 'GP-U80300I' | 'standard-80mm' | 'portable-58mm' | 'custom';
+  paperWidth: '80mm' | '72mm' | '58mm';
+  printableWidthMm: number; // e.g. 72 for 80mm
+  fontScale: 'small' | 'standard' | 'large' | 'extralarge';
+  fontFamily: 'cairo' | 'tahoma' | 'monospace' | 'system';
+  numberFormat: 'latin' | 'arabic';
+  printDensity: 'normal' | 'dark' | 'extradark';
+  lineSpacing: 'compact' | 'standard' | 'relaxed';
+  marginTopMm: number;
+  marginBottomMm: number;
+  feedBeforeCutMm: number;
+  showLogo: boolean;
+  showHeaderName: boolean;
+  showBranchAddress: boolean;
+  showPhone: boolean;
+  showTaxNumber: boolean;
+  taxNumber?: string;
+  customHeaderTitle?: string;
+  showCashierName: boolean;
+  showCustomerInfo: boolean;
+  showPaymentMethod: boolean;
+  tableBorderType: 'dashed' | 'solid' | 'dotted' | 'double';
+  showQrCode: boolean;
+  qrSize: 'small' | 'standard' | 'large';
+  showBarcode: boolean;
+  footerGreeting?: string;
+  showReturnPolicy: boolean;
+  customFooterNote?: string;
+  autoPrintOnSale: boolean;
+  autoCutPaper: boolean;
+  openCashDrawer: boolean;
+  printCopies: number;
+  beepOnPrint: boolean;
+  arabicFixMode: 'standard' | 'direct_sharp' | 'bold_crisp';
+  
+  // خيارات ملف تعريف ESC العام والتدويل (RawBT ESC Profile & TrueType)
+  escProfile?: ESCInternationalizationProfile;
+  useTrueTypeFont?: boolean; // استخدام خط TrueType لمنع الرموز العشوائية وطباعة حروف عربية متصلة
+  feedLinesCount?: number; // عدد الخطوط التي يتم تمريرها (مثل 2)
+  enablePaperCut?: boolean; // قص الورق
+  directRawBTSupport?: boolean; // تفعيل الربط المباشر مع تطبيق RawBT
+  printEnvironment?: 'auto' | 'pc' | 'android_rawbt'; // بيئة الطباعة: كشف تلقائي أو كمبيوتر (وندوز/USB) أو أندرويد (تطبيق RawBT)
+}
+
 export interface SystemSettings {
   storeName: string;
   companyName?: string;
@@ -157,6 +211,7 @@ export interface SystemSettings {
   driveBackupSchedule?: BackupFrequency;
   lastLocalBackupDate?: string;
   lastDriveBackupDate?: string;
+  printerSettings?: ThermalPrinterSettings;
 }
 
 export interface Employee {

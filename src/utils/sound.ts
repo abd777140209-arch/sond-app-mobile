@@ -23,6 +23,10 @@ class DesktopSoundManager {
     }
   }
 
+  playCashRegister() {
+    this.playSuccessChime();
+  }
+
   playWarningBeep() {
     try {
       playErrorWarningSound();

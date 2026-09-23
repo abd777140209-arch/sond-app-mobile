@@ -7,8 +7,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   getFirestore, 
   initializeFirestore, 
-  persistentLocalCache, 
-  persistentMultipleTabManager,
+  memoryLocalCache,
   setLogLevel,
   doc, 
   getDoc, 
@@ -132,16 +131,31 @@ export function getFirestoreDb() {
         setLogLevel('silent');
       } catch (e) {}
 
+      // Safely cleanup any previously aborted or corrupt IndexedDB databases left by persistentLocalCache
+      if (typeof window !== 'undefined' && window.indexedDB) {
+        try {
+          if (typeof window.indexedDB.databases === 'function') {
+            window.indexedDB.databases().then((dbs) => {
+              dbs.forEach((dbInfo) => {
+                if (dbInfo.name && (dbInfo.name.startsWith('firestore/') || dbInfo.name.includes('firestore'))) {
+                  try {
+                    window.indexedDB.deleteDatabase(dbInfo.name);
+                  } catch {}
+                }
+              });
+            }).catch(() => {});
+          }
+        } catch {}
+      }
+
       try {
         firestoreDb = initializeFirestore(app, {
-          localCache: persistentLocalCache({
-            tabManager: persistentMultipleTabManager()
-          }),
+          localCache: memoryLocalCache(),
           experimentalForceLongPolling: true
         });
-        console.log("Firestore offline persistence and long-polling enabled successfully.");
-      } catch (persistenceError) {
-        console.warn("Firestore offline persistence fallback to memory cache:", persistenceError);
+        console.log("Firestore initialized with in-memory cache and reliable long-polling.");
+      } catch (initError) {
+        console.warn("Firestore initialize fallback to getFirestore:", initError);
         firestoreDb = getFirestore(app);
       }
     } catch (e) {

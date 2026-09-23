@@ -58,6 +58,8 @@ import { soundManager } from '../utils/sound';
 import { loadLicenseLocally, saveLicenseLocally, generateHWID, LicenseInfo } from '../utils/licensing';
 import { activateLicenseOnCloud } from '../utils/firebase';
 import { safeStorage } from '../utils/safeStorage';
+import { ThermalPrinterSettingsSection } from './ThermalPrinterSettingsSection';
+import { loadThermalPrinterSettings } from '../utils/printerConfig';
 
 interface SettingsProps {
   settings: SystemSettings;
@@ -578,7 +580,8 @@ export default function Settings({
       driveBackupAccount: driveBackupAccount.trim() || 'حساب Google Drive المرتبط',
       driveBackupSchedule,
       lastLocalBackupDate,
-      lastDriveBackupDate
+      lastDriveBackupDate,
+      printerSettings: settings.printerSettings || loadThermalPrinterSettings()
     });
 
     setSaveSuccess(true);
@@ -1254,6 +1257,12 @@ export default function Settings({
       {/* RIGHT COLUMN: Store Profile & Security Settings (7 cols) */}
       <div className="lg:col-span-7 space-y-6">
         
+        {/* NEW: Dedicated Thermal Printer Settings for GP-U80300I */}
+        <ThermalPrinterSettingsSection
+          settings={settings}
+          onUpdateSystemSettings={onSaveSettings}
+        />
+
         <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
           <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
             <div className="p-2 rounded-xl bg-blue-50 text-blue-600">

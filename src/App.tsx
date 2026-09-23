@@ -78,6 +78,7 @@ import {
 } from './utils/firebaseSync';
 import { listenToLicenseOnCloud, checkLicenseOnCloud, CloudLicense } from './utils/firebase';
 import { safeStorage, cleanUpStorageQuota } from './utils/safeStorage';
+import { loadThermalPrinterSettings, saveThermalPrinterSettings } from './utils/printerConfig';
 
 export default function App() {
   // 1. All Component State Initializations
@@ -109,6 +110,10 @@ export default function App() {
                         (localStorage.getItem('app_interface_mode') as 'mobile' | 'desktop');
     if (savedLayout === 'desktop' || savedLayout === 'mobile') {
       parsed.deviceMode = savedLayout;
+    }
+
+    if (!parsed.printerSettings) {
+      parsed.printerSettings = loadThermalPrinterSettings();
     }
 
     return parsed;
@@ -344,6 +349,20 @@ export default function App() {
   // 🧹 Run storage cleanup on boot
   useEffect(() => {
     cleanUpStorageQuota();
+  }, []);
+
+  // 🖨️ Listener for live thermal printer settings updates
+  useEffect(() => {
+    const handlePrinterSettingsChange = (e: any) => {
+      if (e.detail) {
+        setSettings(prev => ({
+          ...prev,
+          printerSettings: e.detail
+        }));
+      }
+    };
+    window.addEventListener('printer_settings_updated', handlePrinterSettingsChange);
+    return () => window.removeEventListener('printer_settings_updated', handlePrinterSettingsChange);
   }, []);
 
   // 🖥️📱 Listener for System Interface Mode changes
@@ -759,6 +778,9 @@ export default function App() {
     }
     if (newSettings.storeName) {
       safeStorage.setItem('smart_accounting_store_name', newSettings.storeName);
+    }
+    if (newSettings.printerSettings) {
+      saveThermalPrinterSettings(newSettings.printerSettings);
     }
     setSettings(newSettings);
     if (license.licenseKey) saveStoreSettings(license.licenseKey, newSettings);
