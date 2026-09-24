@@ -40,9 +40,6 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Add & Sync Capacitor Android
         run: |
           cap add android || true
