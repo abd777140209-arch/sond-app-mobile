@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Alexandria:wght@400;600;700;800;900&family=Almarai:wght@400;700;800&family=Amiri:wght@400;700&family=Cairo:wght@300;400;500;600;700;800;900&family=Changa:wght@400;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Tajawal:wght@400;500;700;800;900&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -41,22 +41,9 @@ body {
 
 /* Print utility styles */
 @media print {
-  @page {
-    margin: 0;
-    size: auto;
-  }
-  
-  body {
-    background: #ffffff !important;
-    color: #000000 !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
   .no-print {
     display: none !important;
   }
-  
   .print-area {
     display: block !important;
     width: 100% !important;
@@ -65,72 +52,6 @@ body {
     top: 0;
     background: white !important;
     color: black !important;
-  }
-
-  /* When printing from InvoiceModal: isolate only the invoice card! */
-  body.modal-invoice-open > *:not(#invoice_modal_overlay) {
-    display: none !important;
-  }
-
-  body.modal-invoice-open #invoice_modal_overlay {
-    position: static !important;
-    background: #ffffff !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    display: block !important;
-    height: auto !important;
-    max-height: none !important;
-  }
-
-  body.modal-invoice-open #invoice_modal_overlay > div {
-    border: none !important;
-    box-shadow: none !important;
-    max-width: 100% !important;
-    width: 100% !important;
-    height: auto !important;
-    max-height: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    background: #ffffff !important;
-    overflow: visible !important;
-  }
-
-  body.modal-invoice-open #invoice-printable-card {
-    display: block !important;
-    position: static !important;
-    width: 100% !important;
-    max-width: 80mm !important;
-    margin: 0 auto !important;
-    padding: 1.5mm 2.5mm !important;
-    background: #ffffff !important;
-    color: #000000 !important;
-    box-shadow: none !important;
-    overflow: visible !important;
-  }
-
-  /* When body is in thermal printing mode, isolate the thermal print container */
-  body.sanad-printing-thermal > *:not(#sanad-thermal-print-container) {
-    display: none !important;
-  }
-
-  #sanad-thermal-print-container {
-    display: block !important;
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 100% !important;
-    max-width: 80mm !important;
-    margin: 0 auto !important;
-    padding: 0 !important;
-    background: #ffffff !important;
-    color: #000000 !important;
-    z-index: 9999999 !important;
-  }
-}
-
-@media screen {
-  #sanad-thermal-print-container {
-    display: none !important;
   }
 }
 

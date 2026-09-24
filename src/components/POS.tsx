@@ -202,7 +202,8 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
           name: product.name,
           quantity: quantityToAdd,
           sellingPrice: product.sellingPrice,
-          total: product.sellingPrice * quantityToAdd
+          total: product.sellingPrice * quantityToAdd,
+          barcode: product.barcode
         }];
       }
     });

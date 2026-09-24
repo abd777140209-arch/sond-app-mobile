@@ -28,7 +28,8 @@ import {
   Sparkles,
   Coins,
   Smartphone,
-  Bot
+  Bot,
+  Printer
 } from 'lucide-react';
 import { SystemSettings, MaintenanceOrder, Product, UserAccount } from '../types';
 import { soundManager } from '../utils/sound';
@@ -168,6 +169,14 @@ export default function Navigation({
       icon: Wrench,
       color: 'orange',
       badgeCount: activeMaintenanceCount
+    },
+    {
+      id: 'printer_settings',
+      label: 'إعدادات الطابعة وتخصيص الفواتير',
+      sublabel: 'ضبط الطابعة الحرارية وتخصيص نمط وشكل الفواتير',
+      icon: Printer,
+      color: 'blue',
+      badge: 'جديد 🖨️'
     },
     {
       id: 'settings',
@@ -535,6 +544,33 @@ export default function Navigation({
             </button>
           )}
 
+          {/* Printer & Invoice Studio */}
+          {isTabAllowed('printer_settings') && (
+            <button
+              id="tab_trigger_printer_settings"
+              onClick={() => handleTabSelect('printer_settings')}
+              className={`group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs transition-all cursor-pointer w-full text-right ${
+                activeTab === 'printer_settings'
+                  ? 'bg-blue-50/90 text-blue-950 font-bold border-r-4 border-blue-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${
+                  activeTab === 'printer_settings'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white'
+                }`}>
+                  <Printer className="w-4 h-4" />
+                </div>
+                <span>ضبط الطابعة والفواتير</span>
+              </div>
+              <span className="px-1.5 py-0.5 text-[8.5px] font-extrabold bg-blue-100 text-blue-800 border border-blue-300 rounded-md">
+                جديد 🖨️
+              </span>
+            </button>
+          )}
+
           {/* Settings */}
           {isTabAllowed('settings') && (
             <button
@@ -568,14 +604,14 @@ export default function Navigation({
           <button
             id="sidebar_logout_btn"
             onClick={() => {
-              if (confirm('⚠️ هل أنت متأكد من رغبتك في تسجيل الخروج وإلغاء ترخيص الجهاز؟')) {
+              if (confirm('⚠️ هل أنت متأكد من رغبتك في تسجيل الخروج وقفل الجلسة؟')) {
                 handleLogout();
               }
             }}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition-all cursor-pointer text-right"
           >
             <LogOut className="w-4 h-4 shrink-0" />
-            <span>تسجيل الخروج</span>
+            <span>تسجيل الخروج وقفل الجلسة</span>
           </button>
         </div>
 
@@ -859,14 +895,14 @@ export default function Navigation({
                 <button
                   onClick={() => {
                     setIsMoreMenuOpen(false);
-                    if (confirm('⚠️ هل أنت متأكد من رغبتك في تسجيل الخروج وإلغاء ترخيص الجهاز؟')) {
+                    if (confirm('⚠️ هل أنت متأكد من رغبتك في تسجيل الخروج وقفل الجلسة؟')) {
                       handleLogout();
                     }
                   }}
                   className="w-full py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition"
                 >
                   <LogOut className="w-4 h-4" />
-                  <span>تسجيل الخروج وإلغاء الترخيص</span>
+                  <span>تسجيل الخروج وقفل الجلسة</span>
                 </button>
               </div>
             </motion.div>

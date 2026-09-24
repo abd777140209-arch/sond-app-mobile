@@ -44,8 +44,14 @@ import {
   Share2,
   Monitor,
   Smartphone,
-  Tablet
+  Tablet,
+  Printer,
+  SlidersHorizontal,
+  Zap
 } from 'lucide-react';
+import PrinterInvoiceStudio from './PrinterInvoiceStudio';
+import { getEffectivePrinterSettings } from '../utils/printerDefaults';
+import { printSalesInvoiceThermalHTML } from '../services/ReceiptPrinter';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
@@ -58,8 +64,6 @@ import { soundManager } from '../utils/sound';
 import { loadLicenseLocally, saveLicenseLocally, generateHWID, LicenseInfo } from '../utils/licensing';
 import { activateLicenseOnCloud } from '../utils/firebase';
 import { safeStorage } from '../utils/safeStorage';
-import { ThermalPrinterSettingsSection } from './ThermalPrinterSettingsSection';
-import { loadThermalPrinterSettings } from '../utils/printerConfig';
 
 interface SettingsProps {
   settings: SystemSettings;
@@ -216,6 +220,7 @@ export default function Settings({
   const [folderInputVal, setFolderInputVal] = useState(backupFolderPath);
   const [showDriveModal, setShowDriveModal] = useState(false);
   const [driveAccountInputVal, setDriveAccountInputVal] = useState(driveBackupAccount);
+  const [settingsTab, setSettingsTab] = useState<'all' | 'printer'>('all');
 
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [currentLicense, setCurrentLicense] = useState<LicenseInfo>(() => loadLicenseLocally());
@@ -556,6 +561,7 @@ export default function Settings({
     safeStorage.setItem('smart_accounting_store_name', storeName.trim());
 
     onSaveSettings({
+      ...settings,
       storeName: storeName.trim(),
       storeLogoUrl,
       currency: (selectedCurrencySymbol || currency).trim(),
@@ -581,7 +587,7 @@ export default function Settings({
       driveBackupSchedule,
       lastLocalBackupDate,
       lastDriveBackupDate,
-      printerSettings: settings.printerSettings || loadThermalPrinterSettings()
+      printerSettings: settings.printerSettings || getEffectivePrinterSettings(settings)
     });
 
     setSaveSuccess(true);
@@ -860,6 +866,62 @@ export default function Settings({
   return (
     <div id="settings_tab_view" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start pb-28 dir-rtl" dir="rtl">
       
+      {/* TOP SECTION: Settings Navigation Tabs */}
+      <div className="lg:col-span-12 flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2 bg-slate-100 rounded-2xl border border-slate-200">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => {
+              soundManager.playScanBeep();
+              setSettingsTab('all');
+            }}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              settingsTab === 'all'
+                ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-300'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+          >
+            <Building2 className="w-4 h-4 text-blue-600" />
+            <span>إعدادات النظام العامة والنشاط والنسخ</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              soundManager.playScanBeep();
+              setSettingsTab('printer');
+            }}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              settingsTab === 'printer'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200'
+            }`}
+          >
+            <Printer className="w-4 h-4 text-blue-500" />
+            <span>مركز ضبط الطابعة وتخصيص الفواتير والمستندات</span>
+            <span className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-bold ${settingsTab === 'printer' ? 'bg-white/20 text-white' : 'bg-blue-200 text-blue-900'}`}>
+              جديد 🖨️
+            </span>
+          </button>
+        </div>
+
+        <div className="hidden sm:flex items-center gap-2 text-[11px] text-slate-500 font-bold px-2">
+          <span>سند المحاسبي</span>
+          <span>·</span>
+          <span>إصدار 2026</span>
+        </div>
+      </div>
+
+      {settingsTab === 'printer' ? (
+        <div className="lg:col-span-12">
+          <PrinterInvoiceStudio
+            settings={settings}
+            onSaveSettings={onSaveSettings}
+            isStandaloneTab={false}
+          />
+        </div>
+      ) : (
+        <>
       {/* LEFT COLUMN: System Info & License (5 cols) */}
       <div className="lg:col-span-5 space-y-6">
         
@@ -1257,11 +1319,150 @@ export default function Settings({
       {/* RIGHT COLUMN: Store Profile & Security Settings (7 cols) */}
       <div className="lg:col-span-7 space-y-6">
         
-        {/* NEW: Dedicated Thermal Printer Settings for GP-U80300I */}
-        <ThermalPrinterSettingsSection
-          settings={settings}
-          onUpdateSystemSettings={onSaveSettings}
-        />
+        {/* Dedicated Printer & Invoice Customization Hub Card */}
+        <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-50/90 via-white to-sky-50/50 border border-blue-200 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-blue-100">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2.5 rounded-xl bg-blue-600 text-white shadow-xs">
+                <Printer className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  <span>قسم ضبط الطابعة وتخصيص الفواتير</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                    مباشر وسريع
+                  </span>
+                </h3>
+                <p className="text-[11px] text-slate-500">ضبط طابعة الكاشير وتخصيص شكل ونمط الفواتير والمستندات</p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                soundManager.playScanBeep();
+                setSettingsTab('printer');
+              }}
+              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95 shrink-0"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>تخصيص الفاتورة بالكامل ⚡</span>
+            </button>
+          </div>
+
+          {/* Quick Info Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+            <div className="p-2.5 rounded-xl bg-white border border-blue-100">
+              <span className="text-[10px] text-slate-400 block mb-0.5">نوع الاتصال:</span>
+              <span className="font-bold text-slate-800 flex items-center gap-1">
+                <Zap className="w-3 h-3 text-amber-500" />
+                {settings.printerSettings?.connectionType === 'bluetooth' ? 'بلوتوث لاسلكي' :
+                 settings.printerSettings?.connectionType === 'network_ip' ? 'شبكي LAN' :
+                 settings.printerSettings?.connectionType === 'thermal_usb' ? 'كاشير USB' : 'نافذة النظام'}
+              </span>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-white border border-blue-100">
+              <span className="text-[10px] text-slate-400 block mb-0.5">حجم الورق:</span>
+              <span className="font-mono font-bold text-blue-600">
+                {settings.printerSettings?.paperSize ? settings.printerSettings.paperSize.toUpperCase() : '80MM'}
+              </span>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-white border border-blue-100">
+              <span className="text-[10px] text-slate-400 block mb-0.5">نمط الفاتورة:</span>
+              <span className="font-bold text-slate-800">
+                {settings.printerSettings?.templateStyle === 'classic' ? 'حراري كلاسيكي' :
+                 settings.printerSettings?.templateStyle === 'boxed' ? 'شبكي مؤطر' :
+                 settings.printerSettings?.templateStyle === 'official' ? 'رسمي معتمد' :
+                 settings.printerSettings?.templateStyle === 'minimal' ? 'اقتصادي سريع' : 'عصري فاخر'}
+              </span>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-white border border-indigo-100 bg-indigo-50/30">
+              <span className="text-[10px] text-indigo-500 block mb-0.5">خط الفاتورة:</span>
+              <span className="font-bold text-indigo-900">
+                {settings.printerSettings?.fontFamily === 'tajawal' ? 'خط تجوال' :
+                 settings.printerSettings?.fontFamily === 'almarai' ? 'خط المراعي' :
+                 settings.printerSettings?.fontFamily === 'alexandria' ? 'الإسكندرية' :
+                 settings.printerSettings?.fontFamily === 'ibm_plex' ? 'IBM بلكس' :
+                 settings.printerSettings?.fontFamily === 'changa' ? 'تشانجا عريض' :
+                 settings.printerSettings?.fontFamily === 'amiri' ? 'أميري ملكي' :
+                 settings.printerSettings?.fontFamily === 'tahoma' ? 'تاهوما POS' :
+                 settings.printerSettings?.fontFamily === 'monospace' ? 'نقطي كاشير' : 'خط كايرو'}
+              </span>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-white border border-indigo-100 bg-indigo-50/30">
+              <span className="text-[10px] text-indigo-500 block mb-0.5">سماكة الخط ولونه:</span>
+              <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                <span className="w-2.5 h-2.5 rounded-full border border-black/20 shrink-0" style={{ backgroundColor: settings.printerSettings?.fontColor || '#000000' }} />
+                <span>
+                  {settings.printerSettings?.fontWeight === 'heavy' ? 'سميك جداً 900' :
+                   settings.printerSettings?.fontWeight === 'medium' ? 'شبه عريض 600' :
+                   settings.printerSettings?.fontWeight === 'normal' ? 'عادي 500' : 'عريض 700'}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-white border border-blue-100">
+              <span className="text-[10px] text-slate-400 block mb-0.5">الرمز التوثيقي:</span>
+              <span className="font-bold text-slate-800">
+                {settings.printerSettings?.codeType === 'barcode' ? 'باركود شريطي' :
+                 settings.printerSettings?.codeType === 'both' ? 'QR + باركود' :
+                 settings.printerSettings?.codeType === 'none' ? 'بدون رمز' : 'رمز QR ذكي'}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2 pt-1">
+            <button
+              type="button"
+              onClick={async () => {
+                soundManager.playScanBeep();
+                const currentCfg = getEffectivePrinterSettings(settings);
+                await printSalesInvoiceThermalHTML(
+                  settings.storeName || 'سند للمحاسبة والخدمات',
+                  {
+                    invoiceNumber: `TEST-${Date.now().toString().slice(-5)}`,
+                    customerName: 'عميل تجريبي (فحص سريع)',
+                    customerPhone: '777000000',
+                    date: new Date().toISOString(),
+                    paymentMethod: 'نقدي (كاش)',
+                    items: [
+                      { name: 'شاشة حماية زجاج نانو 9D (فحص)', quantity: 2, sellingPrice: 1500, total: 3000 },
+                      { name: 'كابل شحن سريع Type-C معتمد 65W', quantity: 1, sellingPrice: 3500, total: 3500 }
+                    ],
+                    totalAmount: 6500,
+                    finalAmount: 6500,
+                    notes: currentCfg.footerPolicyNote,
+                    storeLogoUrl: currentCfg.showLogo ? settings.storeLogoUrl : '',
+                    storeAddress: settings.address,
+                    storePhone: settings.phone,
+                    paperSize: currentCfg.paperSize,
+                    printerSettings: currentCfg
+                  },
+                  settings.currency || 'ر.ي'
+                );
+              }}
+              className="flex-1 py-2.5 px-3 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-98"
+            >
+              <Printer className="w-4 h-4 text-blue-600" />
+              <span>طباعة تجريبية فورية للتحقق من الطابعة 🖨️</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                soundManager.playScanBeep();
+                setSettingsTab('printer');
+              }}
+              className="py-2.5 px-4 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <span>فتح وضبط خيارات الطابعة بالكامل ⚙️</span>
+            </button>
+          </div>
+        </div>
 
         <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
           <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
@@ -1956,6 +2157,8 @@ export default function Settings({
         </div>
 
       </div>
+      </>
+      )}
 
       {/* Modal: Custom Backup Folder Picker */}
       {showFolderModal && (

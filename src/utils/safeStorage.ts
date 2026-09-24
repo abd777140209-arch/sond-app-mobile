@@ -63,11 +63,24 @@ export function cleanUpStorageQuota(): void {
       } catch {}
     }
 
-    // 2. Scan and remove all auto backup / cache keys starting with known prefixes
+    // 2. Scan and remove all auto backup / cache keys starting with known prefixes (NEVER touch license, HWID or activation keys)
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (k) {
+        // Strict protection for license and activation tokens
+        if (
+          k.includes('license') || 
+          k.includes('hwid') || 
+          k.includes('active_code') || 
+          k.includes('permanent') || 
+          k.includes('reg_key') || 
+          k.includes('biometric') ||
+          k.includes('central_license')
+        ) {
+          continue;
+        }
+
         if (
           k.startsWith('sanad_auto_backup_') ||
           k.startsWith('sanad_backup_') ||

@@ -33,19 +33,6 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   private handleReset = () => {
-    try {
-      if (typeof window !== 'undefined' && window.indexedDB && typeof window.indexedDB.databases === 'function') {
-        window.indexedDB.databases().then((dbs) => {
-          dbs.forEach((dbInfo) => {
-            if (dbInfo.name && (dbInfo.name.startsWith('firestore/') || dbInfo.name.includes('firestore'))) {
-              try {
-                window.indexedDB.deleteDatabase(dbInfo.name);
-              } catch {}
-            }
-          });
-        }).catch(() => {});
-      }
-    } catch {}
     this.setState({ hasError: false, error: null });
     window.location.reload();
   };

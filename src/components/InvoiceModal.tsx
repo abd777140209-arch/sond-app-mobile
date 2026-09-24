@@ -3,86 +3,132 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
-import { Printer, Download, X, ShieldCheck, Heart, Smartphone, SlidersHorizontal, MessageCircle, FileDown, Loader2, Share2, Bluetooth, QrCode, ArrowRight, Eye, Paperclip, Image as ImageIcon, Zap, Check, Laptop } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Printer, 
+  Download, 
+  X, 
+  ShieldCheck, 
+  Heart, 
+  Smartphone, 
+  SlidersHorizontal, 
+  MessageCircle, 
+  FileDown, 
+  Loader2, 
+  Share2, 
+  Bluetooth, 
+  QrCode, 
+  ArrowRight, 
+  Eye, 
+  Paperclip, 
+  Image as ImageIcon,
+  Palette,
+  Sparkles,
+  Settings,
+  Scissors,
+  Type
+} from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Filesystem, Directory } from '@capacitor/filesystem';
-import { Share } from '@capacitor/share';
-import { Capacitor } from '@capacitor/core';
-import { Invoice, SystemSettings, Customer, ThermalPrinterSettings } from '../types';
+import JsBarcode from 'jsbarcode';
+import { 
+  Invoice, 
+  SystemSettings, 
+  Customer, 
+  InvoicePaperSize, 
+  InvoiceTemplateStyle, 
+  PrinterSettings,
+  InvoiceFontFamily,
+  InvoiceFontSizeScale,
+  InvoiceFontWeight
+} from '../types';
 import { soundManager } from '../utils/sound';
 import { formatPaymentMethodLabel } from '../utils/paymentMethods';
-import { requestStoragePermissionOnDemand } from '../utils/androidPermissions';
 import { safeStorage } from '../utils/safeStorage';
 import { saveAndShareFile } from '../utils/fileExport';
 import { openWhatsApp } from '../utils/nativeLauncher';
 import { 
   printSalesInvoiceThermalHTML, 
   generateSalesInvoiceThermalPDF, 
-  SalesInvoicePrintData, 
-  generateBarcodeDataUrl, 
-  generateInvoiceQrPng,
-  printInvoiceViaRawBT
+  SalesInvoicePrintData 
 } from '../services/ReceiptPrinter';
 import { 
-  convertInvoiceToEscPos, 
-  printSalesInvoiceEscPosDirect, 
-  downloadEscPosBinaryFile, 
-  checkBrowserDeviceSupport 
-} from '../services/EscPosHelper';
-import { loadThermalPrinterSettings, saveThermalPrinterSettings, isAndroidClient } from '../utils/printerConfig';
+  getEffectivePrinterSettings, 
+  savePrinterSettingsLocally,
+  INVOICE_FONTS,
+  INVOICE_FONT_COLORS,
+  INVOICE_FONT_WEIGHTS,
+  INVOICE_FONT_SIZE_SCALES,
+  getFontFamilyCss,
+  getFontWeightCss,
+  getLineHeightCss,
+  getFontSizeMultiplier
+} from '../utils/printerDefaults';
 
 interface InvoiceModalProps {
   invoice: Invoice | null;
   onClose: () => void;
   settings: SystemSettings;
   customers?: Customer[];
+  onOpenPrinterSettings?: () => void;
+  onSaveSettings?: (settings: SystemSettings) => void;
 }
 
-export default function InvoiceModal({ invoice, onClose, settings, customers }: InvoiceModalProps) {
-  const [printerConfig, setPrinterConfig] = useState<ThermalPrinterSettings>(() => {
-    return settings.printerSettings || loadThermalPrinterSettings();
-  });
-  const [paperSize, setPaperSize] = useState<'80mm' | '58mm'>(() => {
-    return (settings.printerSettings?.paperWidth as '80mm' | '58mm') || (loadThermalPrinterSettings().paperWidth as '80mm' | '58mm') || '80mm';
-  });
-  const [autoDirectPrint, setAutoDirectPrint] = useState(() => {
-    return safeStorage.getItem('auto_direct_print') === 'true';
+export default function InvoiceModal({ 
+  invoice, 
+  onClose, 
+  settings, 
+  customers,
+  onOpenPrinterSettings,
+  onSaveSettings
+}: InvoiceModalProps) {
+  // 1. Reactive Printer & Template Settings
+  const [printerConfig, setPrinterConfig] = useState<PrinterSettings>(() => {
+    return getEffectivePrinterSettings(settings);
   });
 
-  const [barcodeDataUrl, setBarcodeDataUrl] = useState<string>('');
-  const [qrPngDataUrl, setQrPngDataUrl] = useState<string>('');
+  const [paperSize, setPaperSize] = useState<InvoicePaperSize>(
+    printerConfig.paperSize || '80mm'
+  );
+
+  const [autoDirectPrint, setAutoDirectPrint] = useState(() => {
+    return safeStorage.getItem('auto_direct_print') === 'true' || printerConfig.autoPrintOnSale;
+  });
+
   const [showWhatsAppForm, setShowWhatsAppForm] = useState(false);
   const [phoneInput, setPhoneInput] = useState('');
   const [isExportingPDF, setIsExportingPDF] = useState(false);
-  const [isEscPosPrinting, setIsEscPosPrinting] = useState(false);
   const [isBluetoothConnecting, setIsBluetoothConnecting] = useState(false);
   const [showProofModal, setShowProofModal] = useState(false);
-  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+  const [showQuickTemplatePicker, setShowQuickTemplatePicker] = useState(false);
 
-  // Sync settings when parent passes updated props
+  const barcodeCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Sync settings when external props change
   useEffect(() => {
-    const current = settings.printerSettings || loadThermalPrinterSettings();
-    setPrinterConfig(current);
-    if (current.paperWidth) {
-      setPaperSize(current.paperWidth as '80mm' | '58mm');
+    const updated = getEffectivePrinterSettings(settings);
+    setPrinterConfig(updated);
+    if (updated.paperSize) {
+      setPaperSize(updated.paperSize);
     }
-  }, [settings.printerSettings]);
+  }, [settings]);
 
-  // Listen for live printer settings events
+  // Listen to cross-tab or global printer settings updates
   useEffect(() => {
-    const handlePrinterSettingsChange = (e: any) => {
-      if (e.detail) {
-        setPrinterConfig(e.detail);
-        if (e.detail.paperWidth) {
-          setPaperSize(e.detail.paperWidth as '80mm' | '58mm');
+    const handleSettingsUpdated = (e: any) => {
+      if (e?.detail) {
+        setPrinterConfig(prev => ({ ...prev, ...e.detail }));
+        if (e.detail.paperSize) {
+          setPaperSize(e.detail.paperSize);
         }
+      } else {
+        setPrinterConfig(getEffectivePrinterSettings(settings));
       }
     };
-    window.addEventListener('printer_settings_updated', handlePrinterSettingsChange);
-    return () => window.removeEventListener('printer_settings_updated', handlePrinterSettingsChange);
-  }, []);
+    window.addEventListener('printer_settings_updated', handleSettingsUpdated);
+    return () => window.removeEventListener('printer_settings_updated', handleSettingsUpdated);
+  }, [settings]);
 
+  // Customer phone matching
   useEffect(() => {
     if (invoice && customers) {
       const matchedCustomer = customers.find(c => c.id === invoice.customerId);
@@ -94,78 +140,53 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
     }
   }, [invoice, customers]);
 
-  const getInvoicePrintPayload = (): SalesInvoicePrintData => {
-    const activePrinterSettings: ThermalPrinterSettings = {
-      ...printerConfig,
-      paperWidth: paperSize
-    };
-    return {
-      invoiceNumber: invoice.invoiceNumber,
-      customerName: customers?.find(c => c.id === invoice.customerId)?.name || invoice.customerName || 'عميل سفري / نقدي (كاش)',
-      customerPhone: phoneInput || '',
-      date: invoice.date,
-      paymentMethod: formatPaymentMethodLabel(invoice.paymentMethod || invoice.type, invoice.referenceNumber),
-      items: invoice.items,
-      totalAmount: invoice.totalAmount,
-      discount: invoice.discount || 0,
-      finalAmount: invoice.finalAmount,
-      notes: (invoice as any).notes || activePrinterSettings.customFooterNote || settings.invoiceFooterNote || '',
-      storeLogoUrl: settings.storeLogoUrl || '',
-      storeAddress: settings.address || '',
-      storePhone: settings.phone || '',
-      paperSize: paperSize,
-      qrCodeUrl: qrPngDataUrl || getQrCodeDataUrl(),
-      cashierName: (invoice as any).cashierName || localStorage.getItem('sanad_cashier_name') || '',
-      printerSettings: activePrinterSettings
-    };
-  };
-
-  // Generate real barcode and real QR code data URL dynamically
+  // Render Barcode dynamically on Canvas
   useEffect(() => {
-    if (invoice) {
+    if (
+      barcodeCanvasRef.current && 
+      (printerConfig.codeType === 'barcode' || printerConfig.codeType === 'both') && 
+      invoice
+    ) {
       try {
-        setBarcodeDataUrl(generateBarcodeDataUrl(invoice.invoiceNumber));
+        JsBarcode(barcodeCanvasRef.current, invoice.invoiceNumber, {
+          format: 'CODE128',
+          width: paperSize === '58mm' ? 1.2 : 1.5,
+          height: paperSize === '58mm' ? 28 : 34,
+          displayValue: true,
+          font: 'monospace',
+          fontSize: 9,
+          textMargin: 2,
+          margin: 2
+        });
       } catch (err) {
-        setBarcodeDataUrl('');
+        console.warn('Barcode render notice in InvoiceModal:', err);
       }
-
-      const payload = getInvoicePrintPayload();
-      generateInvoiceQrPng(payload, settings.storeName || 'سند للمحاسبة والخدمات', settings.currency || 'ريال')
-        .then(url => setQrPngDataUrl(url))
-        .catch(() => setQrPngDataUrl(''));
     }
-  }, [invoice, settings.storeName, settings.currency, printerConfig, paperSize]);
+  }, [printerConfig.codeType, paperSize, printerConfig.templateStyle, invoice]);
 
-  // Auto-route print when invoice loads if configured
+  // Auto-route direct print if configured
   useEffect(() => {
-    const shouldAutoPrint = autoDirectPrint || printerConfig.autoPrintOnSale;
-    if (shouldAutoPrint && invoice) {
+    if (autoDirectPrint && invoice) {
       const timer = setTimeout(() => {
         handlePrint();
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [invoice, autoDirectPrint, printerConfig.autoPrintOnSale]);
+  }, [invoice, autoDirectPrint]);
 
+  // Back button for Android
   useEffect(() => {
     if (!invoice) return;
-    document.body.classList.add('modal-invoice-open');
     const handleBack = () => {
       onClose();
     };
     window.addEventListener('android-modal-close', handleBack);
-    return () => {
-      document.body.classList.remove('modal-invoice-open');
-      window.removeEventListener('android-modal-close', handleBack);
-    };
+    return () => window.removeEventListener('android-modal-close', handleBack);
   }, [invoice, onClose]);
 
   if (!invoice) return null;
 
-  // فحص بيئة التشغيل: هل العميل على جهاز كمبيوتر (وندوز/ماك) أم هاتف أندرويد
-  const isPC = printerConfig.printEnvironment === 'pc' || (!printerConfig.printEnvironment && !isAndroidClient()) || (printerConfig.printEnvironment === 'auto' && !isAndroidClient());
-
-  // Helper to extract SVG QR code as base64 data URL
+  // Extract SVG QR code as base64 data URL
   const getQrCodeDataUrl = (): string => {
     try {
       const svgEl = document.querySelector('#invoice-printable-card svg') as SVGElement;
@@ -177,34 +198,141 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
     return '';
   };
 
-  const handlePaperSizeChange = (newSize: '80mm' | '58mm') => {
-    soundManager.playScanBeep();
-    setPaperSize(newSize);
-    const updated: ThermalPrinterSettings = { ...printerConfig, paperWidth: newSize };
-    setPrinterConfig(updated);
-    saveThermalPrinterSettings(updated);
+  const matchedCustomer = customers?.find(c => c.id === invoice.customerId);
+
+  const getInvoicePrintPayload = (): SalesInvoicePrintData => {
+    return {
+      invoiceNumber: invoice.invoiceNumber,
+      customerName: matchedCustomer?.name || invoice.customerName || 'عميل سفري / نقدي (كاش)',
+      customerPhone: phoneInput || matchedCustomer?.phone || '',
+      customerBalance: matchedCustomer?.totalDebt,
+      cashierName: printerConfig.showCashierName ? 'الكاشير' : undefined,
+      date: invoice.date,
+      paymentMethod: formatPaymentMethodLabel(invoice.paymentMethod || invoice.type, invoice.referenceNumber),
+      items: invoice.items,
+      totalAmount: invoice.totalAmount,
+      discount: invoice.discount || 0,
+      finalAmount: invoice.finalAmount,
+      notes: printerConfig.showFooterPolicy ? (printerConfig.footerPolicyNote || settings.invoiceFooterNote || '') : '',
+      storeLogoUrl: printerConfig.showLogo ? (settings.storeLogoUrl || '') : '',
+      storeAddress: printerConfig.showHeaderAddress ? (settings.address || '') : '',
+      storePhone: printerConfig.showHeaderPhone ? (settings.phone || '') : '',
+      paperSize: paperSize,
+      qrCodeUrl: getQrCodeDataUrl(),
+      printerSettings: {
+        ...printerConfig,
+        paperSize: paperSize
+      }
+    };
   };
 
-  // 1. [طباعة] - طباعة حرارية (Thermal 80mm / 58mm) متطابقة 100% مع شكل الفاتورة المعروضة
-  // تعمل مباشرة على أندرويد والكمبيوتر (وندوز) بدون أي تعليق
+  // Quick Template Change Handler
+  const handleQuickTemplateChange = (newStyle: InvoiceTemplateStyle) => {
+    soundManager.playScanBeep();
+    const updated: PrinterSettings = {
+      ...printerConfig,
+      templateStyle: newStyle
+    };
+    setPrinterConfig(updated);
+    savePrinterSettingsLocally(updated);
+    if (onSaveSettings) {
+      onSaveSettings({
+        ...settings,
+        printerSettings: updated
+      });
+    }
+  };
+
+  // Paper Size Change Handler
+  const handlePaperSizeChange = (newSize: InvoicePaperSize) => {
+    soundManager.playScanBeep();
+    setPaperSize(newSize);
+    const updated: PrinterSettings = {
+      ...printerConfig,
+      paperSize: newSize
+    };
+    setPrinterConfig(updated);
+    savePrinterSettingsLocally(updated);
+    if (onSaveSettings) {
+      onSaveSettings({
+        ...settings,
+        printerSettings: updated
+      });
+    }
+  };
+
+  // Font Family Change Handler
+  const handleFontFamilyChange = (newFamily: InvoiceFontFamily) => {
+    soundManager.playScanBeep();
+    const updated: PrinterSettings = {
+      ...printerConfig,
+      fontFamily: newFamily
+    };
+    setPrinterConfig(updated);
+    savePrinterSettingsLocally(updated);
+    if (onSaveSettings) {
+      onSaveSettings({
+        ...settings,
+        printerSettings: updated
+      });
+    }
+  };
+
+  // Font Size Scale Change Handler
+  const handleFontSizeScaleChange = (newScale: InvoiceFontSizeScale) => {
+    soundManager.playScanBeep();
+    const updated: PrinterSettings = {
+      ...printerConfig,
+      fontSizeScale: newScale
+    };
+    setPrinterConfig(updated);
+    savePrinterSettingsLocally(updated);
+    if (onSaveSettings) {
+      onSaveSettings({
+        ...settings,
+        printerSettings: updated
+      });
+    }
+  };
+
+  // Font Color Change Handler
+  const handleFontColorChange = (newColor: string) => {
+    soundManager.playScanBeep();
+    const updated: PrinterSettings = {
+      ...printerConfig,
+      fontColor: newColor
+    };
+    setPrinterConfig(updated);
+    savePrinterSettingsLocally(updated);
+    if (onSaveSettings) {
+      onSaveSettings({
+        ...settings,
+        printerSettings: updated
+      });
+    }
+  };
+
+  // Font Weight Change Handler
+  const handleFontWeightChange = (newWeight: InvoiceFontWeight) => {
+    soundManager.playScanBeep();
+    const updated: PrinterSettings = {
+      ...printerConfig,
+      fontWeight: newWeight
+    };
+    setPrinterConfig(updated);
+    savePrinterSettingsLocally(updated);
+    if (onSaveSettings) {
+      onSaveSettings({
+        ...settings,
+        printerSettings: updated
+      });
+    }
+  };
+
+  // 1. [طباعة] - طباعة حرارية فورية متطابقة 100% مع التصميم المختار
   const handlePrint = async () => {
     soundManager.playSuccessChime();
-
-    if (isPC) {
-      setActionFeedback('💻 جاري فتح نافذة طباعة وندوز (طابعة الإيصالات)...');
-      setTimeout(() => setActionFeedback(null), 3000);
-      document.body.classList.add('modal-invoice-open');
-      setTimeout(() => {
-        window.focus();
-        window.print();
-      }, 60);
-      return;
-    }
-
     const payload = getInvoicePrintPayload();
-    setActionFeedback('🖨️ جاري إرسال الفاتورة إلى أمر الطباعة...');
-    setTimeout(() => setActionFeedback(null), 3000);
-
     await printSalesInvoiceThermalHTML(
       settings.storeName || 'سند للمحاسبة والخدمات',
       payload,
@@ -212,29 +340,23 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
     );
   };
 
-  // 2. [بلوتوث] - طباعة حرارية مباشرة عبر البلوتوث للطابعات المحمولة
+  // 2. [بلوتوث] - طباعة عبر البلوتوث للطابعات المحمولة
   const handleBluetoothPrint = async () => {
     soundManager.playSuccessChime();
     setIsBluetoothConnecting(true);
-    setActionFeedback('📶 جاري الاتصال والطباعة عبر البلوتوث...');
 
     try {
       if (typeof navigator !== 'undefined' && 'bluetooth' in navigator) {
         try {
           const device = await (navigator as any).bluetooth.requestDevice({
             acceptAllDevices: true,
-            optionalServices: [
-              '000018f0-0000-1000-8000-00805f9b34fb',
-              '00001101-0000-1000-8000-00805f9b34fb',
-              '49535343-fe7d-4ae5-8fa9-9fafd205e455',
-              'e7810a71-73ae-499d-8c15-faa9aef0c3f2'
-            ]
+            optionalServices: ['0000180f-0000-1000-8000-00805f9b34fb', '00001101-0000-1000-8000-00805f9b34fb']
           });
           if (device) {
             console.log('Bluetooth Thermal Printer Paired:', device.name);
           }
         } catch (btErr) {
-          console.warn('Bluetooth pairing skipped or user cancelled:', btErr);
+          console.warn('Bluetooth pairing skipped:', btErr);
         }
       }
 
@@ -248,42 +370,14 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
       console.error('Bluetooth Thermal Print Error:', err);
     } finally {
       setIsBluetoothConnecting(false);
-      setTimeout(() => setActionFeedback(null), 3000);
     }
   };
 
-  // 3. [RawBT] - طباعة فورية مخصصة للأندرويد عبر تطبيق RawBT
-  const handleRawBTPrint = async () => {
-    soundManager.playSuccessChime();
-    
-    if (isPC) {
-      setActionFeedback('💡 تطبيق RawBT مخصص للهواتف. جاري فتح طباعة وندوز...');
-      setTimeout(() => setActionFeedback(null), 3500);
-      document.body.classList.add('modal-invoice-open');
-      setTimeout(() => {
-        window.focus();
-        window.print();
-      }, 60);
-      return;
-    }
-
-    setActionFeedback('⚡ جاري إرسال الفاتورة إلى تطبيق RawBT (TrueType)...');
-    setTimeout(() => setActionFeedback(null), 3500);
-
-    const payload = getInvoicePrintPayload();
-    await printInvoiceViaRawBT(
-      settings.storeName || 'سند للمحاسبة والخدمات',
-      payload,
-      settings.currency
-    );
-  };
-
-  // 3. [PDF] - حفظ الفاتورة كملف PDF نصي عالي الدقة بنفس شكل الفاتورة الحرارية تماماً
+  // 3. [PDF] - حفظ الفاتورة كملف PDF عالي الدقة بنفس نمط وقالب الفاتورة تماماً
   const handleExportPDF = async () => {
     if (isExportingPDF) return;
     soundManager.playSuccessChime();
     setIsExportingPDF(true);
-    setActionFeedback('📄 جاري تصدير الفاتورة إلى ملف PDF...');
 
     try {
       const payload = getInvoicePrintPayload();
@@ -292,87 +386,10 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
         payload,
         settings.currency
       );
-      setActionFeedback('✓ تم حفظ ومشاركة ملف PDF بنجاح');
     } catch (error) {
       console.error('فشل تصدير الفاتورة كـ PDF:', error);
-      setActionFeedback('فشل تصدير ملف PDF');
     } finally {
       setIsExportingPDF(false);
-      setTimeout(() => setActionFeedback(null), 3500);
-    }
-  };
-
-  // 4. [ESC/POS] - إرسال أوامر ESC/POS الخام مباشرة عبر متصفح الكمبيوتر (WebUSB / WebSerial)
-  const handleEscPosDirectPrint = async () => {
-    if (isEscPosPrinting) return;
-    soundManager.playSuccessChime();
-    setIsEscPosPrinting(true);
-    setActionFeedback('🔌 جاري فحص الاتصال بالطابعة الحرارية...');
-
-    try {
-      const payload = getInvoicePrintPayload();
-      const res = await printSalesInvoiceEscPosDirect(
-        settings.storeName || 'سند للمحاسبة والخدمات',
-        payload,
-        settings.currency,
-        {
-          paperSize: paperSize,
-          cutPaper: printerConfig.enablePaperCut ?? true,
-          openDrawer: printerConfig.openCashDrawer ?? false
-        }
-      );
-
-      if (res.success) {
-        soundManager.playCashRegister();
-        setActionFeedback('✓ ' + res.message);
-      } else if (res.isPermissionsPolicyBlocked) {
-        // منفذ USB مقيد داخل إطار المعاينة (Permissions Policy) -> تحويل تلقائي فوري لطباعة وندوز
-        setActionFeedback('💡 منافذ USB مقيدة داخل إطار المعاينة. جاري تشغيل طباعة وندوز الرسمية...');
-        setTimeout(() => {
-          handlePrint();
-        }, 600);
-      } else {
-        setActionFeedback('⚠️ ' + res.message);
-      }
-    } catch (err: any) {
-      const errText = String(err?.message || err || '');
-      if (err?.name === 'SecurityError' || errText.includes('permissions policy') || errText.includes('disallowed')) {
-        setActionFeedback('💡 منافذ USB مقيدة داخل إطار المعاينة. جاري تشغيل طباعة وندوز الرسمية...');
-        setTimeout(() => {
-          handlePrint();
-        }, 600);
-      } else {
-        console.warn('ESC/POS Direct Print notice:', err);
-        setActionFeedback('تعذر إرسال ESC/POS: ' + (err?.message || ''));
-      }
-    } finally {
-      setIsEscPosPrinting(false);
-      setTimeout(() => setActionFeedback(null), 4000);
-    }
-  };
-
-  // 5. [ESC/POS Bin] - تنزيل ملف أوامر ESC/POS الخام بصيغة ثنائية (.bin)
-  const handleDownloadEscPos = async () => {
-    soundManager.playSuccessChime();
-    setActionFeedback('💾 جاري إنشاء وتنزيل ملف أوامر ESC/POS الخام (.bin)...');
-    try {
-      const payload = getInvoicePrintPayload();
-      const rawBytes = await convertInvoiceToEscPos(
-        payload,
-        settings.storeName || 'سند للمحاسبة والخدمات',
-        settings.currency,
-        {
-          paperSize: paperSize,
-          cutPaper: true,
-          openDrawer: printerConfig.openCashDrawer ?? false
-        }
-      );
-      downloadEscPosBinaryFile(rawBytes, `invoice_${invoice.invoiceNumber}_escpos.bin`);
-      setActionFeedback('✓ تم تنزيل ملف أوامر ESC/POS الخام بنجاح');
-    } catch (err: any) {
-      setActionFeedback('فشل تنزيل ملف ESC/POS');
-    } finally {
-      setTimeout(() => setActionFeedback(null), 3500);
     }
   };
 
@@ -423,7 +440,7 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
     });
   };
 
-  // 4. [واتساب] - إرسال فوري ومباشر دون تعليق أو شاشة بيضاء
+  // 4. [واتساب] - إرسال الفاتورة عبر واتساب
   const handleSendWhatsApp = async () => {
     soundManager.playSuccessChime();
 
@@ -435,8 +452,12 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
       cleanedPhone = '967' + cleanedPhone;
     }
 
+    const cleanTitle = (printerConfig.invoiceTitle || 'فاتورة مبيعات')
+      .replace(/فاتورة\s*ضريبية\s*معتمدة/g, 'فاتورة مبيعات')
+      .replace(/ضريبية\s*معتمدة|ضريبة\s*معتمدة/g, 'مبيعات')
+      .trim() || 'فاتورة مبيعات';
     let text = `👑 *${settings.storeName.toUpperCase()}* 👑\n`;
-    text += `*فاتورة مبيعات رقم:* ${invoice.invoiceNumber}\n`;
+    text += `*${cleanTitle} رقم:* ${invoice.invoiceNumber}\n`;
     text += `*التاريخ والوقت:* ${new Date(invoice.date).toLocaleString('ar-YE')}\n`;
     text += `*العميل المستلم:* ${invoice.customerName}\n`;
     text += `*طريقة الدفع:* ${invoice.type === 'cash' ? 'نقدي (كاش)' : 'ذمم وآجل'}\n`;
@@ -455,8 +476,9 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
     text += `*الصافي النهائي للتسديد:* *${invoice.finalAmount.toLocaleString()} ${settings.currency}*\n`;
     text += `-----------------------------------------\n`;
     if (settings.phone) text += `هاتف المعرض: ${settings.phone}\n`;
+    if (printerConfig.footerPolicyNote) text += `ملاحظة: ${printerConfig.footerPolicyNote}\n`;
     text += `برمجة وتطوير م.عبدالمجيد المحواشي\n`;
-    text += `شكراً لزيارتكم وتعاملكم الراقي معنا! 🌸\n`;
+    text += `${printerConfig.footerGreeting || 'شكراً لزيارتكم وتعاملكم الراقي معنا! 🌸'}\n`;
 
     try {
       await openWhatsApp(cleanedPhone, text);
@@ -470,52 +492,20 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
     }
   };
 
-  const is58 = paperSize === '58mm';
-  const previewFontFamily = 
-    printerConfig.fontFamily === 'tahoma' ? "Tahoma, 'Segoe UI', Arial, sans-serif" :
-    printerConfig.fontFamily === 'monospace' ? "monospace, 'Courier New', Courier" :
-    printerConfig.fontFamily === 'system' ? "system-ui, -apple-system, sans-serif" :
-    "'Cairo', 'Segoe UI', Tahoma, sans-serif";
-
-  let previewBaseSize = is58 ? '11px' : '12px';
-  let previewHeaderSize = is58 ? '15px' : '17px';
-  let previewDetailsSize = is58 ? '10px' : '11px';
-  let previewFinalSize = is58 ? '13.5px' : '15px';
-
-  if (printerConfig.fontScale === 'small') {
-    previewBaseSize = is58 ? '9.5px' : '10.5px';
-    previewHeaderSize = is58 ? '13px' : '15px';
-    previewDetailsSize = is58 ? '8.5px' : '9.5px';
-    previewFinalSize = is58 ? '12px' : '13.5px';
-  } else if (printerConfig.fontScale === 'large') {
-    previewBaseSize = is58 ? '12.5px' : '13.5px';
-    previewHeaderSize = is58 ? '16px' : '18.5px';
-    previewDetailsSize = is58 ? '11px' : '12px';
-    previewFinalSize = is58 ? '15px' : '16.5px';
-  } else if (printerConfig.fontScale === 'extralarge') {
-    previewBaseSize = is58 ? '13.5px' : '15px';
-    previewHeaderSize = is58 ? '17px' : '20px';
-    previewDetailsSize = is58 ? '12px' : '13.5px';
-    previewFinalSize = is58 ? '16.5px' : '18.5px';
-  }
-
-  const previewLineSpacing = printerConfig.lineSpacing === 'compact' ? 1.3 : (printerConfig.lineSpacing === 'relaxed' ? 1.65 : 1.45);
-  const previewWeight = printerConfig.printDensity === 'extradark' ? '900' : (printerConfig.printDensity === 'dark' ? '800' : '600');
-  const previewColor = printerConfig.printDensity === 'normal' ? '#1f2937' : '#000000';
-
-  const previewBorderStyle = 
-    printerConfig.tableBorderType === 'solid' ? '1.5px solid #000000' :
-    printerConfig.tableBorderType === 'dotted' ? '2px dotted #4b5563' :
-    printerConfig.tableBorderType === 'double' ? '3px double #000000' :
-    '1.5px dashed #6b7280';
+  const isWidePaper = paperSize === 'a4' || paperSize === 'a5';
+  const primaryColor = printerConfig.primaryColor || '#0f172a';
+  const sizeMult = getFontSizeMultiplier(printerConfig.fontSizeScale);
+  const baseFontSizePx = (paperSize === '58mm' ? 10 : paperSize === 'a4' ? 13.5 : paperSize === 'a5' ? 12 : 11) * sizeMult;
+  const bodyColor = printerConfig.fontColor || '#000000';
+  const headerColor = printerConfig.headerFontColor || primaryColor;
 
   return (
-    <div id="invoice_modal_overlay" className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-2 sm:p-4 print:bg-white print:p-0 print:m-0 print:static print:inset-auto">
+    <div id="invoice_modal_overlay" className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-2 sm:p-4 print:bg-white print:absolute print:inset-0">
       
-      <div className="w-full max-w-sm h-[92dvh] sm:h-auto sm:max-h-[88vh] rounded-2xl bg-white text-black shadow-2xl border border-gray-200 overflow-hidden relative animate-fadeIn flex flex-col print:h-auto print:max-h-none print:shadow-none print:border-none print:w-full print:rounded-none">
+      <div className={`w-full ${isWidePaper ? 'max-w-lg' : 'max-w-sm'} h-[94dvh] sm:h-auto sm:max-h-[90vh] rounded-2xl bg-white text-black shadow-2xl border border-gray-200 overflow-hidden relative animate-fadeIn flex flex-col no-print`}>
         
         {/* Modal Top Control Bar */}
-        <div className="p-2.5 sm:p-3 bg-slate-900 text-white flex justify-between items-center border-b border-gray-800 shrink-0 no-print">
+        <div className="p-2 sm:p-2.5 bg-slate-900 text-white flex justify-between items-center border-b border-gray-800 shrink-0">
           <button
             id="return_to_pos_btn"
             onClick={onClose}
@@ -525,21 +515,37 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
             <span>رجوع للمبيعات</span>
           </button>
 
-          <div className="flex items-center gap-2">
-            {isPC ? (
-              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-emerald-950/80 border border-emerald-500/40 text-emerald-300">
-                <Laptop className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="text-[11px] font-bold">
-                  نظام الكمبيوتر (وندوز)
-                </span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-amber-950/80 border border-amber-500/40 text-amber-300">
-                <Smartphone className="w-3.5 h-3.5 text-amber-400" />
-                <span className="text-[11px] font-bold">
-                  نظام الهاتف (أندرويد)
-                </span>
-              </div>
+          <div className="flex items-center gap-1.5">
+            {/* Quick Template Switcher Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                soundManager.playScanBeep();
+                setShowQuickTemplatePicker(!showQuickTemplatePicker);
+              }}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer border ${
+                showQuickTemplatePicker 
+                  ? 'bg-purple-600 text-white border-purple-500 shadow-sm'
+                  : 'bg-slate-800 text-purple-300 border-slate-700 hover:bg-slate-700'
+              }`}
+              title="تغيير شكل ونمط الفاتورة فورياً"
+            >
+              <Palette className="w-3.5 h-3.5" />
+              <span>القالب</span>
+            </button>
+
+            {onOpenPrinterSettings && (
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.playScanBeep();
+                  onOpenPrinterSettings();
+                }}
+                className="p-1.5 hover:bg-slate-800 rounded-lg text-amber-400 hover:text-amber-300 cursor-pointer transition border border-slate-800"
+                title="تخصيص كامل الإعدادات في مركز الطابعة"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
             )}
             
             <button
@@ -553,169 +559,275 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
           </div>
         </div>
 
-        {/* Paper format selector & Environment Switcher */}
-        <div className="p-2 bg-slate-950 border-b border-gray-800 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-300 shrink-0 no-print">
-          <div className="flex items-center gap-1.5">
-            <SlidersHorizontal className="w-3.5 h-3.5 text-[#C5A862]" />
-            <span>الرول:</span>
-            <div className="flex items-center bg-slate-900 border border-gray-800 rounded p-0.5">
-              <button
-                type="button"
-                onClick={() => handlePaperSizeChange('80mm')}
-                className={`px-2 py-0.5 text-xs font-bold rounded transition cursor-pointer ${
-                  paperSize === '80mm' ? 'bg-[#C5A862] text-slate-950 shadow-xs' : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                80mm
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePaperSizeChange('58mm')}
-                className={`px-2 py-0.5 text-xs font-bold rounded transition cursor-pointer ${
-                  paperSize === '58mm' ? 'bg-[#C5A862] text-slate-950 shadow-xs' : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                58mm
-              </button>
+        {/* Quick Template Selection Sub-bar */}
+        {showQuickTemplatePicker && (
+          <div className="p-2 bg-purple-950/90 border-b border-purple-800/60 text-white shrink-0 animate-fadeIn">
+            <div className="text-[11px] font-bold text-purple-200 mb-1.5 flex items-center justify-between">
+              <span className="flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5 text-purple-300" />
+                <span>اختر تصميم الفاتورة الفعلي:</span>
+              </span>
+              {onOpenPrinterSettings && (
+                <button
+                  type="button"
+                  onClick={onOpenPrinterSettings}
+                  className="text-[10px] text-amber-300 hover:underline cursor-pointer flex items-center gap-0.5"
+                >
+                  <span>مزيد من الضبط ⚙️</span>
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-5 gap-1 text-[10px]">
+              {[
+                { id: 'modern', name: 'حديث', icon: '🌟' },
+                { id: 'classic', name: 'كلاسيكي', icon: '🖨️' },
+                { id: 'boxed', name: 'شبكي', icon: '📊' },
+                { id: 'minimal', name: 'اقتصادي', icon: '⚡' },
+                { id: 'official', name: 'رسمي', icon: '🏢' }
+              ].map(t => {
+                const active = printerConfig.templateStyle === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => handleQuickTemplateChange(t.id as InvoiceTemplateStyle)}
+                    className={`py-1 px-1 rounded-lg font-bold text-center transition cursor-pointer flex flex-col items-center gap-0.5 ${
+                      active
+                        ? 'bg-white text-purple-950 shadow-sm ring-2 ring-purple-400 font-black'
+                        : 'bg-purple-900/60 text-purple-200 hover:bg-purple-800/80 border border-purple-700/50'
+                    }`}
+                  >
+                    <span>{t.icon}</span>
+                    <span>{t.name}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
+        )}
 
-          <div className="flex items-center gap-1.5">
-            {/* جهاز التشغيل: تبديل صريح فوري بين كمبيوتر وهاتف */}
-            <div className="flex items-center bg-slate-900 border border-gray-800 rounded p-0.5">
-              <button
-                type="button"
-                onClick={() => {
-                  const updated = { ...printerConfig, printEnvironment: 'pc' as const };
-                  setPrinterConfig(updated);
-                  saveThermalPrinterSettings(updated);
-                  soundManager.playScanBeep();
-                }}
-                className={`px-2.5 py-0.5 text-[11px] font-bold rounded transition flex items-center gap-1 cursor-pointer ${
-                  isPC
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-                title="تفعيل وضع الكمبيوتر للطباعة المباشرة عبر متصفح كروم لطابعة وندوز (USB أو شبكة)"
+        {/* Paper format, font, size, color & direct print selector bar */}
+        <div className="p-2 bg-slate-950 border-b border-gray-800 flex items-center justify-between text-xs text-gray-300 shrink-0 flex-wrap gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Paper Size */}
+            <div className="flex items-center gap-1">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-[#C5A862]" />
+              <span className="text-[11px]">الورق:</span>
+              <select
+                value={paperSize}
+                onChange={(e) => handlePaperSizeChange(e.target.value as any)}
+                className="bg-slate-900 border border-gray-800 text-[11px] font-bold text-[#C5A862] rounded px-1.5 py-0.5 focus:outline-none cursor-pointer"
               >
-                <Laptop className="w-3.5 h-3.5" />
-                <span>كمبيوتر (وندوز)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const updated = { ...printerConfig, printEnvironment: 'android_rawbt' as const };
-                  setPrinterConfig(updated);
-                  saveThermalPrinterSettings(updated);
-                  soundManager.playScanBeep();
-                }}
-                className={`px-2.5 py-0.5 text-[11px] font-bold rounded transition flex items-center gap-1 cursor-pointer ${
-                  !isPC
-                    ? 'bg-amber-600 text-white shadow-xs'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-                title="تفعيل وضع الهواتف الذكية (لتطبيق RawBT)"
-              >
-                <Smartphone className="w-3.5 h-3.5" />
-                <span>هاتف (RawBT)</span>
-              </button>
+                <option value="80mm">حراري 80mm</option>
+                <option value="58mm">مصغر 58mm</option>
+                <option value="a4">صفحة كاملة (A4)</option>
+                <option value="a5">نصف صفحة (A5)</option>
+              </select>
             </div>
 
-            <label className="flex items-center gap-1 cursor-pointer hover:text-white select-none mr-1">
+            {/* Font Family */}
+            <div className="flex items-center gap-1">
+              <Type className="w-3.5 h-3.5 text-purple-400" />
+              <span className="text-[11px]">الخط:</span>
+              <select
+                value={printerConfig.fontFamily || 'cairo'}
+                onChange={(e) => handleFontFamilyChange(e.target.value as InvoiceFontFamily)}
+                className="bg-slate-900 border border-gray-800 text-[11px] font-bold text-purple-300 rounded px-1.5 py-0.5 focus:outline-none cursor-pointer"
+              >
+                {INVOICE_FONTS.map(f => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Font Size Scaling */}
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-blue-400 font-bold">الحجم:</span>
+              <select
+                value={printerConfig.fontSizeScale || 'normal'}
+                onChange={(e) => handleFontSizeScaleChange(e.target.value as InvoiceFontSizeScale)}
+                className="bg-slate-900 border border-gray-800 text-[11px] font-bold text-blue-300 rounded px-1.5 py-0.5 focus:outline-none cursor-pointer"
+              >
+                {INVOICE_FONT_SIZE_SCALES.map(s => (
+                  <option key={s.id} value={s.id}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Font Color */}
+            <div className="flex items-center gap-1 bg-slate-900/90 border border-gray-800 rounded px-1.5 py-0.5">
+              <Palette className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-[11px]">اللون:</span>
               <input
-                type="checkbox"
-                checked={autoDirectPrint}
-                onChange={(e) => handleAutoPrintToggle(e.target.checked)}
-                className="w-3.5 h-3.5 rounded border-gray-800 bg-[#16212E] accent-[#C5A862]"
+                type="color"
+                value={printerConfig.fontColor || '#000000'}
+                onChange={(e) => handleFontColorChange(e.target.value)}
+                className="w-4 h-4 rounded border-0 cursor-pointer p-0 bg-transparent"
+                title="تخصيص لون الخط"
               />
-              <span className="text-[11px]">فوري ⚡</span>
-            </label>
+              <select
+                value={printerConfig.fontColor || '#000000'}
+                onChange={(e) => handleFontColorChange(e.target.value)}
+                className="bg-transparent text-[11px] font-bold text-emerald-300 focus:outline-none cursor-pointer"
+              >
+                {INVOICE_FONT_COLORS.map(c => (
+                  <option key={c.color} value={c.color} className="bg-slate-900 text-white">
+                    {c.name.split(' ')[0]}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-            {/* تصدير ملف أوامر ESC/POS الخام ثنائي */}
-            <button
-              type="button"
-              onClick={handleDownloadEscPos}
-              className="text-[10px] text-gray-300 hover:text-indigo-300 flex items-center gap-1 cursor-pointer bg-slate-900 border border-gray-800 hover:border-indigo-500 rounded px-1.5 py-0.5 transition"
-              title="تصدير مخرجات الفاتورة الحالية كملف أوامر خام ESC/POS ثنائي (.bin) لتمريرها مباشرة إلى الطابعة"
-            >
-              <FileDown className="w-3 h-3 text-indigo-400" />
-              <span>أوامر .bin</span>
-            </button>
+            {/* Font Weight */}
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-amber-400 font-bold">السماكة:</span>
+              <select
+                value={printerConfig.fontWeight || 'bold'}
+                onChange={(e) => handleFontWeightChange(e.target.value as InvoiceFontWeight)}
+                className="bg-slate-900 border border-gray-800 text-[11px] font-bold text-amber-300 rounded px-1.5 py-0.5 focus:outline-none cursor-pointer"
+              >
+                {INVOICE_FONT_WEIGHTS.map(w => (
+                  <option key={w.id} value={w.id}>{w.label.split(' ')[0]} ({w.cssWeight})</option>
+                ))}
+              </select>
+            </div>
           </div>
+
+          <label className="flex items-center gap-1.5 cursor-pointer hover:text-white select-none text-[11px]">
+            <input
+              type="checkbox"
+              checked={autoDirectPrint}
+              onChange={(e) => handleAutoPrintToggle(e.target.checked)}
+              className="w-3.5 h-3.5 rounded border-gray-800 bg-[#16212E] accent-[#C5A862]"
+            />
+            <span>مباشر ⚡</span>
+          </label>
         </div>
 
-        {/* PRINTABLE BILL CANVAS AREA */}
+        {/* PRINTABLE BILL CANVAS AREA - DYNAMIC & TEMPLATE DRIVEN */}
         <div 
           id="invoice-printable-card" 
           data-export-container="true" 
           data-receipt-card="true"
-          className="p-3 sm:p-4 bg-white overflow-y-auto flex-1 min-h-0 printable-invoice-card mx-auto w-full transition-all duration-200" 
+          className="p-3 sm:p-4 bg-white overflow-y-auto flex-1 min-h-0 printable-invoice-card" 
           style={{ 
             direction: 'rtl', 
             boxSizing: 'border-box',
-            maxWidth: is58 ? '300px' : '380px',
-            fontFamily: previewFontFamily,
-            fontSize: previewBaseSize,
-            fontWeight: previewWeight as any,
-            color: previewColor,
-            lineHeight: previewLineSpacing
+            fontFamily: getFontFamilyCss(printerConfig.fontFamily),
+            fontWeight: getFontWeightCss(printerConfig.fontWeight),
+            lineHeight: getLineHeightCss(printerConfig.lineHeight),
+            color: bodyColor,
+            fontSize: `${baseFontSizePx}px`
           }}
         >
-          {/* Header section */}
-          <div className="text-center space-y-0.5">
-            {printerConfig.showLogo !== false && settings.storeLogoUrl && (
-              <img 
-                src={settings.storeLogoUrl} 
-                alt={settings.storeName} 
-                className="w-11 h-11 mx-auto object-contain mb-1 rounded-lg"
-              />
-            )}
-            {printerConfig.showHeaderName !== false && (
-              <h2 
-                style={{ fontSize: previewHeaderSize }}
-                className="font-extrabold tracking-tight text-gray-900 leading-tight"
-              >
-                {settings.storeName}
-              </h2>
-            )}
-            
-            {printerConfig.customHeaderTitle ? (
-              <p className="text-[10.5px] font-bold text-gray-700">{printerConfig.customHeaderTitle}</p>
-            ) : (
-              <p className="text-[10px] text-gray-500 font-bold">فاتورة مبيعات نقدية معتمدة</p>
-            )}
+          {/* Top Accent Band for Official Template */}
+          {printerConfig.templateStyle === 'official' && (
+            <div 
+              className="h-1.5 w-full rounded-sm mb-2" 
+              style={{ backgroundColor: primaryColor }} 
+            />
+          )}
 
-            {printerConfig.showBranchAddress !== false && settings.address && (
-              <p className="text-[9.5px] text-gray-500">{settings.address}</p>
-            )}
-            {printerConfig.showPhone !== false && settings.phone && (
-              <p className="text-[9.5px] text-gray-500 font-mono">هاتف / خدمة العملاء: {settings.phone}</p>
-            )}
-
-            {printerConfig.showTaxNumber && printerConfig.taxNumber && (
-              <div className="inline-block px-2 py-0.5 mt-1 border border-black rounded text-[9.5px] font-bold">
-                الرقم الضريبي / السجل: {printerConfig.taxNumber}
+          {/* 1. Header & Logo Block */}
+          <div className="text-center pb-1">
+            {printerConfig.showLogo && settings.storeLogoUrl && (
+              <div className={`mb-1.5 flex ${
+                printerConfig.logoPosition === 'right' ? 'justify-start' :
+                printerConfig.logoPosition === 'left' ? 'justify-end' : 'justify-center'
+              }`}>
+                <img 
+                  src={settings.storeLogoUrl} 
+                  alt={settings.storeName} 
+                  className={`object-contain rounded-lg ${
+                    printerConfig.logoSize === 'small' ? 'h-8 w-8' :
+                    printerConfig.logoSize === 'large' ? 'h-16 w-16' : 'h-11 w-11'
+                  }`}
+                />
               </div>
             )}
+
+            <h2 
+              className="font-black tracking-tight"
+              style={{ color: headerColor, fontSize: `${baseFontSizePx * 1.35}px` }}
+            >
+              {settings.storeName || 'سند للمحاسبة والخدمات'}
+            </h2>
+
+            {printerConfig.invoiceSubtitle && (
+              <p 
+                className="font-bold mt-0.5"
+                style={{ color: bodyColor, opacity: 0.85, fontSize: `${baseFontSizePx * 0.9}px` }}
+              >
+                {printerConfig.invoiceSubtitle}
+              </p>
+            )}
+
+            {(printerConfig.showHeaderAddress || printerConfig.showHeaderPhone) && (
+              <div 
+                className="mt-0.5 flex flex-wrap justify-center gap-1.5 font-sans"
+                style={{ color: bodyColor, opacity: 0.8, fontSize: `${baseFontSizePx * 0.82}px` }}
+              >
+                {printerConfig.showHeaderAddress && settings.address && (
+                  <span>{settings.address}</span>
+                )}
+                {printerConfig.showHeaderAddress && settings.address && printerConfig.showHeaderPhone && settings.phone && (
+                  <span>|</span>
+                )}
+                {printerConfig.showHeaderPhone && settings.phone && (
+                  <span className="font-mono">هاتف: {settings.phone}</span>
+                )}
+              </div>
+            )}
+
+            {/* Tax ID & Commercial Reg */}
+            {(printerConfig.taxNumber || printerConfig.commercialRegistration) && (
+              <div 
+                className="mt-0.5 flex flex-wrap justify-center gap-2 font-mono"
+                style={{ color: bodyColor, opacity: 0.75, fontSize: `${baseFontSizePx * 0.78}px` }}
+              >
+                {printerConfig.taxNumber && (
+                  <span>الرقم الضريبي: {printerConfig.taxNumber}</span>
+                )}
+                {printerConfig.commercialRegistration && (
+                  <span>س.ت: {printerConfig.commercialRegistration}</span>
+                )}
+              </div>
+            )}
+
+            {/* Invoice Main Title Badge */}
+            <div 
+              className="mt-1.5 inline-block px-3 py-0.5 rounded-full bg-slate-100 border border-slate-300 font-extrabold"
+              style={{ color: headerColor || bodyColor, fontSize: `${baseFontSizePx * 0.9}px` }}
+            >
+              {(printerConfig.invoiceTitle || 'فاتورة مبيعات')
+                .replace(/فاتورة\s*ضريبية\s*معتمدة/g, 'فاتورة مبيعات')
+                .replace(/ضريبية\s*معتمدة|ضريبة\s*معتمدة/g, 'مبيعات')
+                .trim() || 'فاتورة مبيعات'}
+            </div>
           </div>
 
-          <div 
-            className="my-2"
-            style={{ borderTop: previewBorderStyle }}
-          ></div>
+          {/* Separator Line */}
+          <div className={`my-2 ${
+            printerConfig.templateStyle === 'classic'
+              ? 'border-b border-dashed border-gray-400'
+              : printerConfig.templateStyle === 'minimal'
+              ? 'border-b border-gray-200'
+              : 'border-b-2 border-slate-900'
+          }`} />
 
-          {/* Bill Metadata Block */}
+          {/* 2. Metadata Grid */}
           <div 
-            style={{ fontSize: previewDetailsSize }}
-            className="space-y-1 text-gray-800"
+            className="space-y-1 leading-tight"
+            style={{ color: bodyColor, fontSize: `${baseFontSizePx * 0.95}px` }}
           >
-            <div className="flex justify-between">
-              <span className="text-gray-500">رقم الفاتورة:</span>
-              <span className="font-bold font-mono">{invoice.invoiceNumber}</span>
+            <div className="flex justify-between items-center">
+              <span className="font-bold" style={{ opacity: 0.8, fontSize: `${baseFontSizePx * 0.9}px` }}>رقم الفاتورة:</span>
+              <span className="font-mono font-black" style={{ color: bodyColor, fontSize: `${baseFontSizePx * 0.95}px` }}>{invoice.invoiceNumber}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">التاريخ والوقت:</span>
-              <span className="font-mono">
+            
+            <div className="flex justify-between items-center">
+              <span className="font-bold" style={{ opacity: 0.8, fontSize: `${baseFontSizePx * 0.9}px` }}>التاريخ والوقت:</span>
+              <span className="font-mono" style={{ color: bodyColor, fontSize: `${baseFontSizePx * 0.9}px` }}>
                 {new Date(invoice.date).toLocaleString('ar-YE', {
                   year: 'numeric',
                   month: 'numeric',
@@ -725,38 +837,48 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
                 })}
               </span>
             </div>
-            {printerConfig.showCustomerInfo !== false && (
-              <div className="flex justify-between">
-                <span className="text-gray-500">العميل المستلم:</span>
-                <span className="font-bold">{invoice.customerName}</span>
+
+            {printerConfig.showCashierName && (
+              <div className="flex justify-between items-center">
+                <span className="font-bold" style={{ opacity: 0.8, fontSize: `${baseFontSizePx * 0.9}px` }}>الكاشير / البائع:</span>
+                <span className="font-bold" style={{ color: bodyColor, fontSize: `${baseFontSizePx * 0.95}px` }}>أحمد (نقطة البيع 1)</span>
               </div>
             )}
-            {printerConfig.showCashierName !== false && (
-              <div className="flex justify-between">
-                <span className="text-gray-500">الكاشير / البائع:</span>
-                <span className="font-bold">
-                  {(invoice as any).cashierName || localStorage.getItem('sanad_cashier_name') || 'أحمد الكاشير'}
-                </span>
+
+            {printerConfig.showCustomerName && (
+              <div className="flex justify-between items-center">
+                <span className="font-bold" style={{ opacity: 0.8, fontSize: `${baseFontSizePx * 0.9}px` }}>العميل المستلم:</span>
+                <span className="font-bold" style={{ color: bodyColor, fontSize: `${baseFontSizePx * 0.95}px` }}>{invoice.customerName}</span>
               </div>
             )}
-            {printerConfig.showPaymentMethod !== false && (
-              <div className="flex justify-between">
-                <span className="text-gray-500">طريقة السداد:</span>
-                <span className="font-bold text-[#C5A862]">
+
+            {printerConfig.showCustomerPhone && phoneInput && (
+              <div className="flex justify-between items-center">
+                <span className="font-bold" style={{ opacity: 0.8, fontSize: `${baseFontSizePx * 0.9}px` }}>هاتف العميل:</span>
+                <span className="font-mono" style={{ color: bodyColor, fontSize: `${baseFontSizePx * 0.95}px` }}>{phoneInput}</span>
+              </div>
+            )}
+
+            {printerConfig.showPaymentMethod && (
+              <div className="flex justify-between items-center">
+                <span className="font-bold" style={{ opacity: 0.8, fontSize: `${baseFontSizePx * 0.9}px` }}>طريقة السداد:</span>
+                <span className="font-bold" style={{ color: bodyColor, fontSize: `${baseFontSizePx * 0.9}px` }}>
                   {formatPaymentMethodLabel(invoice.paymentMethod || invoice.type, invoice.referenceNumber)}
                 </span>
               </div>
             )}
+
             {invoice.proofImage && (
               <div className="flex justify-between items-center bg-blue-50/80 p-1.5 rounded-lg border border-blue-200 mt-1">
-                <span className="flex items-center gap-1 text-[9px] font-bold text-blue-950">
+                <span className="flex items-center gap-1 font-bold text-blue-950" style={{ fontSize: `${baseFontSizePx * 0.85}px` }}>
                   <Paperclip className="w-3 h-3 text-blue-600" />
                   <span>إشعار السند المرفق:</span>
                 </span>
                 <button
                   type="button"
                   onClick={() => setShowProofModal(true)}
-                  className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-[9px] font-bold transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                  className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                  style={{ fontSize: `${baseFontSizePx * 0.85}px` }}
                 >
                   <Eye className="w-2.5 h-2.5" />
                   <span>عرض السند</span>
@@ -765,41 +887,52 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
             )}
           </div>
 
-          <div 
-            className="my-2"
-            style={{ borderTop: previewBorderStyle }}
-          ></div>
+          {/* Separator Line */}
+          <div className={`my-2 ${
+            printerConfig.templateStyle === 'classic'
+              ? 'border-b border-dashed border-gray-400'
+              : 'border-b border-gray-300'
+          }`} />
 
-          {/* Itemized list of purchase */}
+          {/* 3. Items Table */}
           <table 
-            style={{ fontSize: previewDetailsSize }}
-            className="w-full text-right text-gray-900"
+            className={`w-full text-right ${
+              printerConfig.templateStyle === 'boxed' ? 'border border-slate-400' : ''
+            }`}
+            style={{ color: bodyColor, fontSize: `${baseFontSizePx * 0.95}px` }}
           >
             <thead>
-              <tr 
-                style={{ borderBottom: previewBorderStyle }}
-                className="pb-1 font-bold"
-              >
-                <th className="pb-1 text-right">السلعة</th>
-                <th className="pb-1 text-center">الكمية</th>
-                <th className="pb-1 text-left">المجموع</th>
+              <tr className={`${
+                printerConfig.templateStyle === 'boxed' ? 'bg-slate-100 border-b border-slate-400' :
+                printerConfig.templateStyle === 'modern' ? 'bg-slate-50 border-b border-slate-300' : 
+                'border-b border-dashed border-gray-400'
+              }`}>
+                <th className="py-1 px-1 font-black text-right" style={{ color: bodyColor, fontSize: `${baseFontSizePx * 0.92}px` }}>السلعة / الخدمة</th>
+                <th className="py-1 px-1 font-black text-center" style={{ color: bodyColor, fontSize: `${baseFontSizePx * 0.92}px` }}>الكمية</th>
+                {printerConfig.showUnitPrice && (
+                  <th className="py-1 px-1 font-black text-center" style={{ color: bodyColor, fontSize: `${baseFontSizePx * 0.92}px` }}>السعر</th>
+                )}
+                <th className="py-1 px-1 font-black text-left" style={{ color: bodyColor, fontSize: `${baseFontSizePx * 0.92}px` }}>المجموع</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-200">
               {invoice.items.map((item, idx) => (
-                <tr 
-                  key={idx} 
-                  className="py-1"
-                  style={{ borderBottom: `0.5px dashed #cbd5e1` }}
-                >
-                  <td className="py-1 font-medium">
-                    <div className="font-bold">{item.name}</div>
-                    <div className="text-[9px] text-gray-500 font-mono">
-                      {item.sellingPrice.toLocaleString()} {settings.currency}
-                    </div>
+                <tr key={idx} className="py-1">
+                  <td className={`py-1 px-1 font-medium ${printerConfig.templateStyle === 'boxed' ? 'border-l border-slate-200' : ''}`}>
+                    <div className="font-bold" style={{ color: bodyColor, fontSize: `${baseFontSizePx * 1.0}px` }}>{item.name}</div>
+                    {printerConfig.showItemCodeBarcode && item.barcode && (
+                      <div className="font-mono" style={{ color: bodyColor, opacity: 0.75, fontSize: `${baseFontSizePx * 0.75}px` }}>#{item.barcode}</div>
+                    )}
                   </td>
-                  <td className="py-1 text-center font-bold font-mono">{item.quantity}</td>
-                  <td className="py-1 text-left font-bold font-mono">
+                  <td className={`py-1 px-1 text-center font-bold font-mono ${printerConfig.templateStyle === 'boxed' ? 'border-l border-slate-200' : ''}`} style={{ color: bodyColor, fontSize: `${baseFontSizePx * 1.0}px` }}>
+                    {item.quantity}
+                  </td>
+                  {printerConfig.showUnitPrice && (
+                    <td className={`py-1 px-1 text-center font-mono ${printerConfig.templateStyle === 'boxed' ? 'border-l border-slate-200' : ''}`} style={{ color: bodyColor, fontSize: `${baseFontSizePx * 0.95}px` }}>
+                      {item.sellingPrice.toLocaleString()}
+                    </td>
+                  )}
+                  <td className="py-1 px-1 text-left font-bold font-mono" style={{ color: bodyColor, fontSize: `${baseFontSizePx * 1.0}px` }}>
                     {item.total.toLocaleString()} {settings.currency}
                   </td>
                 </tr>
@@ -807,122 +940,147 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
             </tbody>
           </table>
 
-          <div 
-            className="my-2"
-            style={{ borderTop: previewBorderStyle }}
-          ></div>
+          {/* Separator Line */}
+          <div className={`my-2 ${
+            printerConfig.templateStyle === 'classic'
+              ? 'border-b border-dashed border-gray-400'
+              : 'border-b border-gray-300'
+          }`} />
 
-          {/* Financial calculations */}
-          <div 
-            style={{ fontSize: previewDetailsSize }}
-            className="space-y-1 text-gray-900"
-          >
-            <div className="flex justify-between">
-              <span className="text-gray-600">المجموع الفرعي:</span>
-              <span className="font-mono font-bold">{invoice.totalAmount.toLocaleString()} {settings.currency}</span>
+          {/* 4. Financial Calculations & Totals */}
+          <div className="space-y-1" style={{ color: bodyColor, fontSize: `${baseFontSizePx * 0.95}px` }}>
+            <div className="flex justify-between items-center font-bold" style={{ color: bodyColor }}>
+              <span style={{ opacity: 0.85 }}>المجموع الفرعي:</span>
+              <span className="font-mono">{invoice.totalAmount.toLocaleString()} {settings.currency}</span>
             </div>
-            {invoice.discount > 0 && (
-              <div className="flex justify-between text-red-700 font-bold">
+
+            {printerConfig.showItemDiscount && invoice.discount > 0 && (
+              <div className="flex justify-between items-center text-rose-600 font-bold">
                 <span>خصم خاص مخصوم:</span>
                 <span className="font-mono">- {invoice.discount.toLocaleString()} {settings.currency}</span>
               </div>
             )}
+
+            {/* Highlighted Final Net Total */}
             <div 
-              className="my-1.5"
-              style={{ borderTop: previewBorderStyle }}
-            ></div>
-            <div 
-              style={{ fontSize: previewFinalSize }}
-              className="flex justify-between items-center font-extrabold text-black"
+              className={`p-1.5 rounded-lg flex justify-between items-center font-black mt-1.5 ${
+                printerConfig.templateStyle === 'modern'
+                  ? 'bg-slate-900 text-white'
+                  : printerConfig.templateStyle === 'boxed'
+                  ? 'border-2 border-slate-900 bg-slate-100'
+                  : printerConfig.templateStyle === 'official'
+                  ? 'border-t-2 border-b-2 border-slate-900 py-2'
+                  : printerConfig.templateStyle === 'minimal'
+                  ? 'border-t border-slate-300 py-1.5'
+                  : 'border-t-2 border-b-2 border-dashed border-slate-700 py-1.5'
+              }`}
+              style={{ color: printerConfig.templateStyle === 'modern' ? '#ffffff' : bodyColor }}
             >
-              <span>الصافي النهائي للتسديد:</span>
-              <span className="font-mono">
+              <span style={{ fontSize: `${baseFontSizePx * 1.05}px` }}>الصافي النهائي للتسديد:</span>
+              <span className="font-mono" style={{ fontSize: `${baseFontSizePx * 1.3}px` }}>
                 {invoice.finalAmount.toLocaleString()} {settings.currency}
               </span>
             </div>
+
+            {printerConfig.showCustomerBalance && matchedCustomer && matchedCustomer.totalDebt !== undefined && (
+              <div 
+                className="flex justify-between items-center font-bold pt-1"
+                style={{ color: bodyColor, fontSize: `${baseFontSizePx * 0.9}px` }}
+              >
+                <span style={{ opacity: 0.85 }}>الرصيد المتبقي للعميل:</span>
+                <span className="font-mono font-black">{matchedCustomer.totalDebt.toLocaleString()} {settings.currency}</span>
+              </div>
+            )}
           </div>
 
-          {/* Barcode section */}
-          {printerConfig.showBarcode !== false && barcodeDataUrl && (
-            <div className="my-2 text-center">
-              <img 
-                src={barcodeDataUrl} 
-                alt={invoice.invoiceNumber} 
-                className="max-w-[92%] h-9 mx-auto object-contain"
-              />
-              <div className="text-[9px] font-mono font-bold text-gray-700 tracking-wider">
-                *{invoice.invoiceNumber}*
+          {/* 5. Policy / Terms / Warranty Box */}
+          {printerConfig.showFooterPolicy && (printerConfig.footerPolicyNote || settings.invoiceFooterNote) && (
+            <div 
+              className="my-2 p-2 bg-gray-50 border border-dashed border-gray-300 rounded-lg font-bold leading-relaxed whitespace-pre-line text-center"
+              style={{ color: bodyColor, fontSize: `${baseFontSizePx * 0.85}px` }}
+            >
+              {printerConfig.footerPolicyNote || settings.invoiceFooterNote}
+            </div>
+          )}
+
+          {/* 6. Signature & Stamp Boxes */}
+          {printerConfig.showSignatureBox && (
+            <div 
+              className="grid grid-cols-2 gap-2 mt-3 pt-2 border-t border-gray-300 font-bold text-center"
+              style={{ color: bodyColor, fontSize: `${baseFontSizePx * 0.85}px` }}
+            >
+              <div className="p-2 border border-gray-300 rounded h-14 flex flex-col justify-between">
+                <span>توقيع العميل المستلم</span>
+                <div className="border-b border-dotted border-gray-400" />
+              </div>
+              <div className="p-2 border border-gray-300 rounded h-14 flex flex-col justify-between">
+                <span>ختم وتوقيع المنشأة</span>
+                <div className="border-b border-dotted border-gray-400" />
               </div>
             </div>
           )}
 
-          {/* QR Code section */}
-          {printerConfig.showQrCode !== false && (
-            <div className="my-2 text-center">
-              <div className="inline-block p-1 bg-white border border-gray-300 rounded shadow-2xs">
-                {qrPngDataUrl ? (
-                  <img 
-                    src={qrPngDataUrl} 
-                    alt="QR" 
-                    style={{ 
-                      width: printerConfig.qrSize === 'small' ? 75 : printerConfig.qrSize === 'large' ? 115 : 95, 
-                      height: printerConfig.qrSize === 'small' ? 75 : printerConfig.qrSize === 'large' ? 115 : 95 
-                    }} 
-                    className="mx-auto block"
-                  />
-                ) : (
-                  <QRCodeSVG 
-                    value={JSON.stringify({ seller: settings.storeName, invoice: invoice.invoiceNumber, total: invoice.finalAmount })}
-                    size={printerConfig.qrSize === 'small' ? 75 : printerConfig.qrSize === 'large' ? 115 : 95}
-                    level="M"
-                  />
-                )}
-                <div className="text-[8px] font-bold text-gray-600 mt-0.5">رمز التحقق الإلكتروني</div>
+          {/* 7. Verification Codes (QR & Barcode) */}
+          <div className="mt-3 text-center space-y-2">
+            {(printerConfig.codeType === 'qr' || printerConfig.codeType === 'both') && (
+              <div className="inline-block p-1.5 bg-white border border-gray-300 rounded-lg shadow-2xs">
+                <QRCodeSVG
+                  value={JSON.stringify({
+                    seller: settings.storeName || 'سند للمحاسبة',
+                    timestamp: invoice.date,
+                    total: invoice.finalAmount,
+                    invoiceNum: invoice.invoiceNumber
+                  })}
+                  size={paperSize === '58mm' ? 64 : 76}
+                />
+                <div 
+                  className="font-bold mt-0.5"
+                  style={{ color: bodyColor, opacity: 0.75, fontSize: `${baseFontSizePx * 0.75}px` }}
+                >
+                  مسح QR للتحقق
+                </div>
               </div>
-            </div>
-          )}
-
-          {/* Return policy note */}
-          {printerConfig.showReturnPolicy !== false && (printerConfig.customFooterNote || settings.invoiceFooterNote) && (
-            <div className="my-2 p-1.5 bg-gray-50 border border-dashed border-gray-400 rounded text-[9px] text-gray-800 font-bold leading-relaxed whitespace-pre-line text-center">
-              {printerConfig.customFooterNote || settings.invoiceFooterNote}
-            </div>
-          )}
-
-          {/* Footer message / Greetings */}
-          <div className="text-center space-y-1 text-gray-600 pt-1">
-            {printerConfig.footerGreeting ? (
-              <p className="text-[9px] font-bold text-gray-800">
-                {printerConfig.footerGreeting}
-              </p>
-            ) : (
-              <p className="text-[8.5px] text-gray-500 flex items-center justify-center gap-0.5">
-                سعدنا بزيارتكم الكريمة <Heart className="w-2 text-red-500 fill-red-500 inline" /> طاب يومكم
-              </p>
             )}
 
-            <p className="text-[8.5px] font-semibold flex items-center justify-center gap-1 text-green-700">
-              <ShieldCheck className="w-3 h-3 text-green-600 inline" />
-              نظام محاسبي معتمد وسريع
-            </p>
-            <p className="text-[8px] text-gray-400 font-mono">
-              برمجة وتطوير م. عبدالمجيد المحواشي
-            </p>
+            {(printerConfig.codeType === 'barcode' || printerConfig.codeType === 'both') && (
+              <div className="flex justify-center overflow-hidden">
+                <canvas ref={barcodeCanvasRef} className="max-w-full" />
+              </div>
+            )}
           </div>
 
-          {/* Simulated Auto-Cutter feed gap */}
-          <div 
-            style={{ marginTop: `${Math.max(8, Number(printerConfig.feedBeforeCutMm || 12))}px` }}
-            className="pt-1 border-t border-dashed border-gray-300 text-[8px] text-gray-400 text-center font-mono select-none"
-          >
-            ✂ خط قطع الورق الآلي للطابعة ({paperSize})
-          </div>
+          {/* 8. Greeting & Dev Credits */}
+          {printerConfig.footerGreeting && (
+            <div 
+              className="font-bold text-center mt-2"
+              style={{ color: bodyColor, opacity: 0.85, fontSize: `${baseFontSizePx * 0.85}px` }}
+            >
+              {printerConfig.footerGreeting}
+            </div>
+          )}
 
+          {printerConfig.showDevCredits && (
+            <div className="text-center space-y-0.5 mt-2 pt-1 border-t border-gray-100">
+              <p 
+                className="font-semibold flex items-center justify-center gap-1"
+                style={{ color: bodyColor, opacity: 0.85, fontSize: `${baseFontSizePx * 0.75}px` }}
+              >
+                <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                <span>تم الحفظ بنجاح في النظام المحاسبي للكمبيوتر</span>
+              </p>
+              <p 
+                className="font-mono"
+                style={{ color: bodyColor, opacity: 0.65, fontSize: `${baseFontSizePx * 0.7}px` }}
+              >
+                برمجة وتطوير م. عبدالمجيد المحواشي (الجمهورية اليمنية)
+              </p>
+            </div>
+          )}
         </div>
 
         {/* WhatsApp Sender */}
         {showWhatsAppForm && (
-          <div className="px-3 py-2.5 bg-[#0c141e] border-t border-gray-800 text-xs text-gray-300 space-y-2 animate-fadeIn shrink-0 no-print">
+          <div className="px-3 py-2 bg-[#0c141e] border-t border-gray-800 text-xs text-gray-300 space-y-2 animate-fadeIn shrink-0">
             <div className="flex items-center justify-between">
               <span className="font-bold text-[#F3E7C4] flex items-center gap-1">
                 <MessageCircle className="w-4 h-4 text-green-400" /> إرسال الفاتورة عبر الواتساب
@@ -953,61 +1111,23 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
           </div>
         )}
 
-        {/* Live Action Feedback Notice */}
-        {actionFeedback && (
-          <div className="bg-emerald-600 text-white text-[11px] font-bold py-1.5 px-3 flex items-center justify-center gap-1.5 animate-fadeIn shrink-0 no-print border-t border-emerald-500 shadow-inner">
-            <Check className="w-3.5 h-3.5" />
-            <span>{actionFeedback}</span>
-          </div>
-        )}
-
         {/* Modal Bottom Actions */}
-        <div className="p-2.5 bg-slate-900 border-t border-gray-800 grid grid-cols-4 sm:grid-cols-7 gap-1.5 shrink-0 no-print">
+        <div className="p-2 sm:p-2.5 bg-slate-900 border-t border-gray-800 grid grid-cols-5 gap-1.5 shrink-0">
           <button
             id="print_thermal_invoice_btn"
             onClick={handlePrint}
-            className="py-2 px-1 rounded-xl text-[11px] font-black bg-emerald-500 text-black hover:bg-emerald-400 cursor-pointer flex items-center justify-center gap-1 shadow transition active:scale-95"
-            title={isPC ? "فتح نافذة طباعة وندوز الرسمية لطابعة الإيصالات USB أو الشبكة" : "طباعة حرارية فورية"}
+            className="py-2 px-1 rounded-xl text-[11px] font-bold bg-emerald-500 text-black hover:bg-emerald-400 cursor-pointer flex items-center justify-center gap-1 shadow transition active:scale-95"
+            title="طباعة حرارية مباشرة"
           >
             <Printer className="w-3.5 h-3.5 shrink-0" />
-            <span>{isPC ? 'طباعة (وندوز)' : 'طباعة'}</span>
-          </button>
-
-          {/* زر إرسال أوامر ESC/POS الخام مباشرة عبر متصفح الكمبيوتر */}
-          <button
-            id="print_escpos_direct_btn"
-            onClick={handleEscPosDirectPrint}
-            disabled={isEscPosPrinting}
-            className="py-2 px-1 rounded-xl text-[11px] font-black bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1 shadow transition active:scale-95"
-            title="إرسال أوامر ESC/POS الخام مباشرة إلى الطابعة عبر متصفح الكمبيوتر (WebUSB / WebSerial)"
-          >
-            {isEscPosPrinting ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-            ) : (
-              <Zap className="w-3.5 h-3.5 shrink-0 text-amber-300" />
-            )}
-            <span>ESC/POS</span>
-          </button>
-
-          <button
-            id="print_rawbt_invoice_btn"
-            onClick={handleRawBTPrint}
-            className={`py-2 px-1 rounded-xl text-[11px] font-bold cursor-pointer flex items-center justify-center gap-1 shadow transition active:scale-95 ${
-              !isPC
-                ? 'bg-amber-500 text-slate-950 hover:bg-amber-400 font-black'
-                : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700'
-            }`}
-            title="طباعة عبر تطبيق RawBT لهواتف أندرويد"
-          >
-            <Zap className="w-3.5 h-3.5 shrink-0 text-amber-400" />
-            <span>RawBT</span>
+            <span>طباعة</span>
           </button>
 
           <button
             id="print_bluetooth_invoice_btn"
             onClick={handleBluetoothPrint}
             disabled={isBluetoothConnecting}
-            className="py-2 px-1 rounded-xl text-[11px] font-bold bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1 shadow transition"
+            className="py-2 px-1 rounded-xl text-[11px] font-bold bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1 shadow transition active:scale-95"
             title="طباعة بلوتوث"
           >
             {isBluetoothConnecting ? (
@@ -1022,7 +1142,7 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
             id="export_pdf_invoice_btn"
             onClick={handleExportPDF}
             disabled={isExportingPDF}
-            className="py-2 px-1 rounded-xl text-[11px] font-bold bg-rose-600 text-white hover:bg-rose-500 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1 shadow transition"
+            className="py-2 px-1 rounded-xl text-[11px] font-bold bg-rose-600 text-white hover:bg-rose-500 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1 shadow transition active:scale-95"
             title="تصدير PDF"
           >
             {isExportingPDF ? (
@@ -1036,7 +1156,7 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
           <button
             id="download_text_invoice_btn"
             onClick={handleDownload}
-            className="py-2 px-1 rounded-xl text-[11px] font-bold bg-[#C5A862] text-black hover:bg-[#A0813D] cursor-pointer flex items-center justify-center gap-1 shadow transition"
+            className="py-2 px-1 rounded-xl text-[11px] font-bold bg-[#C5A862] text-black hover:bg-[#A0813D] cursor-pointer flex items-center justify-center gap-1 shadow transition active:scale-95"
             title="تحميل إيصال نصي"
           >
             <Download className="w-3.5 h-3.5 shrink-0" />
@@ -1049,7 +1169,7 @@ export default function InvoiceModal({ invoice, onClose, settings, customers }: 
               soundManager.playScanBeep();
               setShowWhatsAppForm(!showWhatsAppForm);
             }}
-            className={`py-2 px-1 rounded-xl text-[11px] font-bold cursor-pointer flex items-center justify-center gap-1 shadow transition ${
+            className={`py-2 px-1 rounded-xl text-[11px] font-bold cursor-pointer flex items-center justify-center gap-1 shadow transition active:scale-95 ${
               showWhatsAppForm 
                 ? 'bg-green-600 text-white' 
                 : 'bg-slate-800 text-green-400 hover:bg-slate-700'

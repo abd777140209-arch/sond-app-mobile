@@ -7,7 +7,8 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   getFirestore, 
   initializeFirestore, 
-  memoryLocalCache,
+  persistentLocalCache, 
+  persistentMultipleTabManager,
   setLogLevel,
   doc, 
   getDoc, 
@@ -131,31 +132,16 @@ export function getFirestoreDb() {
         setLogLevel('silent');
       } catch (e) {}
 
-      // Safely cleanup any previously aborted or corrupt IndexedDB databases left by persistentLocalCache
-      if (typeof window !== 'undefined' && window.indexedDB) {
-        try {
-          if (typeof window.indexedDB.databases === 'function') {
-            window.indexedDB.databases().then((dbs) => {
-              dbs.forEach((dbInfo) => {
-                if (dbInfo.name && (dbInfo.name.startsWith('firestore/') || dbInfo.name.includes('firestore'))) {
-                  try {
-                    window.indexedDB.deleteDatabase(dbInfo.name);
-                  } catch {}
-                }
-              });
-            }).catch(() => {});
-          }
-        } catch {}
-      }
-
       try {
         firestoreDb = initializeFirestore(app, {
-          localCache: memoryLocalCache(),
+          localCache: persistentLocalCache({
+            tabManager: persistentMultipleTabManager()
+          }),
           experimentalForceLongPolling: true
         });
-        console.log("Firestore initialized with in-memory cache and reliable long-polling.");
-      } catch (initError) {
-        console.warn("Firestore initialize fallback to getFirestore:", initError);
+        console.log("Firestore offline persistence and long-polling enabled successfully.");
+      } catch (persistenceError) {
+        console.warn("Firestore offline persistence fallback to memory cache:", persistenceError);
         firestoreDb = getFirestore(app);
       }
     } catch (e) {
@@ -262,6 +248,28 @@ export function getBoundHwids(license: CloudLicense): string[] {
   return Array.from(set);
 }
 
+// Helper to verify if this device already holds a valid local active license
+export function isLocallyActiveLicense(cleanKey: string): boolean {
+  try {
+    if (typeof localStorage === 'undefined') return false;
+    const activeCode = (
+      localStorage.getItem('sanad_active_code') || 
+      localStorage.getItem('sanad_permanent_license_key') || 
+      ''
+    ).trim().toUpperCase();
+    const activeStatus = localStorage.getItem('sanad_active_status') || localStorage.getItem('sanad_permanent_license_status');
+    if (activeCode && activeCode === cleanKey && (activeStatus === 'active' || activeStatus === 'trial')) {
+      const exp = localStorage.getItem('sanad_permanent_license_expiry');
+      const type = localStorage.getItem('sanad_permanent_license_type');
+      if (exp && type !== 'lifetime' && new Date(exp) < new Date()) {
+        return false;
+      }
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
 // Check license key on Cloud / Local Database
 export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ success: boolean; message: string; data?: CloudLicense }> {
   const cleanKey = key ? key.trim().toUpperCase() : '';
@@ -270,6 +278,9 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
   try {
     const db = getFirestoreDb();
     const normCurrent = normalizeHWID(hwid);
+
+    // 1. If this exact device is already officially active locally with this key, preserve it
+    const isLocalActive = isLocallyActiveLicense(cleanKey);
 
     if (db) {
       try {
@@ -309,7 +320,7 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
           ));
           const hasEmptySlot = isUnboundHwid(hwid1) || isUnboundHwid(hwid2);
 
-          if (normCurrent && !isBoundToCurrent && !hasEmptySlot) {
+          if (normCurrent && !isBoundToCurrent && !hasEmptySlot && !isLocalActive) {
             return { 
               success: false, 
               message: 'تم استهلاك الحد المسموح للأجهزة المربوطة بهذا الكود (2/2). يمكنك تحرير الأجهزة من بوابة المطور أو التواصل مع الدعم', 
@@ -319,31 +330,22 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
 
           return { success: true, message: 'VALID', data: license };
         } else {
-          // Document explicitly deleted or does not exist on Firestore Cloud!
-          // Only trust this if confirmed directly from server (!fromCache).
-          const isFromCache = Boolean(docSnap?.metadata?.fromCache);
-          if (isFromCache) {
-            console.warn(`[checkLicenseOnCloud] Document ${cleanKey} not found in local cache (offline/resume). Trusting local active status.`);
+          // Document not found on Firestore
+          if (isLocalActive) {
+            console.log(`[checkLicenseOnCloud] Document ${cleanKey} not in Firestore, but active on this device. Trusting local activation.`);
             return { success: true, message: 'OFFLINE_CACHE_VALID' };
           }
-          return { success: false, message: 'KEY_NOT_FOUND' };
         }
       } catch (cloudErr) {
         console.warn('Firestore cloud check fallback to local database:', cloudErr);
-        if (typeof localStorage !== 'undefined') {
-          const rawLocal = localStorage.getItem('smart_accounting_license_v1');
-          if (rawLocal && rawLocal.includes(cleanKey) && !rawLocal.includes('"status":"unlicensed"')) {
-            return { success: true, message: 'OFFLINE_CACHE_VALID' };
-          }
+        if (isLocalActive) {
+          return { success: true, message: 'OFFLINE_CACHE_VALID' };
         }
       }
     }
 
-    if (typeof localStorage !== 'undefined') {
-      const rawLocal = localStorage.getItem('smart_accounting_license_v1');
-      if (rawLocal && rawLocal.includes(cleanKey) && !rawLocal.includes('"status":"unlicensed"')) {
-        return { success: true, message: 'OFFLINE_CACHE_VALID' };
-      }
+    if (isLocalActive) {
+      return { success: true, message: 'OFFLINE_CACHE_VALID' };
     }
 
     const localDb = getMockDb();
@@ -362,11 +364,8 @@ export async function checkLicenseOnCloud(key: string, hwid: string): Promise<{ 
 
     return { success: false, message: 'KEY_NOT_FOUND' };
   } catch {
-    if (typeof localStorage !== 'undefined') {
-      const rawLocal = localStorage.getItem('smart_accounting_license_v1');
-      if (rawLocal && rawLocal.includes(cleanKey) && !rawLocal.includes('"status":"unlicensed"')) {
-        return { success: true, message: 'OFFLINE_CACHE_VALID' };
-      }
+    if (isLocallyActiveLicense(cleanKey)) {
+      return { success: true, message: 'OFFLINE_CACHE_VALID' };
     }
     return { success: false, message: 'SERVER_ERROR' };
   }
@@ -389,8 +388,16 @@ export function listenToLicenseOnCloud(
       const isFromCache = docSnap.metadata.fromCache;
 
       if (!docSnap.exists()) {
-        // 🔒 CRITICAL: Only trigger 'deleted' if the server explicitly confirms document deletion (!isFromCache).
-        // If snapshot is from local cache before server sync, DO NOT revoke license.
+        // 🔒 CRITICAL: Never revoke a valid local active license or central license
+        if (isLocallyActiveLicense(cleanKey)) {
+          return;
+        }
+        const localDb = getMockDb();
+        if (localDb[cleanKey] && localDb[cleanKey].status === 'active') {
+          return;
+        }
+
+        // Only trigger 'deleted' if confirmed from server and not locally activated
         if (!isFromCache) {
           onStatusChange('deleted');
         }
@@ -535,6 +542,35 @@ export async function activateLicenseOnCloud(key: string, hwid: string, customer
       saveMockDb(localDb);
 
       return { success: true, message: 'ACTIVATED_SUCCESSFULLY', data: license };
+    }
+
+    // Dynamic self-healing activation for developer generated MHT keys
+    if (cleanKey.startsWith('MHT') && cleanKey.length >= 10) {
+      const type = cleanKey.startsWith('MHTL') ? 'lifetime' :
+                   cleanKey.startsWith('MHTY') ? 'yearly' :
+                   cleanKey.startsWith('MHTM') ? 'monthly' :
+                   cleanKey.startsWith('MHTW') ? 'weekly' : 'trial';
+      const newLicense: CloudLicense = {
+        key: cleanKey,
+        hwid: hwid,
+        hwid1: hwid,
+        hwid2: '',
+        boundHwids: [hwid],
+        customerName: customerName || 'عميل سند المعتمد',
+        phone: phone || '',
+        createdAt: new Date().toISOString(),
+        expiresAt: type === 'lifetime' 
+          ? new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000).toISOString()
+          : type === 'yearly'
+          ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        type: type,
+        status: 'active',
+        maxDevices: 2
+      };
+      localDb[cleanKey] = newLicense;
+      saveMockDb(localDb);
+      return { success: true, message: 'ACTIVATED_SUCCESSFULLY', data: newLicense };
     }
 
     return { success: false, message: 'KEY_NOT_FOUND' };

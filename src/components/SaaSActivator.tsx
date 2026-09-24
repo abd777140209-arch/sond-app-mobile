@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { openWhatsApp } from '../utils/nativeLauncher';
-import { LicenseInfo, saveLicenseLocally, generateHWID } from '../utils/licensing';
+import { LicenseInfo, saveLicenseLocally, generateHWID, getSavedRegistrationCredentials, loadLicenseLocally } from '../utils/licensing';
 import { safeStorage } from '../utils/safeStorage';
 import { isFirebaseConfigured, activateLicenseOnCloud } from '../utils/firebase';
 
@@ -41,9 +41,40 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
   const [copiedHwid, setCopiedHwid] = useState(false);
   const [isCloud, setIsCloud] = useState(false);
   const [showInvalidKeyModal, setShowInvalidKeyModal] = useState(false);
+  const [detectedSavedCode, setDetectedSavedCode] = useState<string | null>(null);
 
+  // ⚡ Auto-recognition of active license or saved credentials on mount
   useEffect(() => {
     setIsCloud(isFirebaseConfigured());
+
+    // 1. First check if a valid active license is already preserved on this device
+    const localLic = loadLicenseLocally();
+    if (localLic && (localLic.status === 'active' || localLic.status === 'trial') && localLic.licenseKey) {
+      const isExpired = localLic.expiresAt && localLic.subscriptionType !== 'lifetime' && new Date(localLic.expiresAt) < new Date();
+      if (!isExpired) {
+        console.log('[SaaSActivator] Active license auto-recognized! Bypassing activation screen directly.');
+        setLicense(localLic);
+        onActivationSuccess(localLic);
+        return;
+      }
+    }
+
+    // 2. Auto-load previously saved registration credentials
+    const { key: savedKey, phone: savedPhone, storeName: savedStore } = getSavedRegistrationCredentials();
+    if (savedKey) {
+      setActivationKeyInput(savedKey);
+      setDetectedSavedCode(savedKey);
+    }
+    if (savedPhone) setPhoneInput(savedPhone);
+    if (savedStore) setCustomerNameInput(savedStore);
+
+    // 3. If both saved key and phone exist, show quick-entry status
+    if (savedKey && savedPhone) {
+      setStatusMessage({
+        text: `⚡ تم التعرف التلقائي على كود التسجيل المعتمد (${savedKey}) برقم (${savedPhone}). اضغط الزر أدناه لتأكيد الدخول الفوري.`,
+        type: 'info'
+      });
+    }
   }, []);
 
   // Copy Hardware ID helper
@@ -117,6 +148,14 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
             customerName: storeName,
             phone: phone
           };
+          localStorage.setItem('sanad_saved_reg_key', key);
+          localStorage.setItem('sanad_saved_reg_phone', phone);
+          localStorage.setItem('sanad_saved_reg_customer', storeName);
+          localStorage.setItem('sanad_active_code', key);
+          localStorage.setItem('sanad_active_phone', phone);
+          localStorage.setItem('sanad_active_store', storeName);
+          localStorage.setItem('sanad_active_status', 'active');
+
           saveLicenseLocally(activeLic);
           setLicense(activeLic);
           soundManager.playSuccessChime();
@@ -271,6 +310,31 @@ export default function SaaSActivator({ license, setLicense, onActivationSuccess
             </div>
           </div>
         </div>
+
+        {/* Auto-detected Registered Code Card */}
+        {detectedSavedCode && (
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-sky-50 to-blue-50 dark:from-sky-950/40 dark:to-blue-950/40 border border-sky-300 dark:border-sky-800 flex items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-center gap-3">
+              <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <div className="text-right space-y-0.5">
+                <span className="text-xs font-black text-sky-900 dark:text-sky-200 block">
+                  ⚡ تم التعرف التلقائي على كود التسجيل السابق لجهازك:
+                </span>
+                <div className="text-xs font-mono font-black text-sky-700 dark:text-sky-300 tracking-wider">
+                  {detectedSavedCode}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleActivateLicense}
+              disabled={loading}
+              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs transition shadow-md cursor-pointer shrink-0 active:scale-95"
+            >
+              {loading ? 'جاري التحقق...' : 'دخول فوري ✓'}
+            </button>
+          </div>
+        )}
 
         {/* Phone + Code Activation Form */}
         <form onSubmit={handleActivateLicense} className="space-y-4">

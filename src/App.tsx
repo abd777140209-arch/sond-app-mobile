@@ -62,6 +62,7 @@ import SanadDeviceReceipt from './components/SanadDeviceReceipt';
 import SanadEnterpriseDashboard from './components/SanadEnterpriseDashboard';
 import PinCheckModal from './components/PinCheckModal';
 import DeveloperPortalModal from './components/DeveloperPortalModal';
+import PrinterInvoiceStudio from './components/PrinterInvoiceStudio';
 
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
@@ -78,7 +79,6 @@ import {
 } from './utils/firebaseSync';
 import { listenToLicenseOnCloud, checkLicenseOnCloud, CloudLicense } from './utils/firebase';
 import { safeStorage, cleanUpStorageQuota } from './utils/safeStorage';
-import { loadThermalPrinterSettings, saveThermalPrinterSettings } from './utils/printerConfig';
 
 export default function App() {
   // 1. All Component State Initializations
@@ -110,10 +110,6 @@ export default function App() {
                         (localStorage.getItem('app_interface_mode') as 'mobile' | 'desktop');
     if (savedLayout === 'desktop' || savedLayout === 'mobile') {
       parsed.deviceMode = savedLayout;
-    }
-
-    if (!parsed.printerSettings) {
-      parsed.printerSettings = loadThermalPrinterSettings();
     }
 
     return parsed;
@@ -331,38 +327,16 @@ export default function App() {
   const handleLogout = () => {
     soundManager.playWarningBeep();
     localStorage.setItem('smart_accounting_logged_out', 'true');
-    const updated: LicenseInfo = {
-      licenseKey: '',
-      status: 'unlicensed',
-      activatedAt: '',
-      expiresAt: '',
-      hwid: license.hwid,
-      subscriptionType: 'trial',
-      customerName: 'غير مرخص'
-    };
-    saveLicenseLocally(updated);
-    setLicense(updated);
-    setActiveTab('dashboard');
+    setCurrentUser(null);
+    setIsCashierMode(true);
+    addAuditLog('user_logout', 'تسجيل خروج وقفل الجلسة', 'قام المستخدم بقفل الجلسة الحالية');
+    setActiveTab('pos');
   };
 
   // 3. Side Effects
   // 🧹 Run storage cleanup on boot
   useEffect(() => {
     cleanUpStorageQuota();
-  }, []);
-
-  // 🖨️ Listener for live thermal printer settings updates
-  useEffect(() => {
-    const handlePrinterSettingsChange = (e: any) => {
-      if (e.detail) {
-        setSettings(prev => ({
-          ...prev,
-          printerSettings: e.detail
-        }));
-      }
-    };
-    window.addEventListener('printer_settings_updated', handlePrinterSettingsChange);
-    return () => window.removeEventListener('printer_settings_updated', handlePrinterSettingsChange);
   }, []);
 
   // 🖥️📱 Listener for System Interface Mode changes
@@ -476,11 +450,17 @@ export default function App() {
     const currentHwid = license.hwid || generateHWID();
 
     const handleLicenseRevoked = (reason: string, cloudData?: CloudLicense) => {
-      console.warn(`[License Security] License key ${currentKey} was ${reason} on Cloud!`);
-      soundManager.playWarningBeep();
-
+      // 🔒 Strictly protect active licenses: only revoke if cloud explicitly suspended or subscription expired
       const isExpired = reason === 'KEY_EXPIRED' || reason === 'expired';
       const isSuspended = reason === 'KEY_SUSPENDED' || reason === 'suspended';
+
+      if (!isExpired && !isSuspended) {
+        console.log(`[License Security] Ignoring non-revocation reason: ${reason}`);
+        return;
+      }
+
+      console.warn(`[License Security] License key ${currentKey} was ${reason} on Cloud!`);
+      soundManager.playWarningBeep();
 
       const revokedLicense: LicenseInfo = {
         licenseKey: currentKey,
@@ -489,7 +469,7 @@ export default function App() {
         expiresAt: cloudData?.expiresAt || license.expiresAt,
         hwid: currentHwid,
         subscriptionType: cloudData?.type || license.subscriptionType || 'trial',
-        customerName: cloudData?.customerName || license.customerName || (isSuspended ? 'حساب موقوف' : isExpired ? 'اشتراك منتهي' : 'ترخيص ملغى'),
+        customerName: cloudData?.customerName || license.customerName || (isSuspended ? 'حساب موقوف' : 'اشتراك منتهي'),
         phone: cloudData?.phone || license.phone || ''
       };
 
@@ -499,7 +479,7 @@ export default function App() {
     };
 
     const unsubRealtime = listenToLicenseOnCloud(currentKey, (status, cloudData) => {
-      if (status === 'deleted' || status === 'suspended' || status === 'expired') {
+      if (status === 'suspended' || status === 'expired') {
         handleLicenseRevoked(status, cloudData);
       } else if (status === 'active' && cloudData) {
         if (license.status === 'expired' || license.status === 'unlicensed') {
@@ -542,7 +522,8 @@ export default function App() {
             setShowRevokedModal(false);
           }
         } else if (!checkRes.success) {
-          if (checkRes.message === 'KEY_NOT_FOUND' || checkRes.message === 'KEY_SUSPENDED' || checkRes.message === 'KEY_EXPIRED') {
+          // Only revoke on explicit server suspension or expiry, NEVER on not found
+          if (checkRes.message === 'KEY_SUSPENDED' || checkRes.message === 'KEY_EXPIRED') {
             handleLicenseRevoked(checkRes.message, checkRes.data);
           }
         }
@@ -778,9 +759,6 @@ export default function App() {
     }
     if (newSettings.storeName) {
       safeStorage.setItem('smart_accounting_store_name', newSettings.storeName);
-    }
-    if (newSettings.printerSettings) {
-      saveThermalPrinterSettings(newSettings.printerSettings);
     }
     setSettings(newSettings);
     if (license.licenseKey) saveStoreSettings(license.licenseKey, newSettings);
@@ -1291,6 +1269,7 @@ export default function App() {
       case 'maintenance': return 'قسم الصيانة والورشة';
       case 'employees': return 'إدارة العمال والرواتب';
       case 'users': return 'نظام الصلاحيات وسجل الأنشطة (Audit)';
+      case 'printer_settings': return 'مركز ضبط الطابعة وتخصيص الفواتير';
       case 'settings': return 'إعدادات النظام والترخيص';
       default: return settings.storeName || license.customerName || 'نظام سند المحاسبي';
     }
@@ -1637,6 +1616,14 @@ export default function App() {
               />
             )}
 
+            {activeTab === 'printer_settings' && (
+              <PrinterInvoiceStudio
+                settings={settings}
+                onSaveSettings={handleSaveSettings}
+                isStandaloneTab={true}
+              />
+            )}
+
             {activeTab === 'settings' && (
               <Settings
                 settings={settings}
@@ -1693,6 +1680,11 @@ export default function App() {
           onClose={() => setActiveInvoice(null)}
           settings={settings}
           customers={customers}
+          onOpenPrinterSettings={() => {
+            setActiveInvoice(null);
+            handleTabSelect('printer_settings');
+          }}
+          onSaveSettings={handleSaveSettings}
         />
       )}
 

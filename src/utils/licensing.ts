@@ -197,89 +197,168 @@ export const getExpiryDate = (type: 'weekly' | 'monthly' | 'yearly' | 'lifetime'
 
 const STORAGE_KEY = 'smart_accounting_license_v1';
 const BACKUP_STORAGE_KEY = 'sanad_backup_license_record';
+const PERMANENT_STORAGE_KEY = 'sanad_permanent_license_v2';
 
-// Save license info securely with redundancy
+// Helper to retrieve previously registered activation credentials
+export const getSavedRegistrationCredentials = (): { key: string; phone: string; storeName: string } => {
+  try {
+    if (typeof localStorage === 'undefined') return { key: '', phone: '', storeName: '' };
+    const key = (
+      localStorage.getItem('sanad_active_code') || 
+      localStorage.getItem('sanad_permanent_license_key') || 
+      localStorage.getItem('sanad_saved_reg_key') || 
+      ''
+    ).trim().toUpperCase();
+    const phone = (
+      localStorage.getItem('sanad_active_phone') || 
+      localStorage.getItem('sanad_permanent_license_phone') || 
+      localStorage.getItem('sanad_saved_reg_phone') || 
+      ''
+    ).trim();
+    const storeName = (
+      localStorage.getItem('sanad_active_store') || 
+      localStorage.getItem('sanad_permanent_license_customer') || 
+      localStorage.getItem('sanad_saved_reg_customer') || 
+      ''
+    ).trim();
+    return { key, phone, storeName };
+  } catch {
+    return { key: '', phone: '', storeName: '' };
+  }
+};
+
+// Save license info securely with rock-solid redundancy across layers
 export const saveLicenseLocally = (info: LicenseInfo) => {
   try {
     const jsonStr = JSON.stringify(info);
     const secureStr = obfuscate(jsonStr);
+    
+    // Layer 1: safeStorage & standard localStorage
     safeStorage.setItem(STORAGE_KEY, secureStr);
     try {
       localStorage.setItem(STORAGE_KEY, secureStr);
-      localStorage.setItem(BACKUP_STORAGE_KEY, secureStr);
+      localStorage.setItem(PERMANENT_STORAGE_KEY, secureStr);
     } catch {}
+
+    // Layer 2: Dedicated permanent record for resilience against browser cache purges
+    if (typeof localStorage !== 'undefined') {
+      if (info.licenseKey && (info.status === 'active' || info.status === 'trial')) {
+        localStorage.setItem('sanad_permanent_license_key', info.licenseKey.trim().toUpperCase());
+        localStorage.setItem('sanad_permanent_license_status', info.status);
+        localStorage.setItem('sanad_permanent_license_customer', info.customerName || '');
+        localStorage.setItem('sanad_permanent_license_phone', info.phone || '');
+        localStorage.setItem('sanad_permanent_license_expiry', info.expiresAt || '');
+        localStorage.setItem('sanad_permanent_license_type', info.subscriptionType || 'lifetime');
+        localStorage.setItem('sanad_permanent_license_activated_at', info.activatedAt || '');
+        localStorage.setItem('sanad_permanent_license_hwid', info.hwid || generateHWID());
+
+        // Also save convenient quick-access tokens
+        localStorage.setItem('sanad_active_code', info.licenseKey.trim().toUpperCase());
+        localStorage.setItem('sanad_active_status', info.status);
+        if (info.phone) localStorage.setItem('sanad_active_phone', info.phone);
+        if (info.customerName) localStorage.setItem('sanad_active_store', info.customerName);
+      } else if (info.status === 'unlicensed') {
+        // Only mark status as unlicensed if explicitly deactivating; keep key available for re-activation
+        localStorage.setItem('sanad_permanent_license_status', 'unlicensed');
+        localStorage.setItem('sanad_active_status', 'unlicensed');
+      }
+    }
   } catch (e) {
     console.error('Error saving license locally:', e);
   }
 };
 
-// Load license info safely with multi-layer fallback
+// Load license info safely with multi-layer fallback & auto-healing
 export const loadLicenseLocally = (): LicenseInfo => {
-  let secureStr = safeStorage.getItem(STORAGE_KEY);
-  if (!secureStr && typeof localStorage !== 'undefined') {
-    secureStr = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(BACKUP_STORAGE_KEY);
-  }
-
   const hwid = generateHWID();
 
-  if (!secureStr) {
-    const unlicensedLicense: LicenseInfo = {
-      licenseKey: '',
-      status: 'unlicensed',
-      activatedAt: '',
-      expiresAt: '',
-      hwid,
-      subscriptionType: 'trial',
-      customerName: 'غير مرخص'
-    };
-    saveLicenseLocally(unlicensedLicense);
-    return unlicensedLicense;
+  // 1. Try secure strings from multiple sources
+  let secureStr = safeStorage.getItem(STORAGE_KEY);
+  if (!secureStr && typeof localStorage !== 'undefined') {
+    secureStr = localStorage.getItem(STORAGE_KEY) || 
+                localStorage.getItem(PERMANENT_STORAGE_KEY) || 
+                localStorage.getItem(BACKUP_STORAGE_KEY);
   }
 
-  let rawJson = deobfuscate(secureStr);
+  let rawJson = '';
+  if (secureStr) {
+    rawJson = deobfuscate(secureStr);
+  }
+
   if (!rawJson && typeof localStorage !== 'undefined') {
-    const backupStr = localStorage.getItem(BACKUP_STORAGE_KEY);
+    const backupStr = localStorage.getItem(PERMANENT_STORAGE_KEY) || localStorage.getItem(BACKUP_STORAGE_KEY);
     if (backupStr) rawJson = deobfuscate(backupStr);
   }
 
-  if (!rawJson) {
-    return {
-      licenseKey: '',
-      status: 'unlicensed',
-      activatedAt: '',
-      expiresAt: '',
-      hwid,
-      subscriptionType: 'trial'
-    };
-  }
-
-  try {
-    const info: LicenseInfo = JSON.parse(rawJson);
-    
-    // Check expiry first
-    if (info.expiresAt && info.subscriptionType !== 'lifetime') {
-      const expDate = new Date(info.expiresAt);
-      if (expDate < new Date()) {
-        info.status = 'expired';
+  // 2. If valid JSON was found, parse and validate
+  if (rawJson) {
+    try {
+      const info: LicenseInfo = JSON.parse(rawJson);
+      
+      // Check expiry
+      if (info.expiresAt && info.subscriptionType !== 'lifetime') {
+        const expDate = new Date(info.expiresAt);
+        if (expDate < new Date()) {
+          info.status = 'expired';
+        }
       }
-    }
 
-    // Once a license is saved and active locally, don't arbitrarily invalidate it
-    // because this local storage copy belongs to THIS device.
-    if (info.status === 'active' && info.licenseKey && !info.hwid) {
-      info.hwid = hwid;
-      saveLicenseLocally(info);
+      if (info.status === 'active' || info.status === 'trial') {
+        if (!info.hwid) info.hwid = hwid;
+        // Keep permanent backup refreshed
+        saveLicenseLocally(info);
+        return info;
+      }
+    } catch {
+      // Parse error, proceed to persistent fallback
     }
-
-    return info;
-  } catch {
-    return {
-      licenseKey: '',
-      status: 'unlicensed',
-      activatedAt: '',
-      expiresAt: '',
-      hwid,
-      subscriptionType: 'trial'
-    };
   }
+
+  // 3. Fallback to permanent discrete fields (Auto-Recovery layer)
+  if (typeof localStorage !== 'undefined') {
+    const permKey = (localStorage.getItem('sanad_permanent_license_key') || localStorage.getItem('sanad_active_code') || '').trim().toUpperCase();
+    const permStatus = localStorage.getItem('sanad_permanent_license_status') || localStorage.getItem('sanad_active_status') || '';
+    
+    if (permKey && (permStatus === 'active' || permStatus === 'trial')) {
+      const permExpiry = localStorage.getItem('sanad_permanent_license_expiry') || '';
+      const permType = (localStorage.getItem('sanad_permanent_license_type') as any) || 'lifetime';
+      const permCust = localStorage.getItem('sanad_permanent_license_customer') || 'عميل سند المعتمد';
+      const permPhone = localStorage.getItem('sanad_permanent_license_phone') || '';
+      const permAct = localStorage.getItem('sanad_permanent_license_activated_at') || new Date().toISOString();
+
+      let isExpired = false;
+      if (permExpiry && permType !== 'lifetime') {
+        const expDate = new Date(permExpiry);
+        if (expDate < new Date()) {
+          isExpired = true;
+        }
+      }
+
+      const recoveredLicense: LicenseInfo = {
+        licenseKey: permKey,
+        status: isExpired ? 'expired' : 'active',
+        activatedAt: permAct,
+        expiresAt: permExpiry,
+        hwid,
+        subscriptionType: permType,
+        customerName: permCust,
+        phone: permPhone
+      };
+
+      // Resave to heal storage
+      saveLicenseLocally(recoveredLicense);
+      return recoveredLicense;
+    }
+  }
+
+  // 4. Default unlicensed state if truly no prior activation exists
+  return {
+    licenseKey: '',
+    status: 'unlicensed',
+    activatedAt: '',
+    expiresAt: '',
+    hwid,
+    subscriptionType: 'trial',
+    customerName: 'غير مرخص'
+  };
 };

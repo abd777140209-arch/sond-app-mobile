@@ -38,6 +38,7 @@ export interface InvoiceItem {
   quantity: number;
   sellingPrice: number;
   total: number;
+  barcode?: string;
 }
 
 export type InvoiceType = 'cash' | 'debt';
@@ -129,58 +130,82 @@ export interface CurrencyRate {
 
 export type BackupFrequency = 'off' | 'daily' | 'weekly' | 'monthly';
 
-export type ESCInternationalizationProfile = 
-  | 'truetype' // استخدم خط TrueType (حل جذري لمنع الرموز العشوائية)
-  | 'standard_lang' // تهيئة نموذجية للغة المختارة
-  | 'goojprt_pt210' // Goojprt PT-210
-  | 'star' // Star
-  | 'utf8_configured' // تم تكوينه بالفعل على أنه UTF-8
-  | 'utf8_esc_gs_t128' // ESC GS t 128
-  | 'utf8_esc_9_0x01'; // ESC 9 0x01
+export type PrinterConnectionType = 'browser' | 'thermal_usb' | 'bluetooth' | 'network_ip';
+export type InvoicePaperSize = '80mm' | '58mm' | 'a4' | 'a5';
+export type InvoiceTemplateStyle = 'modern' | 'classic' | 'boxed' | 'minimal' | 'official';
+export type InvoiceCodeType = 'qr' | 'barcode' | 'both' | 'none';
 
-export interface ThermalPrinterSettings {
-  printerModel: 'GP-U80300I' | 'standard-80mm' | 'portable-58mm' | 'custom';
-  paperWidth: '80mm' | '72mm' | '58mm';
-  printableWidthMm: number; // e.g. 72 for 80mm
-  fontScale: 'small' | 'standard' | 'large' | 'extralarge';
-  fontFamily: 'cairo' | 'tahoma' | 'monospace' | 'system';
-  numberFormat: 'latin' | 'arabic';
-  printDensity: 'normal' | 'dark' | 'extradark';
-  lineSpacing: 'compact' | 'standard' | 'relaxed';
-  marginTopMm: number;
-  marginBottomMm: number;
-  feedBeforeCutMm: number;
-  showLogo: boolean;
-  showHeaderName: boolean;
-  showBranchAddress: boolean;
-  showPhone: boolean;
-  showTaxNumber: boolean;
-  taxNumber?: string;
-  customHeaderTitle?: string;
-  showCashierName: boolean;
-  showCustomerInfo: boolean;
-  showPaymentMethod: boolean;
-  tableBorderType: 'dashed' | 'solid' | 'dotted' | 'double';
-  showQrCode: boolean;
-  qrSize: 'small' | 'standard' | 'large';
-  showBarcode: boolean;
-  footerGreeting?: string;
-  showReturnPolicy: boolean;
-  customFooterNote?: string;
+export type InvoiceFontFamily =
+  | 'cairo'
+  | 'tajawal'
+  | 'almarai'
+  | 'amiri'
+  | 'ibm_plex'
+  | 'alexandria'
+  | 'changa'
+  | 'tahoma'
+  | 'monospace';
+
+export type InvoiceFontWeight = 'normal' | 'medium' | 'bold' | 'heavy';
+export type InvoiceFontSizeScale = 'compact' | 'normal' | 'large' | 'xlarge';
+export type InvoiceLineHeight = 'compact' | 'normal' | 'relaxed';
+
+export interface PrinterSettings {
+  // الاتصال ونوع الطابعة
+  connectionType: PrinterConnectionType;
+  printerName?: string;
+  ipAddress?: string;
+  port?: number;
+  bluetoothDeviceName?: string;
+  
+  // قياس الورق والخصائص
+  paperSize: InvoicePaperSize;
+  copiesCount: number;
+  printDensity: 'normal' | 'high_contrast' | 'compact';
+  pageMargin: 'compact' | 'normal' | 'wide';
   autoPrintOnSale: boolean;
   autoCutPaper: boolean;
   openCashDrawer: boolean;
-  printCopies: number;
   beepOnPrint: boolean;
-  arabicFixMode: 'standard' | 'direct_sharp' | 'bold_crisp';
   
-  // خيارات ملف تعريف ESC العام والتدويل (RawBT ESC Profile & TrueType)
-  escProfile?: ESCInternationalizationProfile;
-  useTrueTypeFont?: boolean; // استخدام خط TrueType لمنع الرموز العشوائية وطباعة حروف عربية متصلة
-  feedLinesCount?: number; // عدد الخطوط التي يتم تمريرها (مثل 2)
-  enablePaperCut?: boolean; // قص الورق
-  directRawBTSupport?: boolean; // تفعيل الربط المباشر مع تطبيق RawBT
-  printEnvironment?: 'auto' | 'pc' | 'android_rawbt'; // بيئة الطباعة: كشف تلقائي أو كمبيوتر (وندوز/USB) أو أندرويد (تطبيق RawBT)
+  // شكل ونمط وتصميم الفاتورة والمستندات
+  templateStyle: InvoiceTemplateStyle;
+  primaryColor?: string;
+  invoiceTitle: string;
+  invoiceSubtitle: string;
+  taxNumber?: string;
+  commercialRegistration?: string;
+  
+  // تخصيص نوع وسماكة ولون الخطوط
+  fontFamily?: InvoiceFontFamily;
+  fontColor?: string;
+  headerFontColor?: string;
+  fontWeight?: InvoiceFontWeight;
+  fontSizeScale?: InvoiceFontSizeScale;
+  lineHeight?: InvoiceLineHeight;
+  
+  // إظهار وإخفاء الحقول
+  showLogo: boolean;
+  logoPosition: 'center' | 'right' | 'left';
+  logoSize: 'small' | 'medium' | 'large';
+  showHeaderAddress: boolean;
+  showHeaderPhone: boolean;
+  showCashierName: boolean;
+  showCustomerName: boolean;
+  showCustomerPhone: boolean;
+  showCustomerBalance: boolean;
+  showPaymentMethod: boolean;
+  showItemCodeBarcode: boolean;
+  showUnitPrice: boolean;
+  showItemDiscount: boolean;
+  codeType: InvoiceCodeType;
+  showTaxRow: boolean;
+  taxRate?: number;
+  showFooterPolicy: boolean;
+  footerPolicyNote: string;
+  footerGreeting: string;
+  showSignatureBox: boolean;
+  showDevCredits: boolean;
 }
 
 export interface SystemSettings {
@@ -211,7 +236,7 @@ export interface SystemSettings {
   driveBackupSchedule?: BackupFrequency;
   lastLocalBackupDate?: string;
   lastDriveBackupDate?: string;
-  printerSettings?: ThermalPrinterSettings;
+  printerSettings?: PrinterSettings;
 }
 
 export interface Employee {
