@@ -24,6 +24,7 @@
     "@types/jsbarcode": "^3.11.4",
     "@types/qrcode": "^1.5.6",
     "@vitejs/plugin-react": "^5.0.4",
+    "cordova-plugin-printer": "^0.8.0",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "firebase": "^12.16.0",

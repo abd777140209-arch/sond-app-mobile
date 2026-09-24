@@ -12,6 +12,7 @@ import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import QRCode from 'qrcode';
 import JsBarcode from 'jsbarcode';
+import { Capacitor } from '@capacitor/core';
 import { saveAndShareFile } from '../utils/fileExport';
 import { getSafeHtml2CanvasOptions } from '../utils/pdfHelper';
 import { PrinterSettings, InvoicePaperSize } from '../types';
@@ -199,35 +200,7 @@ export const printReceiptHTML = (
     </html>
   `;
 
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) {
-    // Fallback for native WebView where window.open returns null
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
-    document.body.appendChild(iframe);
-    const doc = iframe.contentWindow?.document;
-    if (doc) {
-      doc.open();
-      doc.write(htmlContent);
-      doc.close();
-      setTimeout(() => {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-        setTimeout(() => {
-          try { document.body.removeChild(iframe); } catch(e){}
-        }, 1000);
-      }, 300);
-    }
-    return;
-  }
-
-  printWindow.document.write(htmlContent);
-  printWindow.document.close();
+  executeNativeOrBrowserPrint(htmlContent, `سند_استلام_${ticket}`);
 };
 
 /**
@@ -313,7 +286,7 @@ export const buildSalesInvoiceInnerHTML = (
   const primaryColor = cfg.primaryColor || '#0f172a';
   const headerTextColor = cfg.headerFontColor || primaryColor;
 
-  const paperWidth = is58 ? '54mm' : isA4 ? '190mm' : isA5 ? '138mm' : '76mm';
+  const paperWidth = is58 ? '54mm' : isA4 ? '190mm' : isA5 ? '138mm' : '78mm';
   const pageCssSize = is58 ? '58mm auto' : isA4 ? 'A4 portrait' : isA5 ? 'A5 portrait' : '80mm auto';
   const rawBaseSize = is58 ? 10 : isA4 ? 13 : isA5 ? 12 : 11;
   const scaledBaseSize = Math.round(rawBaseSize * sizeMultiplier * 10) / 10;
@@ -371,9 +344,10 @@ export const buildSalesInvoiceInnerHTML = (
     }
     @media print {
       html, body {
-        width: ${paperWidth} !important;
+        width: 100% !important;
+        max-width: ${isA4 ? '190mm' : isA5 ? '138mm' : is58 ? '54mm' : '100%'} !important;
         margin: 0 auto !important;
-        padding: ${isA4 ? '8mm' : isA5 ? '5mm' : '4mm 2mm 8mm 2mm'} !important;
+        padding: ${isA4 ? '8mm' : isA5 ? '5mm' : '2mm 1mm 6mm 1mm'} !important;
         background: #fff !important;
         color: ${bodyTextColor} !important;
         -webkit-print-color-adjust: exact;
@@ -387,8 +361,9 @@ export const buildSalesInvoiceInnerHTML = (
     body { 
       font-family: ${fontCssFamily}; 
       font-weight: ${baseWeight};
-      width: ${paperWidth}; 
-      padding: ${isA4 ? '16px' : '8px 6px 24px 6px'}; 
+      width: 100%;
+      max-width: ${isA4 ? '190mm' : isA5 ? '138mm' : is58 ? '54mm' : '78mm'}; 
+      padding: ${isA4 ? '16px' : '4px 2px 16px 2px'}; 
       margin: 0 auto; 
       text-align: center;
       color: ${bodyTextColor};
@@ -596,7 +571,77 @@ export const buildSalesInvoiceThermalHTML = (
 };
 
 /**
- * 4. طباعة فاتورة مبيعات حرارية (Thermal Printer 80mm / Bluetooth / POS)
+ * 🖨️ دالة الطباعة الموحدة الذكية:
+ * - في بيئة الأندرويد الأصلية (Capacitor Native): تستدعي واجهة نظام أندرويد الرسمية (Android Print Spooler)
+ *   عبر إضافة الطباعة المعتمدة لتتيح الحفظ كـ PDF أو الطباعة المباشرة على أي طابعة متصلة.
+ * - في بيئة المتصفح / الويندوز: تستدعي طباعة المتصفح عبر iframe معزول نظيف.
+ */
+export const executeNativeOrBrowserPrint = (
+  htmlContent: string,
+  documentTitle: string = 'فاتورة_مبيعات'
+): Promise<void> => {
+  return new Promise((resolve) => {
+    try {
+      const isNative = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform();
+      const cordova = (window as any)?.cordova;
+
+      // 🟢 1. التحقق من أندرويد وتشغيل Print Spooler الأصلي
+      if (isNative && cordova?.plugins?.printer) {
+        cordova.plugins.printer.print(
+          htmlContent,
+          {
+            name: documentTitle,
+            orientation: 'portrait',
+            monochrome: false
+          },
+          () => {
+            resolve();
+          }
+        );
+        return;
+      }
+    } catch (err) {
+      console.warn('Native printer error, using browser print fallback:', err);
+    }
+
+    // 🔵 2. بيئة الويندوز والويب: نافذة طباعة المتصفح
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(htmlContent);
+      doc.close();
+
+      setTimeout(() => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch (e) {
+          console.warn('Iframe print error:', e);
+        }
+        setTimeout(() => {
+          try {
+            document.body.removeChild(iframe);
+          } catch (e) {}
+          resolve();
+        }, 1200);
+      }, 350);
+    } else {
+      resolve();
+    }
+  });
+};
+
+/**
+ * 4. طباعة فاتورة مبيعات حرارية (Thermal Printer 80mm / Bluetooth / POS / Android Spooler)
  */
 export const printSalesInvoiceThermalHTML = async (
   shopName: string = 'سند للمحاسبة والخدمات',
@@ -611,44 +656,9 @@ export const printSalesInvoiceThermalHTML = async (
   }
 
   const htmlContent = buildSalesInvoiceThermalHTML(shopName, invoiceData, currency, qrPng, barcodePng);
+  const docTitle = `${cfg.invoiceTitle || 'فاتورة'}_${invoiceData.invoiceNumber || Date.now()}`;
 
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) {
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
-    document.body.appendChild(iframe);
-    const doc = iframe.contentWindow?.document;
-    if (doc) {
-      doc.open();
-      doc.write(htmlContent);
-      doc.close();
-      setTimeout(() => {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-        setTimeout(() => {
-          try { document.body.removeChild(iframe); } catch(e){}
-        }, 1000);
-      }, 300);
-    }
-    return;
-  }
-
-  printWindow.document.write(htmlContent);
-  printWindow.document.close();
-  setTimeout(() => {
-    try {
-      printWindow.focus();
-      printWindow.print();
-      setTimeout(() => {
-        try { printWindow.close(); } catch(e){}
-      }, 1000);
-    } catch(e){}
-  }, 250);
+  await executeNativeOrBrowserPrint(htmlContent, docTitle);
 };
 
 /**
