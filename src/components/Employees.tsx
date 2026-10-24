@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Users, UserPlus, DollarSign, Wallet, Trash2, Calendar, FileText, Search, AlertTriangle, CheckCircle2, ShieldAlert, X } from 'lucide-react';
+import { Users, UserPlus, DollarSign, Wallet, Trash2, Calendar, FileText, Search, AlertTriangle, CheckCircle2, ShieldAlert, X, Edit3 } from 'lucide-react';
 import { Employee, PayrollRecord } from '../types';
 import { soundManager } from '../utils/sound';
 
@@ -8,6 +8,7 @@ interface EmployeesProps {
   employees: Employee[];
   payrollRecords: PayrollRecord[];
   onAddEmployee: (employee: Omit<Employee, 'id' | 'totalAdvances' | 'hireDate'>) => void;
+  onUpdateEmployee?: (employee: Employee) => void;
   onRecordAdvance: (employeeId: string, amount: number, note: string) => void;
   onPaySalary: (employeeId: string, amount: number, note: string) => void;
   onDeleteEmployee: (employeeId: string) => void;
@@ -18,6 +19,7 @@ export default function Employees({
   employees,
   payrollRecords,
   onAddEmployee,
+  onUpdateEmployee,
   onRecordAdvance,
   onPaySalary,
   onDeleteEmployee,
@@ -25,8 +27,12 @@ export default function Employees({
 }: EmployeesProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [deleteTargetEmployee, setDeleteTargetEmployee] = useState<Employee | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [modalType, setModalType] = useState<'advance' | 'salary' | null>(null);
+  const [formError, setFormError] = useState<string>('');
+  const [toastMessage, setToastMessage] = useState<string>('');
 
   // Form states
   const [newName, setNewName] = useState('');
@@ -37,6 +43,11 @@ export default function Employees({
   // Advance/Salary Form
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 3500);
+  };
 
   const activeEmployees = employees.filter(e => !e.isDeleted);
   const filteredEmployees = activeEmployees.filter(e =>
@@ -50,31 +61,46 @@ export default function Employees({
 
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
     if (!newName.trim() || !newSalary || Number(newSalary) <= 0) {
       soundManager.playWarningBeep();
-      alert('يرجى ملء جميع الحقول بصورة صحيحة');
+      setFormError('يرجى إدخال اسم الموظف والراتب الشهري بشكل صحيح.');
       return;
     }
 
-    onAddEmployee({
-      name: newName.trim(),
-      phone: newPhone.trim() || 'غير محدد',
-      jobTitle: newJobTitle,
-      monthlySalary: Number(newSalary)
-    });
+    if (editingEmployee && onUpdateEmployee) {
+      onUpdateEmployee({
+        ...editingEmployee,
+        name: newName.trim(),
+        phone: newPhone.trim() || 'غير محدد',
+        jobTitle: newJobTitle,
+        monthlySalary: Number(newSalary)
+      });
+      showToast(`تم تحديث بيانات الموظف (${newName.trim()}) بنجاح`);
+    } else {
+      onAddEmployee({
+        name: newName.trim(),
+        phone: newPhone.trim() || 'غير محدد',
+        jobTitle: newJobTitle,
+        monthlySalary: Number(newSalary)
+      });
+      showToast(`تم إضافة الموظف (${newName.trim()}) وحفظه بالنظام`);
+    }
 
     soundManager.playSuccessChime();
     setNewName('');
     setNewPhone('');
     setNewSalary('');
+    setEditingEmployee(null);
     setShowAddModal(false);
   };
 
   const handleActionSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
     if (!selectedEmployee || !amount || Number(amount) <= 0) {
       soundManager.playWarningBeep();
-      alert('يرجى إدخال مبلغ صحيح');
+      setFormError('يرجى إدخال مبلغ مالي صحيح أكبر من صفر.');
       return;
     }
 
@@ -82,8 +108,10 @@ export default function Employees({
 
     if (modalType === 'advance') {
       onRecordAdvance(selectedEmployee.id, numAmount, note.trim() || 'سلفة مالية');
+      showToast(`تم تسجيل سلفة بمبلغ ${numAmount.toLocaleString()} ${currency} وقيدها في الصندوق`);
     } else if (modalType === 'salary') {
       onPaySalary(selectedEmployee.id, numAmount, note.trim() || 'صرف راتب شهري');
+      showToast(`تم صرف راتب بمبلغ ${numAmount.toLocaleString()} ${currency} وتصفية السلف وقيده في الصندوق`);
     }
 
     soundManager.playSuccessChime();
@@ -108,13 +136,28 @@ export default function Employees({
         </div>
 
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={() => {
+            setEditingEmployee(null);
+            setNewName('');
+            setNewPhone('');
+            setNewJobTitle('كاشير');
+            setNewSalary('');
+            setFormError('');
+            setShowAddModal(true);
+          }}
           className="w-full md:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold px-4 py-2.5 rounded-xl shadow-xs transition cursor-pointer text-xs"
         >
           <UserPlus className="w-4 h-4 shrink-0" />
           <span>إضافة موظف جديد</span>
         </button>
       </div>
+
+      {toastMessage && (
+        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
 
       {/* KPI Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4">
@@ -193,17 +236,30 @@ export default function Employees({
                   </div>
                 </div>
 
-                <button
-                  onClick={() => {
-                    if (confirm(`هل أنت متأكد من حذف الموظف ${employee.name}؟`)) {
-                      onDeleteEmployee(employee.id);
-                    }
-                  }}
-                  className="p-1.5 text-slate-400 hover:text-red-500 transition"
-                  title="حذف الموظف"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => {
+                      setEditingEmployee(employee);
+                      setNewName(employee.name);
+                      setNewPhone(employee.phone === 'غير محدد' ? '' : employee.phone);
+                      setNewJobTitle(employee.jobTitle);
+                      setNewSalary(String(employee.monthlySalary));
+                      setFormError('');
+                      setShowAddModal(true);
+                    }}
+                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition cursor-pointer"
+                    title="تعديل بيانات الموظف"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setDeleteTargetEmployee(employee)}
+                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                    title="حذف الموظف"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               <div className="mt-4 pt-3 border-t border-slate-100 space-y-2 text-xs text-slate-700">
@@ -223,6 +279,12 @@ export default function Employees({
                     {employee.totalAdvances.toLocaleString()} {currency}
                   </span>
                 </div>
+                <div className="flex justify-between items-center pt-1 border-t border-slate-50">
+                  <span className="text-slate-500 font-bold">صافي الراتب المستحق:</span>
+                  <span className="font-mono font-black text-blue-600">
+                    {Math.max(0, employee.monthlySalary - employee.totalAdvances).toLocaleString()} {currency}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -231,6 +293,9 @@ export default function Employees({
               <button
                 onClick={() => {
                   setSelectedEmployee(employee);
+                  setAmount('');
+                  setNote('');
+                  setFormError('');
                   setModalType('advance');
                 }}
                 className="py-2 px-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
@@ -242,6 +307,9 @@ export default function Employees({
               <button
                 onClick={() => {
                   setSelectedEmployee(employee);
+                  setAmount(String(Math.max(0, employee.monthlySalary - employee.totalAdvances)));
+                  setNote(`صرف راتب شهر ${new Date().toLocaleDateString('ar-YE', { month: 'long', year: 'numeric' })}`);
+                  setFormError('');
                   setModalType('salary');
                 }}
                 className="py-2 px-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 hover:bg-emerald-100 text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
@@ -254,7 +322,7 @@ export default function Employees({
         ))}
       </div>
 
-      {/* Modal: Add Employee (Bottom Sheet) */}
+      {/* Modal: Add / Edit Employee (Bottom Sheet) */}
       <AnimatePresence>
         {showAddModal && (
           <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-0 sm:p-4">
@@ -262,7 +330,10 @@ export default function Employees({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setShowAddModal(false)}
+              onClick={() => {
+                setShowAddModal(false);
+                setEditingEmployee(null);
+              }}
               className="absolute inset-0"
             />
             <motion.div
@@ -278,15 +349,24 @@ export default function Employees({
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <UserPlus className="w-5 h-5 text-blue-600" />
-                  <span>إضافة موظف جديد</span>
+                  <span>{editingEmployee ? `تعديل بيانات الموظف: ${editingEmployee.name}` : 'إضافة موظف جديد'}</span>
                 </h3>
                 <button
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setEditingEmployee(null);
+                  }}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
+
+              {formError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                  {formError}
+                </div>
+              )}
 
               <form onSubmit={handleAddSubmit} className="space-y-4">
                 <div>
@@ -344,7 +424,10 @@ export default function Employees({
                 <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
                   <button
                     type="button"
-                    onClick={() => setShowAddModal(false)}
+                    onClick={() => {
+                      setShowAddModal(false);
+                      setEditingEmployee(null);
+                    }}
                     className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs hover:bg-slate-200 transition cursor-pointer"
                   >
                     إلغاء
@@ -353,7 +436,7 @@ export default function Employees({
                     type="submit"
                     className="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 transition cursor-pointer shadow-xs"
                   >
-                    حفظ الموظف
+                    {editingEmployee ? 'حفظ التعديلات' : 'حفظ الموظف'}
                   </button>
                 </div>
               </form>
@@ -411,6 +494,12 @@ export default function Employees({
                 </button>
               </div>
 
+              {formError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                  {formError}
+                </div>
+              )}
+
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1 text-slate-700">
                 <div className="flex justify-between">
                   <span>الراتب المحدد:</span>
@@ -420,15 +509,19 @@ export default function Employees({
                   <span>إجمالي السُلف الحالية:</span>
                   <span className="font-mono text-amber-600 font-bold">{selectedEmployee.totalAdvances.toLocaleString()} {currency}</span>
                 </div>
+                <div className="flex justify-between pt-1 border-t border-slate-200">
+                  <span className="font-bold">الصافي المتبقي بعد السلف:</span>
+                  <span className="font-mono text-blue-600 font-black">{Math.max(0, selectedEmployee.monthlySalary - selectedEmployee.totalAdvances).toLocaleString()} {currency}</span>
+                </div>
               </div>
 
               <form onSubmit={handleActionSubmit} className="space-y-4">
                 <div>
-                  <label className="text-xs text-slate-600 block mb-1">المبلغ المطلوب ({currency}) *</label>
+                  <label className="text-xs text-slate-600 block mb-1">المبلغ المصروف من الصندوق ({currency}) *</label>
                   <input
                     type="number"
                     required
-                    placeholder={modalType === 'salary' ? String(selectedEmployee.monthlySalary - selectedEmployee.totalAdvances) : '20000'}
+                    placeholder={modalType === 'salary' ? String(Math.max(0, selectedEmployee.monthlySalary - selectedEmployee.totalAdvances)) : '20000'}
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-300 text-xs font-mono text-slate-900 focus:outline-none focus:border-blue-600"
@@ -436,10 +529,10 @@ export default function Employees({
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-600 block mb-1">ملاحظة / بيان القيد</label>
+                  <label className="text-xs text-slate-600 block mb-1">ملاحظة / بيان سند الصرف</label>
                   <input
                     type="text"
-                    placeholder={modalType === 'advance' ? 'سلفة لحالة طارئة' : 'صرف راتب شهر يوليو'}
+                    placeholder={modalType === 'advance' ? 'سلفة لحالة طارئة' : 'صرف راتب شهري'}
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
                     className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-300 text-xs text-slate-900 focus:outline-none focus:border-blue-600"
@@ -465,11 +558,52 @@ export default function Employees({
                         : 'bg-emerald-600 hover:bg-emerald-700 text-white'
                     }`}
                   >
-                    تأكيد وتسجيل القيد
+                    تأكيد الصرف وقيد السند بالصندوق
                   </button>
                 </div>
               </form>
             </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deleteTargetEmployee && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-sm w-full p-5 space-y-4 text-right">
+              <div className="flex items-center gap-3 text-rose-600">
+                <div className="p-2.5 rounded-2xl bg-rose-50 border border-rose-100">
+                  <Trash2 className="w-6 h-6 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">تأكيد حذف الموظف</h3>
+                  <p className="text-xs text-slate-500">{deleteTargetEmployee.name}</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                هل أنت متأكد من حذف الموظف <span className="font-bold text-slate-900">({deleteTargetEmployee.name})</span> من سجل الموظفين النشطين؟
+              </p>
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => {
+                    onDeleteEmployee(deleteTargetEmployee.id);
+                    showToast(`تم حذف الموظف (${deleteTargetEmployee.name})`);
+                    setDeleteTargetEmployee(null);
+                    soundManager.playScanBeep();
+                  }}
+                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition cursor-pointer"
+                >
+                  تأكيد الحذف
+                </button>
+                <button
+                  onClick={() => setDeleteTargetEmployee(null)}
+                  className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </AnimatePresence>

@@ -75,7 +75,8 @@ import {
   deleteStoreDocument, 
   saveStoreSettings, 
   syncStoreCollection, 
-  syncStoreSettings 
+  syncStoreSettings,
+  wipeStoreCloudAndLocalData
 } from './utils/firebaseSync';
 import { listenToLicenseOnCloud, checkLicenseOnCloud, CloudLicense } from './utils/firebase';
 import { safeStorage, cleanUpStorageQuota } from './utils/safeStorage';
@@ -117,27 +118,67 @@ export default function App() {
 
   const [products, setProducts] = useState<Product[]>(() => {
     const data = localStorage.getItem('smart_accounting_products');
-    return data ? JSON.parse(data) : SEED_PRODUCTS;
+    if (data !== null) {
+      try {
+        const parsed = JSON.parse(data);
+        return Array.isArray(parsed) ? parsed.filter((p: any) => p && p.isDeleted !== true) : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
   });
 
   const [customers, setCustomers] = useState<Customer[]>(() => {
     const data = localStorage.getItem('smart_accounting_customers');
-    return data ? JSON.parse(data) : SEED_CUSTOMERS;
+    if (data !== null) {
+      try {
+        const parsed = JSON.parse(data);
+        return Array.isArray(parsed) ? parsed.filter((c: any) => c && c.isDeleted !== true && c.isActive !== false) : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
   });
 
   const [invoices, setInvoices] = useState<Invoice[]>(() => {
     const data = localStorage.getItem('smart_accounting_invoices');
-    return data ? JSON.parse(data) : SEED_INVOICES;
+    if (data !== null) {
+      try {
+        const parsed = JSON.parse(data);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
   });
 
   const [payments, setPayments] = useState<Payment[]>(() => {
     const data = localStorage.getItem('smart_accounting_payments');
-    return data ? JSON.parse(data) : SEED_PAYMENTS;
+    if (data !== null) {
+      try {
+        const parsed = JSON.parse(data);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
   });
 
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     const data = localStorage.getItem('smart_accounting_transactions');
-    return data ? JSON.parse(data) : SEED_TRANSACTIONS;
+    if (data !== null) {
+      try {
+        const parsed = JSON.parse(data);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
   });
 
   const [maintenanceOrders, setMaintenanceOrders] = useState<MaintenanceOrder[]>(() => {
@@ -564,12 +605,27 @@ export default function App() {
   useEffect(() => {
     if (!license.licenseKey || !isActivated) return;
 
-    const unsubSettings = syncStoreSettings(license.licenseKey, setSettings, DEFAULT_SETTINGS);
-    const unsubProducts = syncStoreCollection<Product>(license.licenseKey, 'products', setProducts, SEED_PRODUCTS);
-    const unsubCustomers = syncStoreCollection<Customer>(license.licenseKey, 'customers', setCustomers, SEED_CUSTOMERS);
-    const unsubInvoices = syncStoreCollection<Invoice>(license.licenseKey, 'invoices', setInvoices, SEED_INVOICES);
-    const unsubPayments = syncStoreCollection<Payment>(license.licenseKey, 'payments', setPayments, SEED_PAYMENTS);
-    const unsubTransactions = syncStoreCollection<Transaction>(license.licenseKey, 'transactions', setTransactions, SEED_TRANSACTIONS);
+    const handleCloudResetDetected = () => {
+      safeStorage.setItem('smart_accounting_products', '[]');
+      safeStorage.setItem('smart_accounting_customers', '[]');
+      safeStorage.setItem('smart_accounting_invoices', '[]');
+      safeStorage.setItem('smart_accounting_payments', '[]');
+      safeStorage.setItem('smart_accounting_transactions', '[]');
+      safeStorage.setItem('smart_accounting_maintenance', '[]');
+      setProducts([]);
+      setCustomers([]);
+      setInvoices([]);
+      setPayments([]);
+      setTransactions([]);
+      setMaintenanceOrders([]);
+    };
+
+    const unsubSettings = syncStoreSettings(license.licenseKey, setSettings, DEFAULT_SETTINGS, handleCloudResetDetected);
+    const unsubProducts = syncStoreCollection<Product>(license.licenseKey, 'products', setProducts, []);
+    const unsubCustomers = syncStoreCollection<Customer>(license.licenseKey, 'customers', setCustomers, []);
+    const unsubInvoices = syncStoreCollection<Invoice>(license.licenseKey, 'invoices', setInvoices, []);
+    const unsubPayments = syncStoreCollection<Payment>(license.licenseKey, 'payments', setPayments, []);
+    const unsubTransactions = syncStoreCollection<Transaction>(license.licenseKey, 'transactions', setTransactions, []);
     const unsubMaintenance = syncStoreCollection<MaintenanceOrder>(license.licenseKey, 'maintenanceOrders', setMaintenanceOrders, []);
     const unsubEmployees = syncStoreCollection<Employee>(license.licenseKey, 'employees', setEmployees, []);
     const unsubPayroll = syncStoreCollection<PayrollRecord>(license.licenseKey, 'payrollRecords', setPayrollRecords, []);
@@ -836,10 +892,13 @@ export default function App() {
 
   const handleDeleteCustomer = (customerId: string) => {
     const cust = customers.find(c => c.id === customerId);
-    if (!cust) return;
-    const softDeleted = { ...cust, isDeleted: true, isActive: false };
-    setCustomers(prev => prev.map(c => c.id === customerId ? softDeleted : c));
-    if (license.licenseKey) saveStoreDocument(license.licenseKey, 'customers', customerId, softDeleted);
+    setCustomers(prev => prev.filter(c => c.id !== customerId));
+    if (license.licenseKey) {
+      deleteStoreDocument(license.licenseKey, 'customers', customerId);
+    }
+    if (cust) {
+      addAuditLog('customer_deleted', `حذف حساب العميل نهائياً: ${cust.name}`, `تم مسح العميل من النظام والسحابة`);
+    }
   };
 
   const handlePayDebt = (customerId: string, amount: number, note: string, paymentMethod: string = 'cash', referenceNumber?: string) => {
@@ -881,6 +940,7 @@ export default function App() {
     const timestamp = Date.now();
     const newItems: Product[] = [];
     const updatedProducts = [...products];
+    const recordedPurchaseItems: import('./types').PurchaseInvoiceItem[] = [];
 
     productsToAdd.forEach((pData, idx) => {
       // Check if product with same barcode exists
@@ -893,12 +953,24 @@ export default function App() {
         const existing = updatedProducts[existingIndex];
         const updated: Product = {
           ...existing,
+          name: pData.name || existing.name,
           stock: (existing.stock || 0) + (pData.stock || 0),
           costPrice: pData.costPrice > 0 ? pData.costPrice : existing.costPrice,
           sellingPrice: pData.sellingPrice > 0 ? pData.sellingPrice : existing.sellingPrice,
           category: pData.category || existing.category
         };
         updatedProducts[existingIndex] = updated;
+        recordedPurchaseItems.push({
+          productId: updated.id,
+          name: updated.name,
+          barcode: updated.barcode,
+          quantity: Number(pData.stock) || 1,
+          costPrice: Number(pData.costPrice) || updated.costPrice || 0,
+          sellingPrice: Number(pData.sellingPrice) || updated.sellingPrice || 0,
+          category: updated.category || 'إكسسوارات',
+          minStock: updated.minStock || 2,
+          total: (Number(pData.costPrice) || updated.costPrice || 0) * (Number(pData.stock) || 1)
+        });
         if (license.licenseKey) saveStoreDocument(license.licenseKey, 'products', updated.id, updated);
       } else {
         // Create new product
@@ -908,6 +980,17 @@ export default function App() {
         };
         newItems.push(newProd);
         updatedProducts.push(newProd);
+        recordedPurchaseItems.push({
+          productId: newProd.id,
+          name: newProd.name,
+          barcode: newProd.barcode,
+          quantity: Number(newProd.stock) || 1,
+          costPrice: Number(newProd.costPrice) || 0,
+          sellingPrice: Number(newProd.sellingPrice) || 0,
+          category: newProd.category || 'إكسسوارات',
+          minStock: newProd.minStock || 2,
+          total: (Number(newProd.costPrice) || 0) * (Number(newProd.stock) || 1)
+        });
         if (license.licenseKey) saveStoreDocument(license.licenseKey, 'products', newProd.id, newProd);
       }
     });
@@ -915,17 +998,24 @@ export default function App() {
     setProducts(updatedProducts);
 
     // Record purchase expense transaction if requested
-    if (purchaseMetadata?.recordAsExpense && purchaseMetadata.totalAmount && purchaseMetadata.totalAmount > 0) {
+    const computedTotal = purchaseMetadata?.totalAmount ?? recordedPurchaseItems.reduce((s, it) => s + it.total, 0);
+    if (purchaseMetadata?.recordAsExpense) {
+      const invNum = purchaseMetadata.invoiceNumber || `PUR-${Math.floor(10000 + Math.random() * 90000)}`;
       const expenseTx: Transaction = {
         id: `t-${timestamp}`,
         type: 'expense',
-        amount: purchaseMetadata.totalAmount,
+        amount: computedTotal,
         date: new Date().toISOString(),
         paymentMethod: 'cash',
-        referenceNumber: purchaseMetadata.invoiceNumber,
-        description: `مشتريات بضاعة ومخزون${purchaseMetadata.supplierName ? ` من مورد: ${purchaseMetadata.supplierName}` : ''}${purchaseMetadata.invoiceNumber ? ` (فاتورة ${purchaseMetadata.invoiceNumber})` : ''} - عدد ${productsToAdd.length} صنف`
+        referenceNumber: invNum,
+        isPurchaseInvoice: true,
+        supplierName: purchaseMetadata.supplierName || '',
+        invoiceNumber: invNum,
+        purchaseItems: recordedPurchaseItems,
+        voucherCategory: 'purchase_invoice',
+        description: `مشتريات بضاعة ومخزون${purchaseMetadata.supplierName ? ` من مورد: ${purchaseMetadata.supplierName}` : ''}${invNum ? ` (فاتورة ${invNum})` : ''} - عدد ${productsToAdd.length} صنف`
       };
-      setTransactions(prev => [...prev, expenseTx]);
+      setTransactions(prev => [expenseTx, ...prev]);
       if (license.licenseKey) saveStoreDocument(license.licenseKey, 'transactions', expenseTx.id, expenseTx);
     }
 
@@ -933,6 +1023,155 @@ export default function App() {
       'inventory_bulk_add',
       `إضافة مجمعة للمخزن (${productsToAdd.length} صنف)`,
       purchaseMetadata?.invoiceNumber ? `رقم الفاتورة: ${purchaseMetadata.invoiceNumber}` : undefined
+    );
+  };
+
+  const handleUpdatePurchaseInvoice = (
+    transactionId: string,
+    updatedItems: import('./types').PurchaseInvoiceItem[],
+    deletedItems: { productId: string; quantityToRevert: number; deleteProductCompletely?: boolean }[],
+    metadata: {
+      supplierName?: string;
+      invoiceNumber?: string;
+      paymentMethod?: string;
+      customTotalAmount?: number;
+      notes?: string;
+    }
+  ) => {
+    const oldTx = transactions.find(t => t.id === transactionId);
+    if (!oldTx) return;
+
+    const timestamp = Date.now();
+    let updatedProducts = [...products];
+
+    // Map old quantities to compute stock delta accurately
+    const oldQtyMap = new Map<string, number>();
+    if (Array.isArray(oldTx.purchaseItems)) {
+      oldTx.purchaseItems.forEach(it => {
+        oldQtyMap.set(it.productId, Number(it.quantity) || 0);
+      });
+    }
+
+    // 1. Handle deleted items from the purchase invoice
+    deletedItems.forEach(del => {
+      const idx = updatedProducts.findIndex(p => p.id === del.productId);
+      if (idx >= 0) {
+        const prod = updatedProducts[idx];
+        if (del.deleteProductCompletely) {
+          updatedProducts.splice(idx, 1);
+          if (license.licenseKey) deleteStoreDocument(license.licenseKey, 'products', prod.id);
+        } else {
+          const newStock = Math.max(0, (prod.stock || 0) - (del.quantityToRevert || 0));
+          const updatedProd: Product = { ...prod, stock: newStock };
+          updatedProducts[idx] = updatedProd;
+          if (license.licenseKey) saveStoreDocument(license.licenseKey, 'products', prod.id, updatedProd);
+        }
+      }
+    });
+
+    // 2. Handle updated & newly added items in the purchase invoice
+    const finalPurchaseItems: import('./types').PurchaseInvoiceItem[] = updatedItems.map((item, idx) => {
+      const existingIdx = updatedProducts.findIndex(
+        p => p.id === item.productId || (item.barcode && p.isDeleted !== true && p.barcode.trim() === item.barcode.trim())
+      );
+
+      const itemQty = Math.max(0, Number(item.quantity) || 0);
+      const itemCost = Math.max(0, Number(item.costPrice) || 0);
+      const itemSell = Math.max(0, Number(item.sellingPrice) || 0);
+      const itemTotal = itemCost * itemQty;
+
+      if (existingIdx >= 0) {
+        const existingProd = updatedProducts[existingIdx];
+        const prevInvoiceQty = oldQtyMap.has(existingProd.id) ? oldQtyMap.get(existingProd.id)! : itemQty;
+        const qtyDiff = itemQty - prevInvoiceQty;
+        const newStock = Math.max(0, (existingProd.stock || 0) + qtyDiff);
+
+        const updatedProd: Product = {
+          ...existingProd,
+          name: item.name.trim() || existingProd.name,
+          barcode: item.barcode?.trim() || existingProd.barcode,
+          costPrice: itemCost,
+          sellingPrice: itemSell > 0 ? itemSell : existingProd.sellingPrice,
+          category: item.category || existingProd.category,
+          stock: newStock,
+          isDeleted: false
+        };
+        updatedProducts[existingIdx] = updatedProd;
+        if (license.licenseKey) saveStoreDocument(license.licenseKey, 'products', updatedProd.id, updatedProd);
+
+        return {
+          ...item,
+          productId: updatedProd.id,
+          name: updatedProd.name,
+          barcode: updatedProd.barcode,
+          quantity: itemQty,
+          costPrice: itemCost,
+          sellingPrice: updatedProd.sellingPrice,
+          category: updatedProd.category,
+          total: itemTotal
+        };
+      } else {
+        // Brand new product added inside the purchase invoice editor
+        const newProdId = `p-${timestamp}-${idx}`;
+        const newProd: Product = {
+          id: newProdId,
+          name: item.name.trim() || 'صنف جديد',
+          barcode: item.barcode?.trim() || Math.floor(100000000000 + Math.random() * 900000000000).toString(),
+          costPrice: itemCost,
+          sellingPrice: itemSell > 0 ? itemSell : Math.round(itemCost * 1.25),
+          stock: itemQty,
+          minStock: item.minStock || 2,
+          category: item.category || 'إكسسوارات'
+        };
+        updatedProducts.push(newProd);
+        if (license.licenseKey) saveStoreDocument(license.licenseKey, 'products', newProd.id, newProd);
+
+        return {
+          ...item,
+          productId: newProd.id,
+          name: newProd.name,
+          barcode: newProd.barcode,
+          quantity: itemQty,
+          costPrice: itemCost,
+          sellingPrice: newProd.sellingPrice,
+          category: newProd.category,
+          total: itemTotal
+        };
+      }
+    });
+
+    setProducts(updatedProducts);
+
+    const calculatedSum = finalPurchaseItems.reduce((s, it) => s + it.total, 0);
+    const finalExpenseAmount =
+      metadata.customTotalAmount !== undefined && metadata.customTotalAmount >= 0
+        ? metadata.customTotalAmount
+        : calculatedSum;
+
+    const invNum = metadata.invoiceNumber ?? oldTx.invoiceNumber ?? oldTx.referenceNumber ?? '';
+    const supName = metadata.supplierName ?? oldTx.supplierName ?? '';
+
+    const updatedTx: Transaction = {
+      ...oldTx,
+      amount: finalExpenseAmount,
+      paymentMethod: metadata.paymentMethod || oldTx.paymentMethod || 'cash',
+      referenceNumber: invNum,
+      invoiceNumber: invNum,
+      supplierName: supName,
+      isPurchaseInvoice: true,
+      purchaseItems: finalPurchaseItems,
+      notes: metadata.notes ?? oldTx.notes,
+      description: `مشتريات بضاعة ومخزون${supName ? ` من مورد: ${supName}` : ''}${invNum ? ` (فاتورة ${invNum})` : ''} - عدد ${finalPurchaseItems.length} صنف`
+    };
+
+    setTransactions(prev => prev.map(t => t.id === transactionId ? updatedTx : t));
+    if (license.licenseKey) saveStoreDocument(license.licenseKey, 'transactions', updatedTx.id, updatedTx);
+
+    soundManager.playSuccessChime();
+    addAuditLog(
+      'purchase_invoice_updated',
+      `تعديل فاتورة مشتريات #${invNum || transactionId.slice(0, 6)}`,
+      `عدد الأصناف: ${finalPurchaseItems.length} - الإجمالي الجديد: ${finalExpenseAmount} ${settings.currency}`
     );
   };
 
@@ -958,10 +1197,13 @@ export default function App() {
 
   const handleDeleteProduct = (productId: string) => {
     const prod = products.find(p => p.id === productId);
-    if (!prod) return;
-    const softDeleted = { ...prod, isDeleted: true, stock: 0 };
-    setProducts(prev => prev.map(p => p.id === productId ? softDeleted : p));
-    if (license.licenseKey) saveStoreDocument(license.licenseKey, 'products', productId, softDeleted);
+    setProducts(prev => prev.filter(p => p.id !== productId));
+    if (license.licenseKey) {
+      deleteStoreDocument(license.licenseKey, 'products', productId);
+    }
+    if (prod) {
+      addAuditLog('product_deleted', `حذف الصنف نهائياً: ${prod.name}`, `تم مسح الصنف من المخزن والسحابة`);
+    }
   };
 
   const handleUpdateProductStock = (productId: string, newStock: number) => {
@@ -1033,15 +1275,264 @@ export default function App() {
     );
   };
 
-  const handleAddExpense = (amount: number, description: string, paymentMethod: string = 'cash', referenceNumber?: string) => {
-    const newTx: Transaction = { id: `t-${Date.now()}`, type: 'expense', amount, date: new Date().toISOString(), paymentMethod, referenceNumber, description: `مصروفات: ${description}` };
-    setTransactions(prev => [...prev, newTx]);
+  const handleAddExpense = (
+    amount: number,
+    description: string,
+    paymentMethod: string = 'cash',
+    referenceNumber?: string,
+    extra?: { beneficiary?: string; voucherCategory?: string; date?: string; notes?: string }
+  ) => {
+    const refNum = referenceNumber || `PV-${Math.floor(1000 + Math.random() * 9000)}`;
+    const prefix = extra?.beneficiary ? `سند صرف (${extra.beneficiary}): ` : 'مصروفات: ';
+    const cleanDesc = description.startsWith('مصروفات:') || description.startsWith('سند صرف') ? description : `${prefix}${description}`;
+    const newTx: Transaction = {
+      id: `t-${Date.now()}`,
+      type: 'expense',
+      amount,
+      date: extra?.date || new Date().toISOString(),
+      paymentMethod,
+      referenceNumber: refNum,
+      payerOrBeneficiary: extra?.beneficiary,
+      voucherCategory: extra?.voucherCategory || 'expense_voucher',
+      notes: extra?.notes,
+      description: cleanDesc
+    };
+    setTransactions(prev => [newTx, ...prev]);
     if (license.licenseKey) saveStoreDocument(license.licenseKey, 'transactions', newTx.id, newTx);
+    addAuditLog('expense_added', `إصدار سند صرف / مصروف #${refNum}`, `${cleanDesc} - المبلغ: ${amount} ${settings.currency}`);
   };
 
-  const handleDeleteTransaction = (id: string) => {
+  const handleAddReceiptVoucher = (voucherData: {
+    amount: number;
+    description: string;
+    paymentMethod?: string;
+    referenceNumber?: string;
+    payerName?: string;
+    customerId?: string;
+    deductFromCustomerDebt?: boolean;
+    voucherCategory?: string;
+    date?: string;
+    notes?: string;
+  }) => {
+    const timestamp = Date.now();
+    const dateStr = voucherData.date || new Date().toISOString();
+    const refNum = voucherData.referenceNumber?.trim() || `RV-${Math.floor(1000 + Math.random() * 9000)}`;
+    const method = voucherData.paymentMethod || 'cash';
+
+    let targetCustomer: Customer | undefined;
+    if (voucherData.customerId) {
+      targetCustomer = customers.find(c => c.id === voucherData.customerId);
+    }
+
+    const payerLabel = targetCustomer?.name || voucherData.payerName?.trim() || 'مقبوضات عامة';
+    const descText = voucherData.description.trim()
+      ? `سند قبض (${payerLabel}): ${voucherData.description.trim()}`
+      : `سند قبض مالي من: ${payerLabel}`;
+
+    const newTx: Transaction = {
+      id: `t-${timestamp}`,
+      type: 'payment',
+      amount: voucherData.amount,
+      date: dateStr,
+      paymentMethod: method,
+      referenceNumber: refNum,
+      customerId: targetCustomer?.id,
+      customerName: targetCustomer?.name,
+      payerOrBeneficiary: payerLabel,
+      voucherCategory: voucherData.voucherCategory || (targetCustomer ? 'debt_collection' : 'receipt_voucher'),
+      notes: voucherData.notes,
+      description: descText
+    };
+
+    setTransactions(prev => [newTx, ...prev]);
+    if (license.licenseKey) saveStoreDocument(license.licenseKey, 'transactions', newTx.id, newTx);
+
+    // If linked to a customer and deductFromCustomerDebt is enabled, update customer debt & payments
+    if (targetCustomer && voucherData.deductFromCustomerDebt !== false) {
+      const payId = `pay-${timestamp}`;
+      const newPayment: Payment = {
+        id: payId,
+        customerId: targetCustomer.id,
+        customerName: targetCustomer.name,
+        amount: voucherData.amount,
+        date: dateStr,
+        note: voucherData.description || `سند قبض رقم ${refNum}`,
+        paymentMethod: method,
+        referenceNumber: refNum
+      };
+      const updatedCustomer: Customer = {
+        ...targetCustomer,
+        totalDebt: Math.max(0, (targetCustomer.totalDebt || 0) - voucherData.amount)
+      };
+
+      setCustomers(prev => prev.map(c => c.id === targetCustomer!.id ? updatedCustomer : c));
+      setPayments(prev => [newPayment, ...prev]);
+
+      if (license.licenseKey) {
+        saveStoreDocument(license.licenseKey, 'payments', payId, newPayment);
+        saveStoreDocument(license.licenseKey, 'customers', targetCustomer.id, updatedCustomer);
+      }
+    }
+
+    addAuditLog('receipt_voucher_added', `إصدار سند قبض #${refNum}`, `${descText} - المبلغ: ${voucherData.amount} ${settings.currency}`);
+  };
+
+  const handleUpdateTransaction = (updatedTx: Transaction) => {
+    const oldTx = transactions.find(t => t.id === updatedTx.id);
+    setTransactions(prev => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
+    if (license.licenseKey) saveStoreDocument(license.licenseKey, 'transactions', updatedTx.id, updatedTx);
+
+    // Sync customer debt & payment record if this transaction is linked to a customer
+    if (oldTx && updatedTx.customerId && updatedTx.type === 'payment') {
+      if (oldTx.amount !== updatedTx.amount) {
+        const cust = customers.find(c => c.id === updatedTx.customerId);
+        if (cust) {
+          const diff = updatedTx.amount - oldTx.amount;
+          const updatedCustomer: Customer = {
+            ...cust,
+            totalDebt: Math.max(0, (cust.totalDebt || 0) - diff)
+          };
+          setCustomers(prev => prev.map(c => c.id === cust.id ? updatedCustomer : c));
+          if (license.licenseKey) saveStoreDocument(license.licenseKey, 'customers', cust.id, updatedCustomer);
+        }
+      }
+
+      // Sync corresponding customer Payment entry for CustomerStatementModal
+      const expectedPayId = updatedTx.id.startsWith('t-') ? `pay-${updatedTx.id.slice(2)}` : '';
+      const matchedPay = payments.find(p =>
+        (expectedPayId && p.id === expectedPayId) ||
+        (oldTx.referenceNumber && p.referenceNumber === oldTx.referenceNumber && p.customerId === updatedTx.customerId)
+      );
+      if (matchedPay) {
+        const updatedPay: Payment = {
+          ...matchedPay,
+          amount: updatedTx.amount,
+          date: updatedTx.date,
+          paymentMethod: updatedTx.paymentMethod,
+          referenceNumber: updatedTx.referenceNumber,
+          note: updatedTx.description
+        };
+        setPayments(prev => prev.map(p => p.id === matchedPay.id ? updatedPay : p));
+        if (license.licenseKey) saveStoreDocument(license.licenseKey, 'payments', matchedPay.id, updatedPay);
+      }
+    }
+
+    soundManager.playSuccessChime();
+    addAuditLog('voucher_updated', `تعديل سند مالي #${updatedTx.referenceNumber || updatedTx.id.slice(0, 6)}`, `${updatedTx.description} - المبلغ: ${updatedTx.amount} ${settings.currency}`);
+  };
+
+  const handleDeleteTransaction = (id: string, options?: { revertInventory?: boolean; revertCustomerDebt?: boolean }) => {
+    const targetTx = transactions.find(t => t.id === id);
+    if (!targetTx) return;
+
+    // Optional: Revert inventory if deleting a purchase invoice and user chose to revert
+    if (options?.revertInventory && (targetTx.isPurchaseInvoice || targetTx.description?.includes('مشتريات بضاعة'))) {
+      let updatedProducts = [...products];
+      if (Array.isArray(targetTx.purchaseItems) && targetTx.purchaseItems.length > 0) {
+        targetTx.purchaseItems.forEach(item => {
+          const idx = updatedProducts.findIndex(p => p.id === item.productId);
+          if (idx >= 0) {
+            const p = updatedProducts[idx];
+            const newStock = Math.max(0, (p.stock || 0) - (item.quantity || 0));
+            const updatedP = { ...p, stock: newStock };
+            updatedProducts[idx] = updatedP;
+            if (license.licenseKey) saveStoreDocument(license.licenseKey, 'products', p.id, updatedP);
+          }
+        });
+      } else if (targetTx.id.startsWith('t-')) {
+        const batchTs = targetTx.id.slice(2);
+        updatedProducts = updatedProducts.filter(p => {
+          if (p.id.startsWith(`p-${batchTs}-`)) {
+            if (license.licenseKey) deleteStoreDocument(license.licenseKey, 'products', p.id);
+            return false;
+          }
+          return true;
+        });
+      }
+      setProducts(updatedProducts);
+    }
+
+    // Optional: Revert customer debt & remove linked Payment record if deleting a customer payment voucher
+    if (options?.revertCustomerDebt && targetTx.type === 'payment' && targetTx.customerId) {
+      const cust = customers.find(c => c.id === targetTx.customerId);
+      if (cust) {
+        const updatedCustomer: Customer = {
+          ...cust,
+          totalDebt: (cust.totalDebt || 0) + targetTx.amount
+        };
+        setCustomers(prev => prev.map(c => c.id === cust.id ? updatedCustomer : c));
+        if (license.licenseKey) saveStoreDocument(license.licenseKey, 'customers', cust.id, updatedCustomer);
+      }
+
+      const expectedPayId = targetTx.id.startsWith('t-') ? `pay-${targetTx.id.slice(2)}` : '';
+      const matchedPay = payments.find(p =>
+        (expectedPayId && p.id === expectedPayId) ||
+        (targetTx.referenceNumber && p.referenceNumber === targetTx.referenceNumber && p.customerId === targetTx.customerId)
+      );
+      if (matchedPay) {
+        setPayments(prev => prev.filter(p => p.id !== matchedPay.id));
+        if (license.licenseKey) deleteStoreDocument(license.licenseKey, 'payments', matchedPay.id);
+      }
+    }
+
     setTransactions(prev => prev.filter(t => t.id !== id));
     if (license.licenseKey) deleteStoreDocument(license.licenseKey, 'transactions', id);
+    addAuditLog('voucher_deleted', `حذف سند / قيد مالي #${targetTx.referenceNumber || id.slice(0, 6)}`, targetTx.description);
+  };
+
+  // Sync Maintenance Order with Cashbox Transactions when completed/delivered
+  const syncMaintenanceTransaction = (order: MaintenanceOrder) => {
+    const txId = `t-maint-${order.id}`;
+    const partsTxId = `t-maint-parts-${order.id}`;
+    const isRevenueActive = (order.status === 'delivered' || order.status === 'completed') && (order.cost || 0) > 0;
+
+    if (isRevenueActive) {
+      const maintTx: Transaction = {
+        id: txId,
+        type: 'maintenance',
+        amount: order.cost || 0,
+        date: new Date().toISOString(),
+        paymentMethod: 'cash',
+        referenceNumber: `MNT-${order.orderNumber}`,
+        payerOrBeneficiary: order.customerName,
+        voucherCategory: 'maintenance_revenue',
+        description: `إيراد صيانة كرت #${order.orderNumber} - الجهاز: ${order.deviceName} (${order.customerName})`
+      };
+
+      setTransactions(prev => {
+        const exists = prev.some(t => t.id === txId);
+        return exists ? prev.map(t => t.id === txId ? maintTx : t) : [maintTx, ...prev];
+      });
+      if (license.licenseKey) saveStoreDocument(license.licenseKey, 'transactions', txId, maintTx);
+
+      if ((order.sparePartsCost || 0) > 0) {
+        const partsTx: Transaction = {
+          id: partsTxId,
+          type: 'expense',
+          amount: order.sparePartsCost || 0,
+          date: new Date().toISOString(),
+          paymentMethod: 'cash',
+          referenceNumber: `PRT-${order.orderNumber}`,
+          payerOrBeneficiary: order.technicianName || 'ورشة الصيانة',
+          voucherCategory: 'spare_parts_expense',
+          description: `مصروف قطع غيار صيانة كرت #${order.orderNumber} - الجهاز: ${order.deviceName}`
+        };
+        setTransactions(prev => {
+          const exists = prev.some(t => t.id === partsTxId);
+          return exists ? prev.map(t => t.id === partsTxId ? partsTx : t) : [partsTx, ...prev];
+        });
+        if (license.licenseKey) saveStoreDocument(license.licenseKey, 'transactions', partsTxId, partsTx);
+      } else {
+        setTransactions(prev => prev.filter(t => t.id !== partsTxId));
+        if (license.licenseKey) deleteStoreDocument(license.licenseKey, 'transactions', partsTxId);
+      }
+    } else {
+      setTransactions(prev => prev.filter(t => t.id !== txId && t.id !== partsTxId));
+      if (license.licenseKey) {
+        deleteStoreDocument(license.licenseKey, 'transactions', txId);
+        deleteStoreDocument(license.licenseKey, 'transactions', partsTxId);
+      }
+    }
   };
 
   const handleAddMaintenanceOrder = (orderData: Omit<MaintenanceOrder, 'id' | 'orderNumber' | 'dateReceived'>) => {
@@ -1057,8 +1548,18 @@ export default function App() {
     if (license.licenseKey) {
       saveStoreDocument(license.licenseKey, 'maintenanceOrders', newOrder.id, newOrder);
     }
+    syncMaintenanceTransaction(newOrder);
 
     addAuditLog('maintenance_created', `استلام جهاز صيانة جديد #${orderNum}`, `العميل: ${newOrder.customerName} - الجهاز: ${newOrder.deviceName}`);
+  };
+
+  const handleUpdateMaintenanceOrder = (updatedOrder: MaintenanceOrder) => {
+    setMaintenanceOrders(prev => prev.map(o => o.id === updatedOrder.id ? updatedOrder : o));
+    if (license.licenseKey) {
+      saveStoreDocument(license.licenseKey, 'maintenanceOrders', updatedOrder.id, updatedOrder);
+    }
+    syncMaintenanceTransaction(updatedOrder);
+    addAuditLog('maintenance_updated', `تعديل بيانات كرت الصيانة #${updatedOrder.orderNumber}`, `العميل: ${updatedOrder.customerName} - التكلفة: ${updatedOrder.cost} ${settings.currency}`);
   };
 
   const handleUpdateMaintenanceStatus = (id: string, status: MaintenanceOrder['status']) => {
@@ -1070,6 +1571,7 @@ export default function App() {
     if (license.licenseKey) {
       saveStoreDocument(license.licenseKey, 'maintenanceOrders', id, updated);
     }
+    syncMaintenanceTransaction(updated);
 
     const statusMap = { received: 'مستلم', repairing: 'جاري الصيانة', completed: 'جاهز للاستلام', delivered: 'تم التسليم' };
     addAuditLog('maintenance_status_changed', `تغيير حالة كرت الصيانة #${order.orderNumber}`, `الحالة الجديدة: ${statusMap[status] || status}`);
@@ -1078,12 +1580,137 @@ export default function App() {
   const handleDeleteMaintenanceOrder = (id: string) => {
     const order = maintenanceOrders.find(o => o.id === id);
     setMaintenanceOrders(prev => prev.filter(o => o.id !== id));
+    const txId = `t-maint-${id}`;
+    const partsTxId = `t-maint-parts-${id}`;
+    setTransactions(prev => prev.filter(t => t.id !== txId && t.id !== partsTxId));
+
     if (license.licenseKey) {
       deleteStoreDocument(license.licenseKey, 'maintenanceOrders', id);
+      deleteStoreDocument(license.licenseKey, 'transactions', txId);
+      deleteStoreDocument(license.licenseKey, 'transactions', partsTxId);
     }
 
     if (order) {
       addAuditLog('maintenance_deleted', `حذف كرت صيانة #${order.orderNumber}`, `العميل: ${order.customerName} - الجهاز: ${order.deviceName}`);
+    }
+  };
+
+  // Employees & Payroll Handlers
+  const handleAddEmployee = (empData: Omit<Employee, 'id' | 'totalAdvances' | 'hireDate'>) => {
+    const newEmp: Employee = {
+      id: `emp-${Date.now()}`,
+      name: empData.name,
+      phone: empData.phone,
+      jobTitle: empData.jobTitle,
+      monthlySalary: empData.monthlySalary,
+      totalAdvances: 0,
+      hireDate: new Date().toISOString()
+    };
+    setEmployees(prev => [...prev, newEmp]);
+    if (license.licenseKey) saveStoreDocument(license.licenseKey, 'employees', newEmp.id, newEmp);
+    addAuditLog('employee_added', `إضافة موظف جديد: ${newEmp.name}`, `الوظيفة: ${newEmp.jobTitle} - الراتب: ${newEmp.monthlySalary} ${settings.currency}`);
+  };
+
+  const handleUpdateEmployee = (updatedEmp: Employee) => {
+    setEmployees(prev => prev.map(e => e.id === updatedEmp.id ? updatedEmp : e));
+    if (license.licenseKey) saveStoreDocument(license.licenseKey, 'employees', updatedEmp.id, updatedEmp);
+    addAuditLog('employee_updated', `تعديل بيانات الموظف: ${updatedEmp.name}`, `الراتب الشهري: ${updatedEmp.monthlySalary} ${settings.currency}`);
+  };
+
+  const handleRecordAdvance = (employeeId: string, amount: number, note: string) => {
+    const emp = employees.find(e => e.id === employeeId);
+    if (!emp) return;
+
+    const timestamp = Date.now();
+    const updatedEmp: Employee = {
+      ...emp,
+      totalAdvances: (emp.totalAdvances || 0) + amount
+    };
+    const newRecord: PayrollRecord = {
+      id: `pr-${timestamp}`,
+      employeeId: emp.id,
+      employeeName: emp.name,
+      type: 'advance',
+      amount,
+      date: new Date().toISOString(),
+      note
+    };
+    const refNum = `ADV-${Math.floor(1000 + Math.random() * 9000)}`;
+    const advanceTx: Transaction = {
+      id: `t-adv-${timestamp}`,
+      type: 'expense',
+      amount,
+      date: new Date().toISOString(),
+      paymentMethod: 'cash',
+      referenceNumber: refNum,
+      payerOrBeneficiary: emp.name,
+      voucherCategory: 'salaries_wages',
+      description: `سند صرف سلفة راتب (${emp.name}): ${note}`
+    };
+
+    setEmployees(prev => prev.map(e => e.id === emp.id ? updatedEmp : e));
+    setPayrollRecords(prev => [...prev, newRecord]);
+    setTransactions(prev => [advanceTx, ...prev]);
+
+    if (license.licenseKey) {
+      saveStoreDocument(license.licenseKey, 'employees', emp.id, updatedEmp);
+      saveStoreDocument(license.licenseKey, 'payrollRecords', newRecord.id, newRecord);
+      saveStoreDocument(license.licenseKey, 'transactions', advanceTx.id, advanceTx);
+    }
+
+    addAuditLog('employee_advance', `صرف سلفة للموظف: ${emp.name}`, `المبلغ: ${amount} ${settings.currency} - ${note}`);
+  };
+
+  const handlePaySalary = (employeeId: string, amount: number, note: string) => {
+    const emp = employees.find(e => e.id === employeeId);
+    if (!emp) return;
+
+    const timestamp = Date.now();
+    const updatedEmp: Employee = {
+      ...emp,
+      totalAdvances: 0
+    };
+    const newRecord: PayrollRecord = {
+      id: `pr-${timestamp}`,
+      employeeId: emp.id,
+      employeeName: emp.name,
+      type: 'salary',
+      amount,
+      date: new Date().toISOString(),
+      note: emp.totalAdvances > 0 ? `${note} (بعد تصفية سلف بمبلغ ${emp.totalAdvances.toLocaleString()} ${settings.currency})` : note
+    };
+    const refNum = `SAL-${Math.floor(1000 + Math.random() * 9000)}`;
+    const salaryTx: Transaction = {
+      id: `t-sal-${timestamp}`,
+      type: 'expense',
+      amount,
+      date: new Date().toISOString(),
+      paymentMethod: 'cash',
+      referenceNumber: refNum,
+      payerOrBeneficiary: emp.name,
+      voucherCategory: 'salaries_wages',
+      description: `سند صرف راتب شهري (${emp.name}): ${note}`
+    };
+
+    setEmployees(prev => prev.map(e => e.id === emp.id ? updatedEmp : e));
+    setPayrollRecords(prev => [...prev, newRecord]);
+    setTransactions(prev => [salaryTx, ...prev]);
+
+    if (license.licenseKey) {
+      saveStoreDocument(license.licenseKey, 'employees', emp.id, updatedEmp);
+      saveStoreDocument(license.licenseKey, 'payrollRecords', newRecord.id, newRecord);
+      saveStoreDocument(license.licenseKey, 'transactions', salaryTx.id, salaryTx);
+    }
+
+    addAuditLog('employee_salary_paid', `صرف راتب للموظف: ${emp.name}`, `المبلغ المصروف: ${amount} ${settings.currency} - ${note}`);
+  };
+
+  const handleDeleteEmployee = (employeeId: string) => {
+    const emp = employees.find(e => e.id === employeeId);
+    setEmployees(prev => prev.filter(e => e.id !== employeeId));
+    if (license.licenseKey) deleteStoreDocument(license.licenseKey, 'employees', employeeId);
+    if (emp) {
+      addAuditLog('employee_deleted', `حذف الموظف: ${emp.name}`, `الوظيفة: ${emp.jobTitle}`);
     }
   };
 
@@ -1207,15 +1834,39 @@ export default function App() {
     return hasRestoredAny;
   };
 
-  const handleResetDatabase = async () => {
-    localStorage.clear();
-    setSettings(DEFAULT_SETTINGS);
+  const handleResetDatabase = async (onProgress?: (stepLabel: string, deletedCount: number) => void) => {
+    const knownIds = {
+      products: products.map(p => p.id),
+      customers: customers.map(c => c.id),
+      invoices: invoices.map(i => i.id),
+      payments: payments.map(p => p.id),
+      transactions: transactions.map(t => t.id),
+      maintenanceOrders: maintenanceOrders.map(m => m.id)
+    };
+
+    const res = await wipeStoreCloudAndLocalData(
+      license.licenseKey || '',
+      license.hwid || generateHWID(),
+      knownIds,
+      settings,
+      onProgress
+    );
+
     setProducts([]);
     setCustomers([]);
     setInvoices([]);
     setPayments([]);
     setTransactions([]);
-    setActiveTab('dashboard');
+    setMaintenanceOrders([]);
+    setSettings(prev => ({ ...prev, lastCloudResetAt: res.resetTimestamp }));
+
+    addAuditLog(
+      'cloud_full_reset',
+      'تصفير شامل للنظام والسحابة (الأصناف، العملاء، المبيعات، المشتريات، والديون)',
+      `تم تطهير ${res.deletedCount} سجل سحابي ومحلي مع تثبيت قفل منع الاسترجاع`
+    );
+    soundManager.playSuccessChime();
+    return res;
   };
 
   if (!isActivated) {
@@ -1276,9 +1927,12 @@ export default function App() {
   };
 
   const isDesktopMode = (settings.deviceMode || 'mobile') === 'desktop';
+  const themeClass = `theme-${settings.appTheme || 'financial-blue'}`;
+  const shapeClass = `shape-${settings.cardShape || 'rounded'}`;
+  const densityClass = `density-${settings.density || 'comfortable'}`;
 
   return (
-    <div className={`flex flex-col h-screen w-full bg-slate-100 text-slate-900 select-none overflow-hidden font-sans dir-rtl ${isDesktopMode ? 'mode-desktop' : 'mode-mobile'}`} dir="rtl">
+    <div className={`flex flex-col h-screen w-full bg-slate-100 text-slate-900 select-none overflow-hidden font-sans dir-rtl ${isDesktopMode ? 'mode-desktop' : 'mode-mobile'} ${themeClass} ${shapeClass} ${densityClass}`} dir="rtl">
       
       {/* 1. TOP BAR */}
       <header className="h-14 bg-white border-b border-slate-200 px-4 flex items-center justify-between sticky top-0 z-30 shadow-xs shrink-0">
@@ -1525,7 +2179,12 @@ export default function App() {
               <Transactions
                 transactions={transactions}
                 invoices={invoices}
+                products={products}
+                customers={customers}
                 onAddExpense={handleAddExpense}
+                onAddReceiptVoucher={handleAddReceiptVoucher}
+                onUpdateTransaction={handleUpdateTransaction}
+                onUpdatePurchaseInvoice={handleUpdatePurchaseInvoice}
                 onDeleteTransaction={handleDeleteTransaction}
                 onRefundInvoice={handleRefundInvoice}
                 onViewInvoice={setActiveInvoice}
@@ -1539,6 +2198,7 @@ export default function App() {
               <Maintenance
                 orders={maintenanceOrders}
                 onAddOrder={handleAddMaintenanceOrder}
+                onUpdateOrder={handleUpdateMaintenanceOrder}
                 onUpdateStatus={handleUpdateMaintenanceStatus}
                 onDeleteOrder={handleDeleteMaintenanceOrder}
                 currency={settings.currency}
@@ -1586,10 +2246,11 @@ export default function App() {
               <Employees
                 employees={employees}
                 payrollRecords={payrollRecords}
-                onAddEmployee={() => {}}
-                onRecordAdvance={() => {}}
-                onPaySalary={() => {}}
-                onDeleteEmployee={() => {}}
+                onAddEmployee={handleAddEmployee}
+                onUpdateEmployee={handleUpdateEmployee}
+                onRecordAdvance={handleRecordAdvance}
+                onPaySalary={handlePaySalary}
+                onDeleteEmployee={handleDeleteEmployee}
                 currency={settings.currency}
               />
             )}

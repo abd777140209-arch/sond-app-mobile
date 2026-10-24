@@ -101,8 +101,9 @@ export default function Dashboard({
   // Calculations
   const activeProducts = products.filter(p => p.isDeleted !== true);
   const activeCustomers = customers.filter(c => c.isDeleted !== true);
+  const activeInvoices = invoices.filter(inv => inv.status !== 'refunded');
 
-  const totalSales = invoices.reduce((sum, inv) => sum + inv.finalAmount, 0);
+  const totalSales = activeInvoices.reduce((sum, inv) => sum + inv.finalAmount, 0);
   const totalDebts = activeCustomers.reduce((sum, cust) => sum + cust.totalDebt, 0);
   
   // Total Inventory Value (Cost vs Selling)

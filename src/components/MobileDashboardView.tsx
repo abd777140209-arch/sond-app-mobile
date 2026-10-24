@@ -174,15 +174,19 @@ export default function MobileDashboardView({
   // Active items calculations
   const activeProducts = products.filter(p => p.isDeleted !== true);
   const activeCustomers = customers.filter(c => c.isDeleted !== true);
+  const activeInvoices = invoices.filter(inv => inv.status !== 'refunded');
 
-  const totalSales = invoices.reduce((sum, inv) => sum + inv.finalAmount, 0);
+  const totalSales = activeInvoices.reduce((sum, inv) => sum + inv.finalAmount, 0);
   const totalDebts = activeCustomers.reduce((sum, cust) => sum + cust.totalDebt, 0);
 
-  // Cashbox / Treasury Balance (Total cash sales + Debt payments - Expenses)
-  const cashSales = invoices.filter(inv => inv.type === 'cash').reduce((sum, inv) => sum + inv.finalAmount, 0);
-  const debtPayments = payments.reduce((sum, pay) => sum + pay.amount, 0);
+  // Cashbox / Treasury Balance (Unified with Transactions Ledger: Cash sales + Receipt Vouchers/Debt Payments + Maintenance Revenue - Expenses)
+  const hasSaleTransactions = transactions.some(t => t.type === 'sale');
+  const totalInflows = hasSaleTransactions
+    ? transactions.filter(t => t.type === 'sale' || t.type === 'payment' || t.type === 'maintenance').reduce((sum, t) => sum + t.amount, 0)
+    : activeInvoices.filter(inv => inv.type === 'cash').reduce((sum, inv) => sum + inv.finalAmount, 0) +
+      transactions.filter(t => t.type === 'payment' || t.type === 'maintenance').reduce((sum, t) => sum + t.amount, 0);
   const expenses = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-  const cashboxBalance = cashSales + debtPayments - expenses;
+  const cashboxBalance = totalInflows - expenses;
 
   // Format helper
   const fmt = (num: number) => {

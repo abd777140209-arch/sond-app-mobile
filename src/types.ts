@@ -104,6 +104,18 @@ export interface MaintenanceOrder {
   proofImage?: string;
 }
 
+export interface PurchaseInvoiceItem {
+  productId: string;
+  name: string;
+  barcode: string;
+  quantity: number;
+  costPrice: number;
+  sellingPrice: number;
+  category?: string;
+  minStock?: number;
+  total: number;
+}
+
 export interface Transaction {
   id: string;
   type: 'sale' | 'payment' | 'expense' | 'refund' | 'maintenance_income';
@@ -113,6 +125,15 @@ export interface Transaction {
   paymentMethod?: string;
   referenceNumber?: string;
   proofImage?: string; // صورة سند التحويل أو إشعار الإيداع
+  isPurchaseInvoice?: boolean;
+  supplierName?: string;
+  invoiceNumber?: string;
+  purchaseItems?: PurchaseInvoiceItem[];
+  customerId?: string;
+  customerName?: string;
+  payerOrBeneficiary?: string;
+  voucherCategory?: string;
+  notes?: string;
 }
 
 export type AppTheme = 'financial-blue' | 'emerald-green' | 'warm-amber' | 'dark-luxury';
@@ -236,6 +257,7 @@ export interface SystemSettings {
   driveBackupSchedule?: BackupFrequency;
   lastLocalBackupDate?: string;
   lastDriveBackupDate?: string;
+  lastCloudResetAt?: string;
   printerSettings?: PrinterSettings;
 }
 

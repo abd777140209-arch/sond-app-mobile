@@ -44,7 +44,13 @@ interface BulkProductAddModalProps {
       stock: number;
       minStock: number;
       category: string;
-    }>
+    }>,
+    purchaseMetadata?: {
+      supplierName?: string;
+      invoiceNumber?: string;
+      totalAmount?: number;
+      recordAsExpense?: boolean;
+    }
   ) => void;
   onOpenSmartInvoiceScanner?: () => void;
 }
@@ -78,6 +84,9 @@ export default function BulkProductAddModal({
   ]);
 
   const [bulkCategory, setBulkCategory] = useState<string>(categoriesList[0] || 'إكسسوارات');
+  const [supplierName, setSupplierName] = useState<string>('');
+  const [invoiceNumber, setInvoiceNumber] = useState<string>('');
+  const [recordAsExpense, setRecordAsExpense] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [activeBarcodeRowIndex, setActiveBarcodeRowIndex] = useState<number | null>(null);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
@@ -206,7 +215,12 @@ export default function BulkProductAddModal({
       category: r.category || 'إكسسوارات'
     }));
 
-    onBulkAddProducts(payload);
+    onBulkAddProducts(payload, {
+      supplierName: supplierName.trim() || undefined,
+      invoiceNumber: invoiceNumber.trim() || `PUR-${Math.floor(10000 + Math.random() * 90000)}`,
+      totalAmount: totalCostSum,
+      recordAsExpense
+    });
     soundManager.playSuccessChime();
     onClose();
   };
@@ -227,13 +241,13 @@ export default function BulkProductAddModal({
             </div>
             <div>
               <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
-                <span>إضافة أصناف متعددة دفعة واحدة إلى المخزن</span>
+                <span>إضافة أصناف متعددة / فاتورة مشتريات للمخزن</span>
                 <span className="text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full">
                   إدخال سريع (جدول ذكي)
                 </span>
               </h2>
               <p className="text-[11px] text-slate-400">
-                أدخل عدة بضائع وسلع بسرعة في جدول واحد مع توليد الباركود وحفظ الكل بضغطة زر واحدة
+                أدخل عدة بضائع وسلع بسرعة في جدول واحد مع قيدها في حساب المصروفات والمشتريات تلقائياً
               </p>
             </div>
           </div>
@@ -262,56 +276,86 @@ export default function BulkProductAddModal({
           </div>
         </div>
 
-        {/* Quick Toolbar */}
-        <div className="p-3 bg-slate-100 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2.5 text-xs">
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => handleAddRows(1)}
-              className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition flex items-center gap-1 cursor-pointer shadow-xs"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>+ إضافة سطر</span>
-            </button>
+        {/* Quick Toolbar & Purchase Invoice Metadata */}
+        <div className="p-3 bg-slate-100 border-b border-slate-200 space-y-2.5 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => handleAddRows(1)}
+                className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition flex items-center gap-1 cursor-pointer shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ إضافة سطر</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => handleAddRows(5)}
-              className="px-3 py-1.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold transition flex items-center gap-1 cursor-pointer shadow-xs"
-            >
-              <Plus className="w-3.5 h-3.5 text-blue-600" />
-              <span>+ 5 أسطر</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => handleAddRows(5)}
+                className="px-3 py-1.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold transition flex items-center gap-1 cursor-pointer shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5 text-blue-600" />
+                <span>+ 5 أسطر</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={handleGenerateAllBarcodes}
-              className="px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 font-bold transition flex items-center gap-1 cursor-pointer"
-              title="توليد باركود فريد للأسطر التي لا تحتوي على باركود"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-              <span>توليد باركود تلقائي للكل</span>
-            </button>
+              <button
+                type="button"
+                onClick={handleGenerateAllBarcodes}
+                className="px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 font-bold transition flex items-center gap-1 cursor-pointer"
+                title="توليد باركود فريد للأسطر التي لا تحتوي على باركود"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                <span>توليد باركود تلقائي للكل</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-slate-600 font-bold">تطبيق تصنيف:</span>
+              <select
+                value={bulkCategory}
+                onChange={(e) => setBulkCategory(e.target.value)}
+                className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-slate-900 font-bold focus:ring-1 focus:ring-blue-500"
+              >
+                {categoriesList.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleApplyCategoryToAll}
+                className="px-2.5 py-1 rounded-lg bg-slate-800 text-white font-bold hover:bg-slate-700 transition cursor-pointer"
+              >
+                تطبيق على الكل
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-slate-600 font-bold">تطبيق تصنيف:</span>
-            <select
-              value={bulkCategory}
-              onChange={(e) => setBulkCategory(e.target.value)}
-              className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-slate-900 font-bold focus:ring-1 focus:ring-blue-500"
-            >
-              {categoriesList.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={handleApplyCategoryToAll}
-              className="px-2.5 py-1 rounded-lg bg-slate-800 text-white font-bold hover:bg-slate-700 transition cursor-pointer"
-            >
-              تطبيق على الكل
-            </button>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-200/80">
+            <input
+              type="text"
+              value={supplierName}
+              onChange={(e) => setSupplierName(e.target.value)}
+              placeholder="اسم المورد / التاجر (اختياري)..."
+              className="bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <input
+              type="text"
+              value={invoiceNumber}
+              onChange={(e) => setInvoiceNumber(e.target.value)}
+              placeholder="رقم فاتورة المشتريات (مثال: 49755)..."
+              className="bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <label className="flex items-center gap-2 bg-rose-50 border border-rose-200 rounded-xl px-3 py-1.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={recordAsExpense}
+                onChange={(e) => setRecordAsExpense(e.target.checked)}
+                className="w-4 h-4 accent-rose-600 rounded cursor-pointer"
+              />
+              <span className="text-[11px] font-bold text-rose-800">
+                قيد الفاتورة في سجل المصروفات ({totalCostSum.toLocaleString()} {currency})
+              </span>
+            </label>
           </div>
         </div>
 

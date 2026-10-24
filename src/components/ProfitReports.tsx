@@ -192,7 +192,7 @@ export default function ProfitReports({
     });
   }, [invoices, period, startDate, endDate, invoiceTypeFilter]);
 
-  // Comprehensive KPI Statistics
+  // Comprehensive KPI Statistics (Separating COGS, Purchase Invoices, and Operating Expenses)
   const stats = useMemo(() => {
     let totalRevenue = 0;
     let totalCostOfGoods = 0;
@@ -227,7 +227,58 @@ export default function ProfitReports({
       });
     });
 
+    // Filter transactions by the same date period to separate Operating Expenses from Inventory Purchase Invoices
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    let operatingExpenses = 0;
+    let inventoryPurchasesTotal = 0;
+
+    transactions.forEach(tx => {
+      if (tx.type !== 'expense') return;
+      // Ignore sales refund expense entries since refunded invoices are already excluded from revenue
+      if (tx.description?.startsWith('مرتجع مبيعات فاتورة')) return;
+
+      let txDateStr = tx.date;
+      if (tx.date.includes('T')) txDateStr = tx.date.split('T')[0];
+
+      let inPeriod = true;
+      if (period === 'today') {
+        inPeriod = txDateStr === todayStr;
+      } else if (period === 'week') {
+        const weekAgo = new Date();
+        weekAgo.setDate(now.getDate() - 7);
+        inPeriod = txDateStr >= weekAgo.toISOString().split('T')[0] && txDateStr <= todayStr;
+      } else if (period === 'month') {
+        const firstDayOfMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+        inPeriod = txDateStr >= firstDayOfMonthStr && txDateStr <= todayStr;
+      } else if (period === '30days') {
+        const d30 = new Date();
+        d30.setDate(now.getDate() - 30);
+        inPeriod = txDateStr >= d30.toISOString().split('T')[0] && txDateStr <= todayStr;
+      } else if (period === 'year') {
+        const firstDayOfYearStr = `${now.getFullYear()}-01-01`;
+        inPeriod = txDateStr >= firstDayOfYearStr && txDateStr <= todayStr;
+      } else if (period === 'custom' && startDate && endDate) {
+        inPeriod = txDateStr >= startDate && txDateStr <= endDate;
+      }
+
+      if (!inPeriod) return;
+
+      const isPurchase = Boolean(
+        tx.isPurchaseInvoice ||
+        tx.voucherCategory === 'purchase_invoice' ||
+        tx.description?.includes('مشتريات بضاعة للمخزن')
+      );
+
+      if (isPurchase) {
+        inventoryPurchasesTotal += (tx.amount || 0);
+      } else {
+        operatingExpenses += (tx.amount || 0);
+      }
+    });
+
     const grossProfit = totalRevenue - totalCostOfGoods;
+    const netOperatingProfit = grossProfit - operatingExpenses;
     const profitMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
     const avgInvoiceValue = filteredInvoices.length > 0 ? totalRevenue / filteredInvoices.length : 0;
     const avgInvoiceProfit = filteredInvoices.length > 0 ? grossProfit / filteredInvoices.length : 0;
@@ -240,6 +291,9 @@ export default function ProfitReports({
       totalRevenue,
       totalCostOfGoods,
       grossProfit,
+      operatingExpenses,
+      inventoryPurchasesTotal,
+      netOperatingProfit,
       profitMargin,
       totalDiscount,
       totalCashRevenue,
@@ -249,7 +303,7 @@ export default function ProfitReports({
       avgInvoiceProfit,
       topProducts
     };
-  }, [filteredInvoices, productCostMap]);
+  }, [filteredInvoices, productCostMap, transactions, period, startDate, endDate]);
 
   // Aggregation for Timeline Chart
   const timelineChartData = useMemo(() => {
@@ -1089,7 +1143,7 @@ export default function ProfitReports({
             {/* Total Sales Revenue */}
             <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-2">
               <div className="flex justify-between items-center text-xs font-bold text-slate-500">
-                <span>إجمالي المبيعات (الإيرادات)</span>
+                <span>إجمالي المبيعات الصافية</span>
                 <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
                   <DollarSign className="w-4 h-4" />
                 </div>
@@ -1098,14 +1152,14 @@ export default function ProfitReports({
                 {fmt(stats.totalRevenue)}
               </div>
               <div className="text-[10px] text-slate-400">
-                عدد الفواتير الصادرة: <span className="font-bold text-slate-700">{stats.invoiceCount} فاتورة</span>
+                عدد الفواتير الفعالة: <span className="font-bold text-slate-700">{stats.invoiceCount} فاتورة</span> (مستبعد المرتجع)
               </div>
             </div>
 
             {/* Cost of Goods Sold */}
             <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-2">
               <div className="flex justify-between items-center text-xs font-bold text-slate-500">
-                <span>تكلفة البضاعة المباعة</span>
+                <span>تكلفة البضاعة المباعة (COGS)</span>
                 <div className="p-2 rounded-xl bg-slate-100 text-slate-600">
                   <ShoppingBag className="w-4 h-4" />
                 </div>
@@ -1114,14 +1168,14 @@ export default function ProfitReports({
                 {fmt(stats.totalCostOfGoods)}
               </div>
               <div className="text-[10px] text-slate-400">
-                تأدية رأس المال الصافي للمبيعات
+                مشتريات مخزون مضافة للفترة: <span className="font-bold text-indigo-600">{fmt(stats.inventoryPurchasesTotal)}</span>
               </div>
             </div>
 
-            {/* Net Gross Profit */}
+            {/* Gross Profit & Operating Expenses */}
             <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-2">
               <div className="flex justify-between items-center text-xs font-bold text-slate-500">
-                <span>صافي الأرباح الصافية</span>
+                <span>مجمل ربح المبيعات</span>
                 <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
                   <TrendingUp className="w-4 h-4" />
                 </div>
@@ -1129,24 +1183,26 @@ export default function ProfitReports({
               <div className="text-xl font-black text-emerald-600 font-mono dir-ltr text-right">
                 +{fmt(stats.grossProfit)}
               </div>
-              <div className="text-[10px] text-slate-400">
-                متوسط الربح بالفاتورة: <span className="font-bold text-emerald-600">{fmt(stats.avgInvoiceProfit)}</span>
+              <div className="text-[10px] text-slate-400 flex justify-between items-center">
+                <span>المصاريف التشغيلية والرواتب:</span>
+                <span className="font-bold text-rose-600 font-mono">-{fmt(stats.operatingExpenses)}</span>
               </div>
             </div>
 
-            {/* Profit Margin % */}
+            {/* Net Operating Profit & Margin */}
             <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-2">
               <div className="flex justify-between items-center text-xs font-bold text-slate-500">
-                <span>نسبة هامش الربح</span>
+                <span>صافي الربح الفعلي (بعد المصاريف)</span>
                 <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
                   <Percent className="w-4 h-4" />
                 </div>
               </div>
-              <div className="text-xl font-black text-amber-600 font-mono">
-                %{stats.profitMargin.toFixed(1)}
+              <div className={`text-xl font-black font-mono dir-ltr text-right ${stats.netOperatingProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {stats.netOperatingProfit >= 0 ? '+' : ''}{fmt(stats.netOperatingProfit)}
               </div>
-              <div className="text-[10px] text-slate-400">
-                مؤشر كفاءة الربحية التشغيلية
+              <div className="text-[10px] text-slate-400 flex justify-between items-center">
+                <span>هامش ربح المبيعات:</span>
+                <span className="font-bold text-amber-600 font-mono">%{stats.profitMargin.toFixed(1)}</span>
               </div>
             </div>
 

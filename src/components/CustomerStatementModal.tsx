@@ -47,8 +47,13 @@ export default function CustomerStatementModal({
   const customerInvoices = invoices.filter(inv => inv.customerId === customer.id && inv.status !== 'refunded');
   const customerPayments = payments.filter(p => p.customerId === customer.id);
 
+  const totalInvoicedDebit = customerInvoices.reduce((s, inv) => s + (inv.finalAmount || 0), 0);
+  const totalPaidCredit = customerPayments.reduce((s, pay) => s + (pay.amount || 0), 0);
+  const netFromTransactions = totalInvoicedDebit - totalPaidCredit;
+  const impliedOpeningDebt = Math.max(0, (customer.totalDebt || 0) - netFromTransactions);
+
   // Combine into single chronological ledger list
-  const ledgerEntries = [
+  const rawEntries = [
     ...customerInvoices.map(inv => ({
       id: inv.id,
       date: inv.date,
@@ -62,12 +67,27 @@ export default function CustomerStatementModal({
       id: pay.id,
       date: pay.date,
       type: 'payment' as const,
-      description: `سند قبض نقدية: ${pay.note || 'تسديد دفعة'}`,
+      description: `سند قبض نقدية: ${pay.note || 'تسديد دفعة'}${pay.referenceNumber ? ` (#${pay.referenceNumber})` : ''}`,
       debit: 0,
       credit: pay.amount, // له (دين ينقص)
       itemsCount: 0
     }))
   ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  const ledgerEntries = impliedOpeningDebt > 0
+    ? [
+        {
+          id: `opening-${customer.id}`,
+          date: rawEntries[0]?.date || new Date().toISOString(),
+          type: 'invoice' as const,
+          description: 'رصيد مديونية افتتاحي / سابق مقيد على الحساب',
+          debit: impliedOpeningDebt,
+          credit: 0,
+          itemsCount: 0
+        },
+        ...rawEntries
+      ]
+    : rawEntries;
 
   // Calculate running balances
   let runningBalance = 0;
@@ -89,7 +109,7 @@ export default function CustomerStatementModal({
     try {
       await generateAndSharePDF({
         title: 'كشف حساب عميل',
-        storeName: 'القيصر للأجهزة الذكية والصيانة والبرمجة',
+        storeName: storeName || 'نظام سند المحاسبي',
         invoiceNumber: `كشف-${customer.id.substring(0, 6)}`,
         customerName: customer.name,
         phone: customer.phone || 'غير مسجل',

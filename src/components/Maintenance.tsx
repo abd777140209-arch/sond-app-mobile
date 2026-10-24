@@ -33,7 +33,8 @@ import {
   Check,
   Download,
   FileText,
-  Loader2
+  Loader2,
+  Edit3
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { MaintenanceOrder, DeviceChecklist, ChecklistStatus } from '../types';
@@ -45,6 +46,7 @@ import MaintenanceStickerModal from './MaintenanceStickerModal';
 interface MaintenanceProps {
   orders: MaintenanceOrder[];
   onAddOrder: (order: Omit<MaintenanceOrder, 'id' | 'orderNumber' | 'dateReceived'>) => void;
+  onUpdateOrder?: (order: MaintenanceOrder) => void;
   onUpdateStatus: (id: string, status: MaintenanceOrder['status']) => void;
   onDeleteOrder: (id: string) => void;
   currency: string;
@@ -54,6 +56,7 @@ interface MaintenanceProps {
 export default function Maintenance({
   orders,
   onAddOrder,
+  onUpdateOrder,
   onUpdateStatus,
   onDeleteOrder,
   currency,
@@ -62,7 +65,8 @@ export default function Maintenance({
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'received' | 'repairing' | 'completed' | 'delivered'>('all');
 
-  // New Order states
+  // New / Edit Order states
+  const [editingOrder, setEditingOrder] = useState<MaintenanceOrder | null>(null);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [deviceName, setDeviceName] = useState('');
@@ -97,6 +101,29 @@ export default function Maintenance({
 
   // Delete confirmation modal state
   const [deleteTargetOrder, setDeleteTargetOrder] = useState<MaintenanceOrder | null>(null);
+
+  const handleOpenEditOrder = (order: MaintenanceOrder) => {
+    setEditingOrder(order);
+    setCustomerName(order.customerName || '');
+    setCustomerPhone(order.customerPhone || '');
+    setDeviceName(order.deviceName || '');
+    setIssueDescription(order.issueDescription || '');
+    setCost(order.cost || 0);
+    setSparePartsCost(order.sparePartsCost || 0);
+    setTechnicianName(order.technicianName || 'مهندس الورشة والصيانة');
+    setNotes(order.notes || '');
+    setChecklist(order.checklist || {
+      screen: 'intact',
+      battery: 'intact',
+      camera: 'intact',
+      fingerprint: 'untested',
+      sound: 'intact',
+      power: 'intact'
+    });
+    setFormError('');
+    setShowAddForm(true);
+    soundManager.playScanBeep();
+  };
 
   const handleExportMonthlyMaintenancePDF = async () => {
     soundManager.playSuccessChime();
@@ -134,32 +161,49 @@ export default function Maintenance({
 
     const calculatedLaborFee = Math.max(0, cost - (sparePartsCost || 0));
 
-    const orderData = {
-      customerName: customerName.trim(),
-      customerPhone: customerPhone.trim(),
-      deviceName: deviceName.trim(),
-      issueDescription: issueDescription.trim(),
-      cost: cost,
-      sparePartsCost: sparePartsCost || 0,
-      laborFee: calculatedLaborFee,
-      technicianName: technicianName.trim() || 'مهندس الورشة والصيانة',
-      status: 'received' as const,
-      notes: notes.trim(),
-      checklist: checklist
-    };
+    if (editingOrder && onUpdateOrder) {
+      onUpdateOrder({
+        ...editingOrder,
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim(),
+        deviceName: deviceName.trim(),
+        issueDescription: issueDescription.trim(),
+        cost: cost,
+        sparePartsCost: sparePartsCost || 0,
+        laborFee: calculatedLaborFee,
+        technicianName: technicianName.trim() || 'مهندس الورشة والصيانة',
+        notes: notes.trim(),
+        checklist: checklist
+      });
+    } else {
+      const orderData = {
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim(),
+        deviceName: deviceName.trim(),
+        issueDescription: issueDescription.trim(),
+        cost: cost,
+        sparePartsCost: sparePartsCost || 0,
+        laborFee: calculatedLaborFee,
+        technicianName: technicianName.trim() || 'مهندس الورشة والصيانة',
+        status: 'received' as const,
+        notes: notes.trim(),
+        checklist: checklist
+      };
 
-    onAddOrder(orderData);
+      onAddOrder(orderData);
 
-    const generatedOrderNum = `${Math.floor(1000 + Math.random() * 9000)}`;
-    setStickerOrder({
-      id: `m-${Date.now()}`,
-      orderNumber: generatedOrderNum,
-      dateReceived: new Date().toISOString(),
-      ...orderData
-    });
-    setShowStickerModal(true);
+      const generatedOrderNum = `${Math.floor(1000 + Math.random() * 9000)}`;
+      setStickerOrder({
+        id: `m-${Date.now()}`,
+        orderNumber: generatedOrderNum,
+        dateReceived: new Date().toISOString(),
+        ...orderData
+      });
+      setShowStickerModal(true);
+    }
 
     // Reset states
+    setEditingOrder(null);
     setCustomerName('');
     setCustomerPhone('');
     setDeviceName('');
@@ -501,6 +545,15 @@ export default function Maintenance({
                   </a>
 
                   <button
+                    type="button"
+                    onClick={() => handleOpenEditOrder(order)}
+                    className="p-1.5 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition cursor-pointer"
+                    title="تعديل كرت الصيانة"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+
+                  <button
                     onClick={() => handleDeleteTicket(order)}
                     className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
                     title="حذف كرت الصيانة"
@@ -621,6 +674,15 @@ export default function Maintenance({
                       </a>
 
                       <button
+                        type="button"
+                        onClick={() => handleOpenEditOrder(order)}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition cursor-pointer"
+                        title="تعديل كرت الصيانة"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
                         onClick={() => handleDeleteTicket(order)}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
                         title="حذف كرت الصيانة"
@@ -638,7 +700,7 @@ export default function Maintenance({
 
       </div>
 
-      {/* BOTTOM SHEET MODAL: NEW MAINTENANCE TICKET */}
+      {/* BOTTOM SHEET MODAL: NEW / EDIT MAINTENANCE TICKET */}
       {showAddForm && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-right">
@@ -648,12 +710,19 @@ export default function Maintenance({
                   <Wrench className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">بيانات كرت استلام الجهاز الجديد</h3>
-                  <p className="text-[11px] text-slate-400">فتح امر صيانة وتحديد تكلفة الإرشاد</p>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    {editingOrder ? `تعديل كرت الصيانة #${editingOrder.orderNumber}` : 'بيانات كرت استلام الجهاز الجديد'}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    {editingOrder ? 'تحديث بيانات الجهاز والتكلفة وقطع الغيار' : 'فتح أمر صيانة وتحديد التكلفة والفحص'}
+                  </p>
                 </div>
               </div>
               <button 
-                onClick={() => setShowAddForm(false)}
+                onClick={() => {
+                  setShowAddForm(false);
+                  setEditingOrder(null);
+                }}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
               >
                 <X className="w-5 h-5" />
