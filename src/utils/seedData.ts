@@ -30,7 +30,7 @@ export const DEFAULT_SETTINGS: SystemSettings = {
     SAR: 140,
     USD: 530,
   },
-  appTheme: 'financial-blue',
+  appTheme: 'dark-luxury',
   cardShape: 'soft',
   density: 'comfortable',
   deviceMode: 'mobile',

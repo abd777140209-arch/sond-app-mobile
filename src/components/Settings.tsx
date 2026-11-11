@@ -20,6 +20,7 @@ import {
   Palette, 
   LayoutGrid, 
   Sun, 
+  Moon,
   Mail, 
   HardDrive, 
   Cloud, 
@@ -136,7 +137,20 @@ export default function Settings({
       if (settings.protectedSections) setProtectedSections(settings.protectedSections);
       if (settings.privacyPinCode) setPrivacyPinCode(settings.privacyPinCode);
       if (settings.isPrivacyPinEnabled !== undefined) setIsPrivacyPinEnabled(settings.isPrivacyPinEnabled);
-      if (settings.appTheme) setAppTheme(settings.appTheme);
+      if (settings.appTheme) {
+        const validThemes: AppTheme[] = [
+          'dark-luxury',
+          'light-clean',
+          'obsidian-midnight',
+          'royal-imperial',
+          'global-platinum',
+          'velvet-burgundy',
+          'emerald-palace',
+          'sapphire-crown',
+          'titanium-bronze'
+        ];
+        setAppTheme(validThemes.includes(settings.appTheme) ? settings.appTheme : 'dark-luxury');
+      }
       if (settings.cardShape) setCardShape(settings.cardShape);
       if (settings.density) setDensity(settings.density);
       if (settings.deviceMode) setDeviceMode(settings.deviceMode);
@@ -155,7 +169,22 @@ export default function Settings({
   const [isUpgrading, setIsUpgrading] = useState(false);
 
   // Theme & Layout state
-  const [appTheme, setAppTheme] = useState<AppTheme>(settings.appTheme || 'financial-blue');
+  const [appTheme, setAppTheme] = useState<AppTheme>(() => {
+    const validThemes: AppTheme[] = [
+      'dark-luxury',
+      'light-clean',
+      'obsidian-midnight',
+      'royal-imperial',
+      'global-platinum',
+      'velvet-burgundy',
+      'emerald-palace',
+      'sapphire-crown',
+      'titanium-bronze'
+    ];
+    return settings.appTheme && validThemes.includes(settings.appTheme)
+      ? settings.appTheme
+      : 'dark-luxury';
+  });
   const [cardShape, setCardShape] = useState<CardShape>(settings.cardShape || 'soft');
   const [density, setDensity] = useState<DisplayDensity>(settings.density || 'comfortable');
   const [deviceMode, setDeviceMode] = useState<'mobile' | 'desktop'>(settings.deviceMode || 'mobile');
@@ -367,14 +396,10 @@ export default function Settings({
     const themeClass = `theme-${newTheme}`;
     const shapeClass = `shape-${cardShape}`;
     const densityClass = `density-${density}`;
-    const fullClass = `${themeClass} ${shapeClass} ${densityClass}`;
+    const modeClass = layoutPreference === 'desktop' ? 'mode-desktop' : 'mode-mobile';
+    const isDark = newTheme !== 'light-clean';
 
-    document.documentElement.className = fullClass;
-    if (newTheme === 'dark-luxury') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.className = `${themeClass} ${shapeClass} ${densityClass} ${modeClass}${isDark ? ' dark' : ''}`;
 
     onSaveSettings({
       ...settings,
@@ -2131,63 +2156,229 @@ export default function Settings({
               </div>
 
               {/* Theme Selector Buttons */}
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
-                  <Sun className="w-3.5 h-3.5 text-amber-500" />
-                  <span>ثيم ألوان التطبيق:</span>
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => updateThemeInstantly('financial-blue')}
-                    className={`p-3 rounded-xl border text-right transition cursor-pointer flex flex-col justify-between h-20 ${
-                      appTheme === 'financial-blue'
-                        ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-500/30'
-                        : 'bg-slate-50 border-slate-200'
-                    }`}
-                  >
-                    <div className="text-xs font-bold text-slate-900">الأزرق المالي</div>
-                    <div className="text-[9.5px] text-slate-500">افتراضي واحترافي</div>
-                  </button>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+                    <Sun className="w-4 h-4 text-amber-500" />
+                    <span>ثيم وألوان التطبيق (الداكن • الفاتح • الملكي • الفاخر • العالمي):</span>
+                  </label>
+                  <span className="text-[10px] font-bold text-slate-500">
+                    انقر لتطبيق المظهر فوراً
+                  </span>
+                </div>
 
-                  <button
-                    type="button"
-                    onClick={() => updateThemeInstantly('emerald-green')}
-                    className={`p-3 rounded-xl border text-right transition cursor-pointer flex flex-col justify-between h-20 ${
-                      appTheme === 'emerald-green'
-                        ? 'bg-emerald-50 border-emerald-600 ring-2 ring-emerald-500/30'
-                        : 'bg-slate-50 border-slate-200'
-                    }`}
-                  >
-                    <div className="text-xs font-bold text-slate-900">الأخضر الزمردي</div>
-                    <div className="text-[9.5px] text-slate-500">حيوية المبيعات</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => updateThemeInstantly('warm-amber')}
-                    className={`p-3 rounded-xl border text-right transition cursor-pointer flex flex-col justify-between h-20 ${
-                      appTheme === 'warm-amber'
-                        ? 'bg-amber-50 border-amber-600 ring-2 ring-amber-500/30'
-                        : 'bg-slate-50 border-slate-200'
-                    }`}
-                  >
-                    <div className="text-xs font-bold text-slate-900">البني الدافئ</div>
-                    <div className="text-[9.5px] text-slate-500">فخامة وذهب</div>
-                  </button>
-
+                {/* 1. Primary Dark & Light Mode Switcher */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {/* Dark Mode Button */}
                   <button
                     type="button"
                     onClick={() => updateThemeInstantly('dark-luxury')}
-                    className={`p-3 rounded-xl border text-right transition cursor-pointer flex flex-col justify-between h-20 ${
-                      appTheme === 'dark-luxury'
-                        ? 'bg-slate-900 border-amber-500 ring-2 ring-amber-500/30 text-white'
-                        : 'bg-slate-800 border-slate-700 text-slate-200'
+                    style={{ backgroundColor: '#060B14' }}
+                    className={`p-3.5 rounded-2xl border text-right transition-all cursor-pointer flex items-center justify-between ${
+                      appTheme !== 'light-clean'
+                        ? 'border-amber-400 ring-2 ring-amber-400/40 shadow-lg'
+                        : 'border-slate-700 hover:border-slate-500'
                     }`}
                   >
-                    <div className="text-xs font-bold text-amber-400">الداكن الفخم</div>
-                    <div className="text-[9.5px] text-slate-400">ليلي مريح</div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                        <Moon className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-black text-white flex items-center gap-1.5">
+                          <span>الوضع الداكن الفخم (Dark)</span>
+                        </div>
+                        <div className="text-[10px] text-slate-300 mt-0.5">
+                          مظهر ليلي فخم ومريح للعين (كحلي ملكي وذهبي)
+                        </div>
+                      </div>
+                    </div>
+                    <span
+                      className={`text-[9.5px] font-extrabold px-2.5 py-1 rounded-full shrink-0 ${
+                        appTheme === 'dark-luxury'
+                          ? 'bg-amber-400 text-slate-950'
+                          : 'bg-white/10 text-slate-300'
+                      }`}
+                    >
+                      {appTheme === 'dark-luxury' ? 'مُفعّل ✓' : 'داكن'}
+                    </span>
                   </button>
+
+                  {/* Light Mode Button */}
+                  <button
+                    type="button"
+                    onClick={() => updateThemeInstantly('light-clean')}
+                    style={{ backgroundColor: '#F8FAFC' }}
+                    className={`p-3.5 rounded-2xl border text-right transition-all cursor-pointer flex items-center justify-between ${
+                      appTheme === 'light-clean'
+                        ? 'border-blue-600 ring-2 ring-blue-500/30 shadow-lg'
+                        : 'border-slate-300 hover:border-blue-400'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-600 shrink-0">
+                        <Sun className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-black" style={{ color: '#0F172A' }}>
+                          الوضع الفاتح الرسمي (Light)
+                        </div>
+                        <div className="text-[10px] mt-0.5" style={{ color: '#475569' }}>
+                          مظهر نهاري ناصع وواضح ببطاقات بيضاء نقية
+                        </div>
+                      </div>
+                    </div>
+                    <span
+                      className={`text-[9.5px] font-extrabold px-2.5 py-1 rounded-full shrink-0 ${
+                        appTheme === 'light-clean'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {appTheme === 'light-clean' ? 'مُفعّل ✓' : 'فاتح'}
+                    </span>
+                  </button>
+                </div>
+
+                {/* 2. Exclusive Royal, Luxury & Global Collection */}
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[10px] font-bold text-slate-500 block px-1">
+                    الثيمات الملكية والفاخرة والعالمية الحصرية:
+                  </span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    {[
+                      {
+                        id: 'dark-luxury' as AppTheme,
+                        title: 'الداكن الفخم المطور',
+                        subtitle: 'كحلي ليلي عميق مع أزرق ملكي وذهبي (ERP Pro)',
+                        bgPreview: '#060B14',
+                        cardPreview: '#0C1322',
+                        accentPreview: '#2563EB',
+                        goldPreview: '#F59E0B',
+                        badge: 'الافتراضي الفخم'
+                      },
+                      {
+                        id: 'obsidian-midnight' as AppTheme,
+                        title: 'الليلي الكربوني الفائق',
+                        subtitle: 'أسود كربوني عميق عالي التباين للشاشات المكتبية',
+                        bgPreview: '#04070E',
+                        cardPreview: '#0A101D',
+                        accentPreview: '#3B82F6',
+                        goldPreview: '#10B981',
+                        badge: 'احترافي'
+                      },
+                      {
+                        id: 'royal-imperial' as AppTheme,
+                        title: 'الملكي الإمبراطوري الذهبي',
+                        subtitle: 'أرجواني ملكي داكن مع لمسات الذهب الفاخر',
+                        bgPreview: '#090714',
+                        cardPreview: '#1B1536',
+                        accentPreview: '#D97706',
+                        goldPreview: '#FBBF24',
+                        badge: 'ملكي'
+                      },
+                      {
+                        id: 'global-platinum' as AppTheme,
+                        title: 'العالمي البلاتيني',
+                        subtitle: 'تيتانيوم عالمي داكن مع سماوي سيان حديث',
+                        bgPreview: '#070C12',
+                        cardPreview: '#0E1621',
+                        accentPreview: '#0284C7',
+                        goldPreview: '#38BDF8',
+                        badge: 'عالمي'
+                      },
+                      {
+                        id: 'velvet-burgundy' as AppTheme,
+                        title: 'العنابي المخملي الفاخر',
+                        subtitle: 'عنابي ملكي عميق مع لمسات الياقوت والذهب',
+                        bgPreview: '#11060A',
+                        cardPreview: '#27101A',
+                        accentPreview: '#E11D48',
+                        goldPreview: '#FB7185',
+                        badge: 'فاخر'
+                      },
+                      {
+                        id: 'emerald-palace' as AppTheme,
+                        title: 'القصر الزمردي الملكي',
+                        subtitle: 'أخضر زمردي ليلي فاخر ومريح للعين',
+                        bgPreview: '#04100C',
+                        cardPreview: '#0F2920',
+                        accentPreview: '#059669',
+                        goldPreview: '#34D399',
+                        badge: 'زمردي'
+                      },
+                      {
+                        id: 'sapphire-crown' as AppTheme,
+                        title: 'التاج الياقوتي الأزرق',
+                        subtitle: 'ياقوت أزرق ملكي عميق بلمسات نيلي وسماوي',
+                        bgPreview: '#05091A',
+                        cardPreview: '#111C3D',
+                        accentPreview: '#4F46E5',
+                        goldPreview: '#818CF8',
+                        badge: 'ياقوتي'
+                      },
+                      {
+                        id: 'titanium-bronze' as AppTheme,
+                        title: 'التيتانيوم البرونزي الفاخر',
+                        subtitle: 'معدني دافئ مع لمسات البرونز والنحاس الملكي',
+                        bgPreview: '#0E0B08',
+                        cardPreview: '#221B14',
+                        accentPreview: '#EA580C',
+                        goldPreview: '#FB923C',
+                        badge: 'برونزي'
+                      }
+                    ].map(themeItem => {
+                      const isSelected = appTheme === themeItem.id;
+                      return (
+                        <button
+                          key={themeItem.id}
+                          type="button"
+                          onClick={() => updateThemeInstantly(themeItem.id)}
+                          style={{ backgroundColor: themeItem.bgPreview }}
+                          className={`p-3 rounded-2xl border text-right transition-all cursor-pointer flex flex-col justify-between min-h-[100px] relative overflow-hidden ${
+                            isSelected
+                              ? 'border-amber-400 ring-2 ring-amber-400/40 shadow-lg scale-[1.01]'
+                              : 'border-slate-700/80 hover:border-slate-500'
+                          }`}
+                        >
+                          {/* Top Row: Swatches & Badge */}
+                          <div className="flex items-center justify-between w-full mb-2">
+                            <div className="flex items-center gap-1">
+                              <span
+                                className="w-3.5 h-3.5 rounded-full border border-white/20"
+                                style={{ backgroundColor: themeItem.accentPreview }}
+                              />
+                              <span
+                                className="w-3.5 h-3.5 rounded-full border border-white/20"
+                                style={{ backgroundColor: themeItem.goldPreview }}
+                              />
+                              <span
+                                className="w-3.5 h-3.5 rounded-full border border-white/20"
+                                style={{ backgroundColor: themeItem.cardPreview }}
+                              />
+                            </div>
+                            <span
+                              className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${
+                                isSelected
+                                  ? 'bg-amber-400 text-slate-950'
+                                  : 'bg-white/10 text-slate-300'
+                              }`}
+                            >
+                              {isSelected ? 'مُفعّل ✓' : themeItem.badge}
+                            </span>
+                          </div>
+
+                          {/* Title & Subtitle */}
+                          <div>
+                            <div className="text-xs font-black text-white">{themeItem.title}</div>
+                            <div className="text-[9.5px] text-slate-300/80 mt-0.5 leading-snug">
+                              {themeItem.subtitle}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 

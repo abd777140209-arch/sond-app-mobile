@@ -113,6 +113,21 @@ export default function App() {
       parsed.deviceMode = savedLayout;
     }
 
+    const validThemes = [
+      'dark-luxury',
+      'light-clean',
+      'obsidian-midnight',
+      'royal-imperial',
+      'global-platinum',
+      'velvet-burgundy',
+      'emerald-palace',
+      'sapphire-crown',
+      'titanium-bronze'
+    ];
+    if (!parsed.appTheme || !validThemes.includes(parsed.appTheme)) {
+      parsed.appTheme = 'dark-luxury';
+    }
+
     return parsed;
   });
 
@@ -307,6 +322,8 @@ export default function App() {
   });
 
   const [activeInvoice, setActiveInvoice] = useState<Invoice | null>(null);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState<boolean>(false);
+  const [showHeaderLogoutConfirm, setShowHeaderLogoutConfirm] = useState<boolean>(false);
 
   // 2. Helper Handlers
   const addAuditLog = (actionType: string, actionLabel: string, details?: string) => {
@@ -642,6 +659,29 @@ export default function App() {
       unsubPayroll();
     };
   }, [license.licenseKey, isActivated]);
+
+  // 🎨 Synchronize HTML root classes with active theme, card shape, density, and device mode
+  useEffect(() => {
+    const validThemes = [
+      'dark-luxury',
+      'light-clean',
+      'obsidian-midnight',
+      'royal-imperial',
+      'global-platinum',
+      'velvet-burgundy',
+      'emerald-palace',
+      'sapphire-crown',
+      'titanium-bronze'
+    ];
+    const activeTheme = settings?.appTheme && validThemes.includes(settings.appTheme)
+      ? settings.appTheme
+      : 'dark-luxury';
+    const activeShape = settings?.cardShape || 'soft';
+    const activeDensity = settings?.density || 'comfortable';
+    const activeMode = (settings?.deviceMode || 'mobile') === 'desktop' ? 'mode-desktop' : 'mode-mobile';
+    const isDark = activeTheme !== 'light-clean';
+    document.documentElement.className = `theme-${activeTheme} shape-${activeShape} density-${activeDensity} ${activeMode}${isDark ? ' dark' : ''}`;
+  }, [settings?.appTheme, settings?.cardShape, settings?.density, settings?.deviceMode]);
 
   // 🔄 WhatsApp-Style Automatic Backup Scheduler & Exit Backup
   useEffect(() => {
@@ -1900,14 +1940,12 @@ export default function App() {
     );
   }
 
-  // 🎯 القائمة الوحيدة المتبقية (الرئيسية | المبيعات | العملاء | المخزن | التقارير)
-  const androidNavItems = [
-    { id: 'dashboard', label: 'الرئيسية', icon: Home },
-    { id: 'pos', label: 'المبيعات', icon: ShoppingCart },
-    { id: 'customers', label: 'العملاء', icon: Users },
-    { id: 'inventory', label: 'المخزن', icon: Package },
-    { id: 'reports', label: 'التقارير', icon: BarChart3 },
-  ];
+  const handleToggleDeviceMode = () => {
+    soundManager.playScanBeep();
+    const nextMode = (settings.deviceMode || 'mobile') === 'desktop' ? 'mobile' : 'desktop';
+    const updatedSettings: SystemSettings = { ...settings, deviceMode: nextMode };
+    handleSaveSettings(updatedSettings);
+  };
 
   const getScreenTitle = () => {
     switch (activeTab) {
@@ -1916,84 +1954,123 @@ export default function App() {
       case 'inventory': return 'إدارة المخزن والمستودع';
       case 'reports': return 'الأرباح والتقارير المالية';
       case 'stock_audit': return 'جرد وحصر المنشأة';
-      case 'transactions': return 'سجل القيود والمصاريف';
+      case 'transactions': return 'اليومية والسندات والصندوق';
       case 'maintenance': return 'قسم الصيانة والورشة';
+      case 'device_receipt': return 'كارت استلام جهاز صيانة';
+      case 'diagnostic': return 'التشخيص والمخزون الذكي';
+      case 'phone_ledger': return 'دفتر العملات والحسابات';
+      case 'assistant': return 'المساعد الذكي (سند AI)';
       case 'employees': return 'إدارة العمال والرواتب';
-      case 'users': return 'نظام الصلاحيات وسجل الأنشطة (Audit)';
-      case 'printer_settings': return 'مركز ضبط الطابعة وتخصيص الفواتير';
-      case 'settings': return 'إعدادات النظام والترخيص';
+      case 'users': return 'المستخدمين والصلاحيات والرقابة';
+      case 'printer_settings': return 'ضبط الطابعة وتخصيص الفواتير';
+      case 'settings': return 'إعدادات النظام والنسخ الاحتياطي';
       default: return settings.storeName || license.customerName || 'نظام سند المحاسبي';
     }
   };
 
   const isDesktopMode = (settings.deviceMode || 'mobile') === 'desktop';
-  const themeClass = `theme-${settings.appTheme || 'financial-blue'}`;
+  const validThemes = [
+    'dark-luxury',
+    'light-clean',
+    'obsidian-midnight',
+    'royal-imperial',
+    'global-platinum',
+    'velvet-burgundy',
+    'emerald-palace',
+    'sapphire-crown',
+    'titanium-bronze'
+  ];
+  const resolvedTheme = settings.appTheme && validThemes.includes(settings.appTheme)
+    ? settings.appTheme
+    : 'dark-luxury';
+  const themeClass = `theme-${resolvedTheme}`;
   const shapeClass = `shape-${settings.cardShape || 'rounded'}`;
   const densityClass = `density-${settings.density || 'comfortable'}`;
 
   return (
     <div className={`flex flex-col h-screen w-full bg-slate-100 text-slate-900 select-none overflow-hidden font-sans dir-rtl ${isDesktopMode ? 'mode-desktop' : 'mode-mobile'} ${themeClass} ${shapeClass} ${densityClass}`} dir="rtl">
       
-      {/* 1. TOP BAR */}
-      <header className="h-14 bg-white border-b border-slate-200 px-4 flex items-center justify-between sticky top-0 z-30 shadow-xs shrink-0">
-        <div className="flex items-center gap-3">
+      {/* 1. UNIFIED TOP BAR */}
+      <header className="h-14 bg-white border-b border-slate-200 px-3 sm:px-4 flex items-center justify-between sticky top-0 z-30 shadow-2xs shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
           {activeTab !== 'dashboard' ? (
             <button 
               onClick={() => {
                 soundManager.playScanBeep();
                 setActiveTab('dashboard');
               }}
-              className="p-2 text-slate-700 hover:bg-slate-100 active:bg-slate-200 rounded-full transition-colors"
+              className="p-2 text-slate-700 hover:bg-slate-100 active:bg-slate-200 rounded-xl transition-colors cursor-pointer shrink-0"
+              title="العودة للرئيسية"
             >
               <ArrowRight className="w-5 h-5" />
             </button>
           ) : (
             <button 
-              onClick={() => handleTabSelect('settings')}
-              className="p-2 text-slate-700 hover:bg-slate-100 active:bg-slate-200 rounded-full transition-colors"
+              onClick={() => {
+                soundManager.playScanBeep();
+                if (isDesktopMode) {
+                  handleTabSelect('settings');
+                } else {
+                  setIsMobileDrawerOpen(true);
+                }
+              }}
+              className="p-2 text-slate-700 hover:bg-slate-100 active:bg-slate-200 rounded-xl transition-colors cursor-pointer shrink-0"
+              title="قائمة جميع الأقسام"
             >
               <Menu className="w-5 h-5" />
             </button>
           )}
 
-          <h1 className="text-base font-bold text-slate-800 tracking-wide truncate max-w-[200px] sm:max-w-none">
+          <h1 className="text-sm sm:text-base font-black text-slate-800 tracking-wide truncate">
             {getScreenTitle()}
           </h1>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Calculator Button replacing download button in header */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Quick Device Layout Mode Switcher (Mobile <-> Desktop) */}
+          <button
+            onClick={handleToggleDeviceMode}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs font-bold transition cursor-pointer"
+            title={isDesktopMode ? 'التبديل لواجهة الجوال' : 'التبديل لواجهة الكمبيوتر'}
+          >
+            <span>{isDesktopMode ? '📱' : '💻'}</span>
+            <span className="hidden md:inline font-bold">
+              {isDesktopMode ? 'واجهة الجوال' : 'واجهة الكمبيوتر'}
+            </span>
+          </button>
+
+          {/* Calculator Button */}
           <button
             onClick={() => {
               soundManager.playScanBeep();
               setShowCalculator(true);
             }}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-200 text-xs font-bold transition cursor-pointer shadow-2xs active:scale-95"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-200 text-xs font-bold transition cursor-pointer"
             title="فتح الآلة الحاسبة السريعة"
           >
             <Calculator className="w-3.5 h-3.5 text-sky-600" />
-            <span className="hidden xs:inline font-bold">الحاسبة</span>
+            <span className="hidden sm:inline font-bold">الحاسبة</span>
           </button>
 
           {/* Developer Modal Button */}
           <button
             onClick={() => setShowDeveloperModal(true)}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold transition cursor-pointer shadow-2xs"
-            title="معلومات المطور ولوحة التحكم والترخيص (/admin)"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold transition cursor-pointer"
+            title="معلومات المطور والترخيص"
           >
             <span>👨‍💻</span>
-            <span className="hidden sm:inline font-bold">المطور</span>
+            <span className="hidden lg:inline font-bold">المطور</span>
           </button>
 
           {/* Active User Badge & Switcher Trigger */}
           <button
             onClick={() => handleTabSelect('users')}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 text-purple-900 border border-purple-200 text-xs font-bold hover:bg-purple-100 transition cursor-pointer shadow-2xs"
-            title="انقر لإدارة المستخدمين أو التبديل بين الحسابات"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-purple-50 text-purple-900 border border-purple-200 text-xs font-bold hover:bg-purple-100 transition cursor-pointer"
+            title="إدارة المستخدمين أو التبديل بين الحسابات"
           >
             <Shield className="w-3.5 h-3.5 text-purple-600" />
             <span className="hidden sm:inline font-bold">{currentUser?.name}</span>
-            <span className="text-[10px] px-1.5 py-0.5 bg-purple-200 text-purple-950 rounded-md font-mono">
+            <span className="text-[10px] px-1.5 py-0.5 bg-purple-200 text-purple-950 rounded-md font-bold">
               {currentUser?.role === 'admin' ? 'مدير' :
                currentUser?.role === 'cashier' ? 'كاشير' :
                currentUser?.role === 'technician' ? 'فني' : 'محاسب'}
@@ -2007,9 +2084,10 @@ export default function App() {
                 else setIsPrivacyMode(false);
               } else setIsPrivacyMode(true);
             }}
-            className="p-2 text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+            className="p-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+            title={isPrivacyMode ? 'إظهار المبالغ المالية' : 'إخفاء المبالغ المالية'}
           >
-            {isPrivacyMode ? <EyeOff className="w-5 h-5 text-amber-600" /> : <Eye className="w-5 h-5" />}
+            {isPrivacyMode ? <EyeOff className="w-4 h-4 text-amber-600" /> : <Eye className="w-4 h-4" />}
           </button>
 
           <button
@@ -2017,47 +2095,68 @@ export default function App() {
               if (isCashierMode) setShowPinCheckModal(true);
               else setIsCashierMode(true);
             }}
-            className="p-2 text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+            className="p-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+            title={isCashierMode ? 'وضع الكاشير مفعل (انقر لفتح القفل)' : 'تفعيل وضع الكاشير'}
           >
-            {isCashierMode ? <Lock className="w-5 h-5 text-amber-600" /> : <Unlock className="w-5 h-5 text-emerald-600" />}
+            {isCashierMode ? <Lock className="w-4 h-4 text-amber-600" /> : <Unlock className="w-4 h-4 text-emerald-600" />}
           </button>
 
-          <button
-            onClick={() => {
-              if (confirm('⚠️ هل أنت متأكد من تسجيل الخروج؟')) handleLogout();
-            }}
-            className="p-2 text-rose-600 hover:bg-rose-50 rounded-full transition-colors"
-          >
-            <LogOut className="w-5 h-5" />
-          </button>
+          {!showHeaderLogoutConfirm ? (
+            <button
+              onClick={() => setShowHeaderLogoutConfirm(true)}
+              className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+              title="تسجيل الخروج"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          ) : (
+            <div className="flex items-center gap-1 bg-rose-50 border border-rose-200 px-2 py-1 rounded-xl">
+              <button
+                onClick={() => {
+                  setShowHeaderLogoutConfirm(false);
+                  handleLogout();
+                }}
+                className="px-2 py-0.5 bg-rose-600 text-white rounded-lg text-[10px] font-bold cursor-pointer"
+              >
+                خروج
+              </button>
+              <button
+                onClick={() => setShowHeaderLogoutConfirm(false)}
+                className="px-1.5 py-0.5 text-slate-600 text-[10px] font-bold cursor-pointer"
+              >
+                إلغاء
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
       {/* 2. MAIN WORKSPACE WRAPPER */}
       <div className="flex flex-1 overflow-hidden relative">
-        {/* Desktop Sidebar Navigation Rail */}
-        {isDesktopMode && (
-          <Navigation
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            handleTabSelect={handleTabSelect}
-            settings={settings}
-            products={products}
-            maintenanceOrders={maintenanceOrders}
-            isCashierMode={isCashierMode}
-            setIsCashierMode={setIsCashierMode}
-            isPrivacyMode={isPrivacyMode}
-            setIsPrivacyMode={setIsPrivacyMode}
-            setShowPinCheckModal={setShowPinCheckModal}
-            setShowPrivacyPinModal={setShowPrivacyPinModal}
-            handleLogout={handleLogout}
-            currentUser={currentUser}
-            users={users}
-            setCurrentUser={setCurrentUser}
-          />
-        )}
+        {/* Unified Navigation (Desktop Categorized Sidebar OR Mobile 5-Tab Bottom Bar + Drawer) */}
+        <Navigation
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          handleTabSelect={handleTabSelect}
+          settings={settings}
+          products={products}
+          maintenanceOrders={maintenanceOrders}
+          isCashierMode={isCashierMode}
+          setIsCashierMode={setIsCashierMode}
+          isPrivacyMode={isPrivacyMode}
+          setIsPrivacyMode={setIsPrivacyMode}
+          setShowPinCheckModal={setShowPinCheckModal}
+          setShowPrivacyPinModal={setShowPrivacyPinModal}
+          handleLogout={handleLogout}
+          currentUser={currentUser}
+          users={users}
+          setCurrentUser={setCurrentUser}
+          onToggleDeviceMode={handleToggleDeviceMode}
+          externalMenuOpen={isMobileDrawerOpen}
+          setExternalMenuOpen={setIsMobileDrawerOpen}
+        />
 
-        <main className="flex-1 overflow-y-auto p-3 sm:p-4 pb-16 bg-slate-50 relative screen-content-wrapper">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 pb-20 bg-slate-50 relative screen-content-wrapper">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={activeTab}
@@ -2210,11 +2309,11 @@ export default function App() {
               <SanadDiagnosticScreen
                 products={products}
                 currency={settings.currency}
-                onNavigateToPOSWithItems={(items) => {
+                onNavigateToPOSWithItems={() => {
                   setActiveTab('pos');
                   soundManager.playSuccessChime();
                 }}
-                onNavigateToMaintenanceWithProblem={(problem, notes) => {
+                onNavigateToMaintenanceWithProblem={() => {
                   setActiveTab('maintenance');
                   soundManager.playSuccessChime();
                 }}
@@ -2226,7 +2325,7 @@ export default function App() {
                 customers={customers}
                 transactions={transactions}
                 settings={settings}
-                onSelectCustomerStatement={(customer) => {
+                onSelectCustomerStatement={() => {
                   setActiveTab('customers');
                   soundManager.playSuccessChime();
                 }}
@@ -2240,6 +2339,14 @@ export default function App() {
                 settings={settings}
                 onAddMaintenanceOrder={handleAddMaintenanceOrder}
               />
+            )}
+
+            {activeTab === 'assistant' && (
+              <div className="max-w-2xl mx-auto h-[78vh] bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <SanadVoiceAssistant
+                  onClose={() => setActiveTab('dashboard')}
+                />
+              </div>
             )}
 
             {activeTab === 'employees' && (
@@ -2299,40 +2406,6 @@ export default function App() {
         </AnimatePresence>
       </main>
     </div>
-
-      {/* 3. COMPACT BOTTOM NAVBAR (For Mobile/Responsive Mode) */}
-      {!isDesktopMode && (
-        <nav className="h-12 bg-white border-t border-slate-200 fixed bottom-0 left-0 right-0 z-30 flex items-center justify-around px-1 shadow-sm">
-          {androidNavItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => handleTabSelect(item.id)}
-                className="flex flex-col items-center justify-center flex-1 h-full py-0.5 group cursor-pointer"
-              >
-                <div
-                  className={`px-3 py-0.5 rounded-full transition-all duration-200 ${
-                    isActive
-                      ? 'bg-blue-100 text-blue-700 font-bold'
-                      : 'text-slate-500 group-active:scale-90'
-                  }`}
-                >
-                  <Icon className={`w-4 h-4 ${isActive ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
-                </div>
-                <span
-                  className={`text-[10px] mt-0.5 transition-colors ${
-                    isActive ? 'text-blue-700 font-bold' : 'text-slate-500'
-                  }`}
-                >
-                  {item.label}
-                </span>
-              </button>
-            );
-          })}
-        </nav>
-      )}
 
       {/* Modals & Tools */}
       {activeInvoice && (

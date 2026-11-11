@@ -6,16 +6,148 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+/* ========================================================
+   1. MASTER THEME PALETTES (8 NEW LUXURY, ROYAL & GLOBAL THEMES)
+   ======================================================== */
+
+/* Default & 1. الداكن الفخم المطور (Midnight Obsidian ERP Pro) */
+:root,
+.theme-dark-luxury {
+  --t-canvas: #060B14;
+  --t-surface: #0C1322;
+  --t-elevated: #131D31;
+  --t-table-head: #162238;
+  --t-border: #1E2D47;
+  --t-text: #F8FAFC;
+  --t-muted: #94A3B8;
+  --t-accent: #2563EB;
+  --t-accent-hover: #1D4ED8;
+  --t-accent-text: #60A5FA;
+}
+
+/* 2. الليلي الكربوني الفائق (Obsidian Midnight Pro) */
+.theme-obsidian-midnight {
+  --t-canvas: #04070E;
+  --t-surface: #0A101D;
+  --t-elevated: #111A2E;
+  --t-table-head: #152038;
+  --t-border: #1D2B45;
+  --t-text: #FFFFFF;
+  --t-muted: #94A3B8;
+  --t-accent: #3B82F6;
+  --t-accent-hover: #2563EB;
+  --t-accent-text: #60A5FA;
+}
+
+/* 3. الملكي الإمبراطوري الذهبي (Royal Imperial Gold & Velvet) */
+.theme-royal-imperial {
+  --t-canvas: #090714;
+  --t-surface: #120E24;
+  --t-elevated: #1B1536;
+  --t-table-head: #221B44;
+  --t-border: #31275E;
+  --t-text: #FDFBF7;
+  --t-muted: #A79EC7;
+  --t-accent: #D97706;
+  --t-accent-hover: #B45309;
+  --t-accent-text: #FBBF24;
+}
+
+/* 4. العالمي البلاتيني (Global Executive Titanium & Cyan) */
+.theme-global-platinum {
+  --t-canvas: #070C12;
+  --t-surface: #0E1621;
+  --t-elevated: #152130;
+  --t-table-head: #1A283B;
+  --t-border: #243750;
+  --t-text: #F1F5F9;
+  --t-muted: #94A3B8;
+  --t-accent: #0284C7;
+  --t-accent-hover: #0369A1;
+  --t-accent-text: #38BDF8;
+}
+
+/* 5. العنابي المخملي الفاخر (Velvet Burgundy & Champagne) */
+.theme-velvet-burgundy {
+  --t-canvas: #11060A;
+  --t-surface: #1B0B12;
+  --t-elevated: #27101A;
+  --t-table-head: #311421;
+  --t-border: #471D2F;
+  --t-text: #FFF5F7;
+  --t-muted: #C49BA8;
+  --t-accent: #E11D48;
+  --t-accent-hover: #BE123C;
+  --t-accent-text: #FB7185;
+}
+
+/* 6. القصر الزمردي الملكي (Royal Emerald Palace & Gold) */
+.theme-emerald-palace {
+  --t-canvas: #04100C;
+  --t-surface: #091B15;
+  --t-elevated: #0F2920;
+  --t-table-head: #14352A;
+  --t-border: #1D4A3B;
+  --t-text: #ECFDF5;
+  --t-muted: #86B8A7;
+  --t-accent: #059669;
+  --t-accent-hover: #047857;
+  --t-accent-text: #34D399;
+}
+
+/* 7. التاج الياقوتي الأزرق (Royal Sapphire Crown) */
+.theme-sapphire-crown {
+  --t-canvas: #05091A;
+  --t-surface: #0B122C;
+  --t-elevated: #121D42;
+  --t-table-head: #182654;
+  --t-border: #233670;
+  --t-text: #F8FAFC;
+  --t-muted: #93A8D6;
+  --t-accent: #4F46E5;
+  --t-accent-hover: #4338CA;
+  --t-accent-text: #818CF8;
+}
+
+/* 8. التيتانيوم البرونزي الفاخر (Executive Titanium & Bronze) */
+.theme-titanium-bronze {
+  --t-canvas: #0C0A09;
+  --t-surface: #171412;
+  --t-elevated: #221E1B;
+  --t-table-head: #2C2623;
+  --t-border: #3D3530;
+  --t-text: #FAFAF9;
+  --t-muted: #A8A29E;
+  --t-accent: #EA580C;
+  --t-accent-hover: #C2410C;
+  --t-accent-text: #FB923C;
+}
+
+/* 9. الوضع الفاتح الرسمي النقي (Clean Daylight ERP Mode) */
+.theme-light-clean {
+  --t-canvas: #F1F5F9;
+  --t-surface: #FFFFFF;
+  --t-elevated: #F8FAFC;
+  --t-table-head: #E2E8F0;
+  --t-border: #CBD5E1;
+  --t-text: #0F172A;
+  --t-muted: #475569;
+  --t-accent: #2563EB;
+  --t-accent-hover: #1D4ED8;
+  --t-accent-text: #1D4ED8;
+}
+
+/* ========================================================
+   2. GLOBAL SURFACE & TYPOGRAPHY ENFORCEMENT (DARK & LIGHT)
+   ======================================================== */
+
 body, html, #root {
   margin: 0;
   padding: 0;
   min-height: 100vh;
-  background-color: #f8fafc;
-}
-
-body {
+  background-color: var(--t-canvas) !important;
+  color: var(--t-text) !important;
   font-family: var(--font-sans);
-  color: #0f172a;
   direction: rtl;
   overflow-x: hidden;
 }
@@ -27,129 +159,264 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #0F1722;
+  background: var(--t-canvas);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #C5A862;
+  background: var(--t-border);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #9F8342;
+  background: var(--t-accent);
 }
 
-/* Print utility styles */
-@media print {
-  .no-print {
-    display: none !important;
-  }
-  .print-area {
-    display: block !important;
-    width: 100% !important;
-    position: absolute;
-    left: 0;
-    top: 0;
-    background: white !important;
-    color: black !important;
-  }
+/* Main workspace & background containers */
+main.screen-content-wrapper,
+.bg-slate-100,
+.bg-slate-200,
+.bg-gray-50,
+.bg-gray-100 {
+  background-color: var(--t-canvas) !important;
+  color: var(--t-text) !important;
 }
 
-/* ========================================================
-   THEMES & LAYOUTS CUSTOMIZATION STYLES
-   ======================================================== */
-
-/* 1. Dark Luxury Theme */
-.theme-dark-luxury {
-  background-color: #0B141F !important;
-  color: #F8FAFC !important;
+/* Cards, Headers, Sidebars, Modals & Panels */
+header,
+aside#desktop_navigation_rail,
+nav#mobile_bottom_nav,
+div.bg-white,
+section.bg-white,
+aside.bg-white,
+.bg-white,
+.bg-white\/95,
+.bg-white\/90,
+.bg-white\/80 {
+  background-color: var(--t-surface) !important;
+  border-color: var(--t-border) !important;
+  color: var(--t-text) !important;
 }
 
-.theme-dark-luxury header#desktop_topbar,
-.theme-dark-luxury aside#desktop_navigation_rail,
-.theme-dark-luxury div.bg-white,
-.theme-dark-luxury section.bg-white,
-.theme-dark-luxury aside.bg-white {
-  background-color: #0E1825 !important;
-  border-color: #1E293B !important;
-  color: #F8FAFC !important;
+/* Sub-cards, Elevated rows & Filter bars */
+.bg-slate-50,
+.bg-slate-50\/80,
+.bg-slate-50\/60,
+.bg-slate-50\/50,
+.from-sky-50,
+.via-blue-50\/50,
+.to-indigo-50\/30 {
+  background-color: var(--t-elevated) !important;
+  background-image: none !important;
+  border-color: var(--t-border) !important;
+  color: var(--t-text) !important;
 }
 
-.theme-dark-luxury h1,
-.theme-dark-luxury h2,
-.theme-dark-luxury h3,
-.theme-dark-luxury h4,
-.theme-dark-luxury .text-slate-900,
-.theme-dark-luxury .text-slate-800,
-.theme-dark-luxury .text-slate-700 {
-  color: #F1F5F9 !important;
+/* Table Headers & Rows */
+thead tr,
+thead,
+tr.bg-slate-100,
+tr.bg-rose-50\/80 {
+  background-color: var(--t-table-head) !important;
+  border-color: var(--t-border) !important;
+  color: var(--t-text) !important;
 }
 
-.theme-dark-luxury .text-slate-500,
-.theme-dark-luxury .text-slate-600 {
-  color: #94A3B8 !important;
+tbody tr:hover,
+.hover\:bg-slate-50:hover,
+.hover\:bg-slate-50\/80:hover,
+.hover\:bg-slate-100:hover,
+.hover\:bg-slate-200:hover {
+  background-color: var(--t-elevated) !important;
 }
 
-.theme-dark-luxury .bg-slate-50 {
-  background-color: #121E2E !important;
-  color: #F1F5F9 !important;
+/* All Primary Headings & Text Classes -> Adaptive Theme Text */
+h1, h2, h3, h4, h5, h6,
+.text-slate-950,
+.text-slate-900,
+.text-slate-800,
+.text-slate-700,
+.text-gray-900,
+.text-gray-800,
+.text-blue-950,
+.text-blue-900,
+.text-sky-950,
+.text-sky-900,
+.text-emerald-950,
+.text-emerald-900,
+.text-amber-950,
+.text-amber-900,
+.text-purple-950,
+.text-purple-900,
+.text-rose-950,
+.text-rose-900,
+.text-teal-950,
+.text-indigo-950,
+.text-orange-950 {
+  color: var(--t-text) !important;
 }
 
-.theme-dark-luxury .border-slate-200 {
-  border-color: #1E293B !important;
+/* Secondary / Muted Text */
+.text-slate-600,
+.text-slate-500,
+.text-slate-400,
+.text-gray-500,
+.text-gray-400 {
+  color: var(--t-muted) !important;
 }
 
-.theme-dark-luxury input:not([type="checkbox"]),
-.theme-dark-luxury select,
-.theme-dark-luxury textarea {
-  background-color: #121E2E !important;
-  border-color: #334155 !important;
+/* All Borders & Dividers */
+.border-slate-200,
+.border-slate-100,
+.border-slate-300,
+.border-gray-200,
+.border-sky-100,
+.border-sky-200,
+.divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+.divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--t-border) !important;
+}
+
+/* Active Sidebar & Navigation Pill */
+aside#desktop_navigation_rail button.border-r-4 {
+  background-color: var(--t-accent) !important;
+  color: #FFFFFF !important;
+  border-right-color: #FFFFFF !important;
+  box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.25) !important;
+}
+
+aside#desktop_navigation_rail button.border-r-4 span {
   color: #FFFFFF !important;
 }
 
-/* 2. Emerald Green Theme */
-.theme-emerald-green .text-blue-600 {
-  color: #059669 !important;
-}
-.theme-emerald-green .bg-blue-600 {
-  background-color: #059669 !important;
-}
-.theme-emerald-green .bg-blue-50 {
-  background-color: #ECFDF5 !important;
-}
-.theme-emerald-green .border-blue-600 {
-  border-color: #059669 !important;
+/* Form Inputs, Selects & Textareas */
+html.dark input:not([type="checkbox"]):not([type="radio"]),
+html.dark select,
+html.dark textarea {
+  background-color: var(--t-canvas) !important;
+  border-color: var(--t-border) !important;
+  color: #FFFFFF !important;
 }
 
-/* 3. Warm Amber / Gold Theme */
-.theme-warm-amber .text-blue-600 {
-  color: #D97706 !important;
-}
-.theme-warm-amber .bg-blue-600 {
-  background-color: #D97706 !important;
-}
-.theme-warm-amber .bg-blue-50 {
-  background-color: #FFFBEB !important;
-}
-.theme-warm-amber .border-blue-600 {
-  border-color: #D97706 !important;
+html:not(.dark) input:not([type="checkbox"]):not([type="radio"]),
+html:not(.dark) select,
+html:not(.dark) textarea {
+  background-color: #FFFFFF !important;
+  border-color: #CBD5E1 !important;
+  color: #0F172A !important;
 }
 
-/* 4. Card Shapes: Sharp */
+input::placeholder,
+textarea::placeholder {
+  color: var(--t-muted) !important;
+  opacity: 0.75;
+}
+
+/* Soft Tinted Badges & Alert Boxes in Dark Themes */
+html.dark .bg-blue-50,
+html.dark .bg-blue-50\/90,
+html.dark .bg-blue-50\/70,
+html.dark .bg-blue-50\/50,
+html.dark .bg-blue-100,
+html.dark .bg-sky-50,
+html.dark .bg-sky-50\/90,
+html.dark .bg-sky-100,
+html.dark .bg-indigo-50,
+html.dark .bg-indigo-50\/90 {
+  background-color: rgba(37, 99, 235, 0.16) !important;
+  border-color: rgba(59, 130, 246, 0.35) !important;
+  color: #93C5FD !important;
+}
+
+html.dark .bg-emerald-50,
+html.dark .bg-emerald-50\/90,
+html.dark .bg-emerald-100,
+html.dark .bg-teal-50,
+html.dark .bg-teal-50\/90 {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+  color: #6EE7B7 !important;
+}
+
+html.dark .bg-amber-50,
+html.dark .bg-amber-50\/90,
+html.dark .bg-amber-50\/80,
+html.dark .bg-amber-50\/60,
+html.dark .bg-amber-100,
+html.dark .bg-orange-50,
+html.dark .bg-orange-50\/90 {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+  color: #FCD34D !important;
+}
+
+html.dark .bg-rose-50,
+html.dark .bg-rose-50\/90,
+html.dark .bg-rose-50\/80,
+html.dark .bg-rose-100 {
+  background-color: rgba(244, 63, 94, 0.16) !important;
+  border-color: rgba(244, 63, 94, 0.35) !important;
+  color: #FDA4AF !important;
+}
+
+html.dark .bg-purple-50,
+html.dark .bg-purple-50\/90,
+html.dark .bg-purple-100,
+html.dark .bg-purple-200 {
+  background-color: rgba(168, 85, 247, 0.18) !important;
+  border-color: rgba(168, 85, 247, 0.35) !important;
+  color: #D8B4FE !important;
+}
+
+/* Semantic Financial Accents in Dark Themes */
+html.dark .text-emerald-600,
+html.dark .text-emerald-700,
+html.dark .text-emerald-800 {
+  color: #10B981 !important;
+}
+
+html.dark .text-rose-600,
+html.dark .text-rose-700,
+html.dark .text-rose-800 {
+  color: #F43F5E !important;
+}
+
+html.dark .text-amber-600,
+html.dark .text-amber-700,
+html.dark .text-amber-800 {
+  color: #F59E0B !important;
+}
+
+html.dark .text-blue-600,
+html.dark .text-blue-700,
+html.dark .text-blue-800,
+html.dark .text-sky-600,
+html.dark .text-sky-700,
+html.dark .text-sky-800 {
+  color: var(--t-accent-text) !important;
+}
+
+html.dark .text-purple-600,
+html.dark .text-purple-700,
+html.dark .text-purple-800 {
+  color: #C084FC !important;
+}
+
+/* ========================================================
+   3. CARD SHAPES & DISPLAY DENSITY
+   ======================================================== */
+
 .shape-sharp .rounded-2xl,
 .shape-sharp .rounded-xl,
 .shape-sharp .rounded-lg {
   border-radius: 2px !important;
 }
 
-/* 5. Card Shapes: Glassmorphism */
 .shape-glass .rounded-2xl,
 .shape-glass .rounded-xl {
   backdrop-filter: blur(12px) !important;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25) !important;
 }
 
-/* 6. Display Density: Compact */
 .density-compact .p-5 {
   padding: 0.85rem !important;
 }
@@ -177,10 +444,9 @@ body {
 }
 
 /* ========================================================
-   SYSTEM INTERFACE MODE STYLES (Desktop Mode vs Mobile Mode)
+   4. SYSTEM INTERFACE MODE STYLES
    ======================================================== */
 
-/* 1. Desktop Mode (واجهة سطح المكتب) */
 html.mode-desktop,
 body.mode-desktop,
 .mode-desktop {
@@ -197,7 +463,6 @@ body.mode-desktop,
   padding: 1.25rem !important;
 }
 
-/* 2. Mobile / Tablet Responsive Mode (واجهة الجوال والتابلت) */
 html.mode-mobile,
 body.mode-mobile,
 .mode-mobile {
@@ -205,9 +470,23 @@ body.mode-mobile,
 }
 
 /* ========================================================
-   DEDICATED RESET & ISOLATION FOR INVOICES, RECEIPTS & EXPORTS
-   (Ensures 100% full-width, non-truncated export in all modes)
+   5. PRINT & INVOICE EXPORT ISOLATION
    ======================================================== */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-area {
+    display: block !important;
+    width: 100% !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    background: white !important;
+    color: black !important;
+  }
+}
+
 #invoice-printable-card,
 .printable-invoice-card,
 .pdf-export-container,
@@ -231,18 +510,3 @@ body.mode-mobile,
   overflow: visible !important;
   margin: 0 !important;
 }
-
-#invoice-printable-card th,
-#invoice-printable-card td,
-.printable-invoice-card th,
-.printable-invoice-card td,
-.pdf-export-container th,
-.pdf-export-container td,
-[data-export-container] th,
-[data-export-container] td,
-[data-receipt-card] th,
-[data-receipt-card] td {
-  box-sizing: border-box !important;
-}
-
-

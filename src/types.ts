@@ -136,7 +136,16 @@ export interface Transaction {
   notes?: string;
 }
 
-export type AppTheme = 'financial-blue' | 'emerald-green' | 'warm-amber' | 'dark-luxury';
+export type AppTheme =
+  | 'dark-luxury'
+  | 'light-clean'
+  | 'obsidian-midnight'
+  | 'royal-imperial'
+  | 'global-platinum'
+  | 'velvet-burgundy'
+  | 'emerald-palace'
+  | 'sapphire-crown'
+  | 'titanium-bronze';
 export type CardShape = 'soft' | 'sharp' | 'glass';
 export type DisplayDensity = 'comfortable' | 'compact';
 
