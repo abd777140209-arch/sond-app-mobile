@@ -1109,9 +1109,9 @@ export default function Settings({
             <div className="pt-2 border-t border-slate-700/60 flex flex-wrap items-center justify-between gap-2 text-[11px]">
               <div className="flex items-center gap-1.5 text-slate-300">
                 <Folder className="w-3.5 h-3.5 text-emerald-400" />
-                <span>المسار:</span>
+                <span>مسار الحفظ في الهاتف:</span>
                 <span className="font-mono bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 text-emerald-200">
-                  {backupFolderPath}
+                  التخزين الداخلي / Download (التنزيلات)
                 </span>
               </div>
 
@@ -1135,13 +1135,13 @@ export default function Settings({
             {/* Folder selection */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-white p-3 rounded-lg border border-slate-200">
               <div>
-                <label className="text-xs font-bold text-slate-800 block">مجلد تخزين النسخ بالذاكرة المحلية:</label>
-                <div className="flex items-center gap-2 mt-1">
+                <label className="text-xs font-bold text-slate-800 block">مجلد تخزين النسخ والملفات بالذاكرة المحلية للهاتف:</label>
+                <div className="flex flex-wrap items-center gap-2 mt-1">
                   <span className="font-mono text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg dir-ltr text-right">
-                    Documents/{backupFolderPath.replace(/^Documents\//i, '')}
+                    Download/ + Documents/{backupFolderPath.replace(/^Documents\//i, '')}
                   </span>
-                  <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                    Directory.Documents
+                  <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                    التخزين الداخلي ← مجلد التنزيلات (Download)
                   </span>
                 </div>
               </div>

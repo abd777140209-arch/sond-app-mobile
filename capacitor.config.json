@@ -1,6 +1,6 @@
 {
   "appId": "com.sanad.accounting",
-  "appName": "سند للمحاسبة",
+  "appName": "Sanad Accounting",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"

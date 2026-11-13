@@ -2,15 +2,22 @@ package com.sanad.accounting
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.DownloadManager
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
 import android.provider.Settings
+import android.util.Base64
 import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
+import android.webkit.URLUtil
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -22,11 +29,13 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import java.io.File
+import java.io.FileOutputStream
 
 /**
- * MainActivity for Sanad Accounting (نظام سند الذكي المحاسبي)
+ * MainActivity for Sanad Accounting (com.sanad.accounting)
  * Configures WebView to load local bundled offline assets directly from assets/public/index.html.
- * Includes complete WebChromeClient.onShowFileChooser implementation for HTML file inputs.
+ * Includes WebChromeClient.onShowFileChooser, native DownloadListener, and MediaStore Downloads bridge.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -67,6 +76,51 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
+        fun saveBase64File(fileName: String, base64Data: String, mimeType: String): Boolean {
+            return try {
+                val cleanBase64 = if (base64Data.contains(",")) {
+                    base64Data.substringAfter(",")
+                } else {
+                    base64Data
+                }.replace("\\s".toRegex(), "")
+                val bytes = Base64.decode(cleanBase64, Base64.DEFAULT)
+                val safeName = fileName.replace(Regex("[/\\\\?%*:|\"<>]"), "_").ifBlank { "sanad_file" }
+                val cleanMime = mimeType.ifBlank { "application/octet-stream" }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val values = ContentValues().apply {
+                        put(MediaStore.Downloads.DISPLAY_NAME, safeName)
+                        put(MediaStore.Downloads.MIME_TYPE, cleanMime)
+                        put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/Sanad Accounting")
+                        put(MediaStore.Downloads.IS_PENDING, 1)
+                    }
+                    val resolver = mContext.contentResolver
+                    val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    if (uri != null) {
+                        resolver.openOutputStream(uri)?.use { out ->
+                            out.write(bytes)
+                        }
+                        values.clear()
+                        values.put(MediaStore.Downloads.IS_PENDING, 0)
+                        resolver.update(uri, values, null, null)
+                        return true
+                    }
+                }
+
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                val sanadDir = File(downloadsDir, "Sanad Accounting")
+                if (!sanadDir.exists()) sanadDir.mkdirs()
+                val outFile = File(sanadDir, safeName)
+                FileOutputStream(outFile).use { it.write(bytes) }
+                MediaScannerConnection.scanFile(mContext, arrayOf(outFile.absolutePath), arrayOf(cleanMime), null)
+                true
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
+            }
+        }
+
+        @JavascriptInterface
         fun requestPermissions(permissions: Array<String>) {
             // Permission handler bridge
         }
@@ -75,7 +129,7 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         webView = WebView(this)
         setContentView(webView)
 
@@ -101,7 +155,37 @@ class MainActivity : AppCompatActivity() {
         settings.builtInZoomControls = true
         settings.displayZoomControls = false
 
-        webView.addJavascriptInterface(WebAppInterface(this), "AndroidInterface")
+        val jsInterface = WebAppInterface(this)
+        webView.addJavascriptInterface(jsInterface, "AndroidInterface")
+
+        webView.setDownloadListener { url, userAgent, contentDisposition, mimetype, _ ->
+            try {
+                if (url.startsWith("data:")) {
+                    val fileName = URLUtil.guessFileName(url, contentDisposition, mimetype)
+                    val saved = jsInterface.saveBase64File(fileName, url, mimetype ?: "application/octet-stream")
+                    Toast.makeText(
+                        this,
+                        if (saved) "تم حفظ الملف في Download/Sanad Accounting" else "تعذر حفظ الملف",
+                        Toast.LENGTH_LONG
+                    ).show()
+                } else if (url.startsWith("http://") || url.startsWith("https://")) {
+                    val request = DownloadManager.Request(Uri.parse(url))
+                    val fileName = URLUtil.guessFileName(url, contentDisposition, mimetype)
+                    request.setMimeType(mimetype)
+                    request.addRequestHeader("User-Agent", userAgent)
+                    request.setTitle(fileName)
+                    request.setDescription("جاري التنزيل من Sanad Accounting...")
+                    request.allowScanningByMediaScanner()
+                    request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "Sanad Accounting/$fileName")
+                    val dm = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                    dm.enqueue(request)
+                    Toast.makeText(this, "تم بدء تنزيل ($fileName) إلى مجلد التنزيلات", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
 
         webView.webViewClient = object : WebViewClient() {
             override fun onReceivedError(
@@ -203,4 +287,3 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
-

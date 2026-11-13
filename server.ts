@@ -33,8 +33,86 @@ function getAIClient(): GoogleGenAI | null {
 async function startServer() {
   const app = express();
 
-  app.use(express.json({ limit: '15mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '15mb' }));
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+  // Temporary in-memory file store for native Android/iOS HTTP attachment downloads
+  const downloadStore = new Map<
+    string,
+    { buffer: Buffer; fileName: string; mimeType: string; expiresAt: number }
+  >();
+
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, val] of downloadStore.entries()) {
+      if (val.expiresAt < now) {
+        downloadStore.delete(key);
+      }
+    }
+  }, 60_000);
+
+  // Register a generated file (PDF, PNG, JSON, CSV) for native OS DownloadManager retrieval
+  app.post('/api/download-bridge', (req, res) => {
+    try {
+      const { fileName, data, isBase64, mimeType } = req.body || {};
+      if (!fileName || typeof data !== 'string') {
+        return res.status(400).json({ ok: false, error: 'Missing fileName or data' });
+      }
+
+      const cleanName = String(fileName).replace(/[/\\?%*:|"<>]/g, '_').trim() || 'sanad_file';
+      let buffer: Buffer;
+      if (isBase64) {
+        const stripped = data.replace(/^data:.*?;base64,/, '').replace(/\s/g, '');
+        buffer = Buffer.from(stripped, 'base64');
+      } else {
+        buffer = Buffer.from(data, 'utf-8');
+      }
+
+      const token = `dl_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      downloadStore.set(token, {
+        buffer,
+        fileName: cleanName,
+        mimeType: mimeType || 'application/octet-stream',
+        expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes TTL
+      });
+
+      const downloadUrl = `/api/download-file/${token}/${encodeURIComponent(cleanName)}`;
+      return res.json({
+        ok: true,
+        token,
+        downloadUrl,
+        size: buffer.length,
+      });
+    } catch (err: any) {
+      console.error('[API /api/download-bridge] Error:', err?.message || err);
+      return res.status(500).json({ ok: false, error: 'Failed to prepare file download' });
+    }
+  });
+
+  // Serve file with standard HTTP Content-Disposition header for Android/iOS DownloadManager
+  app.get('/api/download-file/:token/:fileName?', (req, res) => {
+    const { token } = req.params;
+    const inline = req.query.inline === '1';
+    const item = downloadStore.get(token);
+
+    if (!item || item.expiresAt < Date.now()) {
+      downloadStore.delete(token);
+      return res.status(404).send('انتهت صلاحية رابط التنزيل، يرجى إعادة الضغط على زر الحفظ.');
+    }
+
+    const asciiFallback = item.fileName.replace(/[^\x20-\x7E]/g, '_') || 'sanad_document';
+    const encodedUtf8Name = encodeURIComponent(item.fileName);
+    const dispositionType = inline ? 'inline' : 'attachment';
+
+    res.setHeader('Content-Type', item.mimeType || 'application/octet-stream');
+    res.setHeader(
+      'Content-Disposition',
+      `${dispositionType}; filename="${asciiFallback}"; filename*=UTF-8''${encodedUtf8Name}`
+    );
+    res.setHeader('Content-Length', String(item.buffer.length));
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    return res.send(item.buffer);
+  });
 
   // Health check
   app.get('/api/health', (_req, res) => {
