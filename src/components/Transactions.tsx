@@ -46,6 +46,7 @@ import { Transaction, Invoice, Product, Customer, PurchaseInvoiceItem } from '..
 import { soundManager } from '../utils/sound';
 import { saveAndShareFile } from '../utils/fileExport';
 import { generateAndSharePDF } from '../services/pdfService';
+import { openWhatsApp } from '../utils/nativeLauncher';
 import { PAYMENT_METHODS, formatPaymentMethodLabel, PaymentMethodKey } from '../utils/paymentMethods';
 
 interface TransactionsProps {
@@ -449,7 +450,7 @@ export default function Transactions({
     soundManager.playSuccessChime();
     const isPurchase = isPurchaseInvoiceTx(t);
     const items = isPurchase ? resolvePurchaseItemsForTx(t) : [];
-    const isReceipt = t.type === 'payment' || t.type === 'sale' || t.type === 'maintenance_income';
+    const isReceipt = t.type === 'payment' || t.type === 'sale' || t.type === 'maintenance_income' || t.type === 'maintenance';
     const voucherTitle = isPurchase
       ? 'فاتورة وسند مشتريات بضاعة'
       : t.type === 'payment'
@@ -458,7 +459,7 @@ export default function Transactions({
       ? 'سند صرف / مصروفات'
       : t.type === 'refund'
       ? 'سند مرتجع مبيعات'
-      : t.type === 'maintenance_income'
+      : (t.type === 'maintenance_income' || t.type === 'maintenance')
       ? 'سند إيراد صيانة'
       : 'سند قيد مبيعات';
 
@@ -675,7 +676,7 @@ export default function Transactions({
   }, [dailyTransactions]);
 
   const dailyMaintenanceIncome = useMemo(() => {
-    return dailyTransactions.filter(t => t.type === 'maintenance_income').reduce((sum, t) => sum + t.amount, 0);
+    return dailyTransactions.filter(t => t.type === 'maintenance_income' || t.type === 'maintenance').reduce((sum, t) => sum + t.amount, 0);
   }, [dailyTransactions]);
 
   const dailyExpenses = useMemo(() => {
@@ -727,7 +728,7 @@ export default function Transactions({
   const totalPayments = transactions.filter(t => t.type === 'payment').reduce((sum, t) => sum + t.amount, 0);
   const totalExpenses = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
   const totalRefunds = transactions.filter(t => t.type === 'refund').reduce((sum, t) => sum + t.amount, 0);
-  const totalMaintenance = transactions.filter(t => t.type === 'maintenance_income').reduce((sum, t) => sum + t.amount, 0);
+  const totalMaintenance = transactions.filter(t => t.type === 'maintenance_income' || t.type === 'maintenance').reduce((sum, t) => sum + t.amount, 0);
   const netCashFlow = totalSales + totalPayments + totalMaintenance - totalExpenses - totalRefunds;
 
   // Filter transactions for Ledger tab
@@ -744,6 +745,7 @@ export default function Transactions({
       const matchesType =
         filterType === 'all' ? true :
         filterType === 'purchase' ? isPurchaseInvoiceTx(t) :
+        filterType === 'maintenance_income' ? (t.type === 'maintenance_income' || t.type === 'maintenance') :
         t.type === filterType;
 
       const matchesMethod = filterPaymentMethod === 'all' || (t.paymentMethod || 'cash') === filterPaymentMethod;
@@ -912,8 +914,7 @@ export default function Transactions({
 ----------------------------------
 ✨ تم استخراج التقرير آلياً عبر نظام سند المحاسبي`;
 
-    const encoded = encodeURIComponent(text);
-    window.open(`https://wa.me/?text=${encoded}`, '_blank');
+    openWhatsApp('', text);
   };
 
   // Export Daily Closing Summary as PDF
@@ -1122,7 +1123,7 @@ export default function Transactions({
         t.type === 'expense' ? 'سند صرف' :
         t.type === 'refund' ? 'سند مرتجع' :
         t.type === 'payment' ? 'سند قبض' :
-        t.type === 'maintenance_income' ? 'سند صيانة' : 'سند مبيعات';
+        (t.type === 'maintenance_income' || t.type === 'maintenance') ? 'سند صيانة' : 'سند مبيعات';
 
       const isOut = t.type === 'expense' || t.type === 'refund';
       const methodLabel = formatPaymentMethodLabel(t.paymentMethod);
@@ -1684,7 +1685,7 @@ export default function Transactions({
               { id: 'expense', label: '📤 سندات الصرف والمصروفات', count: transactions.filter(t => t.type === 'expense').length, color: 'rose' },
               { id: 'purchase', label: '📦 فواتير المشتريات والأصناف', count: transactions.filter(t => isPurchaseInvoiceTx(t)).length, color: 'amber' },
               { id: 'sale', label: '🛒 سندات المبيعات', count: transactions.filter(t => t.type === 'sale').length, color: 'teal' },
-              { id: 'maintenance_income', label: '🔧 سندات الصيانة', count: transactions.filter(t => t.type === 'maintenance_income').length, color: 'indigo' },
+              { id: 'maintenance_income', label: '🔧 سندات الصيانة', count: transactions.filter(t => t.type === 'maintenance_income' || t.type === 'maintenance').length, color: 'indigo' },
               { id: 'refund', label: '🔄 سندات المرتجع', count: transactions.filter(t => t.type === 'refund').length, color: 'orange' },
             ].map(tab => {
               const active = filterType === tab.id;
@@ -1860,13 +1861,13 @@ export default function Transactions({
                                 isPurchase ? 'bg-amber-100 text-amber-900 border border-amber-300' :
                                 t.type === 'sale' ? 'bg-emerald-100 text-emerald-700' :
                                 t.type === 'payment' ? 'bg-teal-100 text-teal-800 border border-teal-200' :
-                                t.type === 'maintenance_income' ? 'bg-indigo-100 text-indigo-700' :
+                                (t.type === 'maintenance_income' || t.type === 'maintenance') ? 'bg-indigo-100 text-indigo-700' :
                                 t.type === 'refund' ? 'bg-orange-100 text-orange-800' : 'bg-rose-100 text-rose-700'
                               }`}>
                                 {isPurchase ? '📦 فاتورة مشتريات' :
                                  t.type === 'sale' ? '🛒 سند مبيعات' :
                                  t.type === 'payment' ? '📥 سند قبض' :
-                                 t.type === 'maintenance_income' ? '🔧 سند صيانة' :
+                                 (t.type === 'maintenance_income' || t.type === 'maintenance') ? '🔧 سند صيانة' :
                                  t.type === 'refund' ? '🔄 سند مرتجع' : '📤 سند صرف / مصروف'}
                               </span>
                               <span className="text-[9.5px] text-slate-400 font-medium">{methodLabel}</span>

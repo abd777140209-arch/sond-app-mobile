@@ -91,9 +91,9 @@ export default function Dashboard({
   // Cashbox Balance (Unified with Transactions Ledger)
   const hasSaleTransactions = transactions.some(t => t.type === 'sale');
   const totalInflows = hasSaleTransactions
-    ? transactions.filter(t => t.type === 'sale' || t.type === 'payment' || t.type === 'maintenance').reduce((sum, t) => sum + t.amount, 0)
+    ? transactions.filter(t => t.type === 'sale' || t.type === 'payment' || t.type === 'maintenance' || t.type === 'maintenance_income').reduce((sum, t) => sum + t.amount, 0)
     : activeInvoices.filter(inv => inv.type === 'cash').reduce((sum, inv) => sum + inv.finalAmount, 0) +
-      transactions.filter(t => t.type === 'payment' || t.type === 'maintenance').reduce((sum, t) => sum + t.amount, 0);
+      transactions.filter(t => t.type === 'payment' || t.type === 'maintenance' || t.type === 'maintenance_income').reduce((sum, t) => sum + t.amount, 0);
   const totalExpenses = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
   const cashboxBalance = totalInflows - totalExpenses;
 
@@ -606,7 +606,7 @@ export default function Dashboard({
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className={`p-2 rounded-lg shrink-0 ${
                     t.type === 'sale' ? 'bg-emerald-100 text-emerald-700' :
-                    t.type === 'payment' || t.type === 'maintenance' ? 'bg-blue-100 text-blue-700' :
+                    t.type === 'payment' || t.type === 'maintenance' || t.type === 'maintenance_income' ? 'bg-blue-100 text-blue-700' :
                     'bg-rose-100 text-rose-700'
                   }`}>
                     <ArrowDownLeft className={`w-4 h-4 ${t.type === 'expense' ? 'rotate-180' : ''}`} />

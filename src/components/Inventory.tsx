@@ -43,6 +43,7 @@ import { safeStorage } from '../utils/safeStorage';
 import { generateAndSharePDF } from '../services/pdfService';
 import BarcodeLabelPrinterModal from './BarcodeLabelPrinterModal';
 import CameraBarcodeScannerModal from './CameraBarcodeScannerModal';
+import { showToast } from '../utils/toast';
 import ManageCategoriesModal from './ManageCategoriesModal';
 import BulkProductAddModal from './BulkProductAddModal';
 import SmartInvoiceScannerModal from './SmartInvoiceScannerModal';
@@ -98,6 +99,7 @@ export default function Inventory({
   const [showCsvRestoreModal, setShowCsvRestoreModal] = useState(false);
   const [showBulkMinStockModal, setShowBulkMinStockModal] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLowStock, setFilterLowStock] = useState(false);
 
@@ -269,7 +271,7 @@ export default function Inventory({
 
     if (!editingProduct.name.trim() || !editingProduct.barcode.trim()) {
       soundManager.playWarningBeep();
-      alert('⚠️ اسم السلعة والباركود حقول إجبارية!');
+      showToast('اسم السلعة والباركود حقول إجبارية!', 'warning');
       return;
     }
 
@@ -552,7 +554,7 @@ export default function Inventory({
       utterance.rate = 1.0;
       window.speechSynthesis.speak(utterance);
     } else {
-      alert(`🤖 المساعد زارا: إجمالي الأصناف ${activeProductsList.length} صنف، بقيمة تكلفة ${totalCostValue.toLocaleString()} ${currency}`);
+      showToast(`ملخص المخزن: إجمالي الأصناف ${activeProductsList.length} صنف، بقيمة تكلفة ${totalCostValue.toLocaleString()} ${currency}`, 'info');
     }
   };
 
@@ -1041,17 +1043,34 @@ export default function Inventory({
                         <Pencil className="w-3.5 h-3.5" /> تعديل
                       </button>
 
-                      <button
-                        onClick={() => {
-                          if (confirm(`هل أنت متأكد من حذف السلعة "${p.name}"؟`)) {
-                            soundManager.playWarningBeep();
-                            onDeleteProduct(p.id);
-                          }
-                        }}
-                        className="p-2 rounded-xl text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition flex items-center gap-1 text-xs font-bold"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" /> حذف
-                      </button>
+                      {confirmDeleteId === p.id ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              soundManager.playWarningBeep();
+                              onDeleteProduct(p.id);
+                              setConfirmDeleteId(null);
+                              showToast(`تم حذف السلعة "${p.name}"`, 'info');
+                            }}
+                            className="px-2.5 py-2 rounded-xl text-white bg-rose-600 text-xs font-bold cursor-pointer"
+                          >
+                            تأكيد
+                          </button>
+                          <button
+                            onClick={() => setConfirmDeleteId(null)}
+                            className="px-2 py-2 rounded-xl text-slate-600 bg-slate-100 text-xs font-bold cursor-pointer"
+                          >
+                            إلغاء
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmDeleteId(p.id)}
+                          className="p-2 rounded-xl text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition flex items-center gap-1 text-xs font-bold"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> حذف
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1133,18 +1152,35 @@ export default function Inventory({
                             <Pencil className="w-4 h-4" />
                           </button>
 
-                          <button
-                            onClick={() => {
-                              if (confirm(`هل أنت متأكد من حذف السلعة "${p.name}"؟`)) {
-                                soundManager.playWarningBeep();
-                                onDeleteProduct(p.id);
-                              }
-                            }}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
-                            title="حذف السلعة"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {confirmDeleteId === p.id ? (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  soundManager.playWarningBeep();
+                                  onDeleteProduct(p.id);
+                                  setConfirmDeleteId(null);
+                                  showToast(`تم حذف السلعة "${p.name}"`, 'info');
+                                }}
+                                className="px-2 py-1 rounded-lg bg-rose-600 text-white text-[10px] font-bold cursor-pointer"
+                              >
+                                تأكيد
+                              </button>
+                              <button
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="px-1.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold cursor-pointer"
+                              >
+                                إلغاء
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setConfirmDeleteId(p.id)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                              title="حذف السلعة"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );

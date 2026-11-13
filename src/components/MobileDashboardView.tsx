@@ -172,9 +172,9 @@ export default function MobileDashboardView({
   // Cashbox / Treasury Balance (Unified with Transactions Ledger)
   const hasSaleTransactions = transactions.some(t => t.type === 'sale');
   const totalInflows = hasSaleTransactions
-    ? transactions.filter(t => t.type === 'sale' || t.type === 'payment' || t.type === 'maintenance').reduce((sum, t) => sum + t.amount, 0)
+    ? transactions.filter(t => t.type === 'sale' || t.type === 'payment' || t.type === 'maintenance' || t.type === 'maintenance_income').reduce((sum, t) => sum + t.amount, 0)
     : activeInvoices.filter(inv => inv.type === 'cash').reduce((sum, inv) => sum + inv.finalAmount, 0) +
-      transactions.filter(t => t.type === 'payment' || t.type === 'maintenance').reduce((sum, t) => sum + t.amount, 0);
+      transactions.filter(t => t.type === 'payment' || t.type === 'maintenance' || t.type === 'maintenance_income').reduce((sum, t) => sum + t.amount, 0);
   const expenses = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
   const cashboxBalance = totalInflows - expenses;
 

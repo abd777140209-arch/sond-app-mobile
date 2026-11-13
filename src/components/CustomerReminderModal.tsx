@@ -70,30 +70,48 @@ export default function CustomerReminderModal({
   // Device native share sheet (الهاتف المحمول)
   const handleNativeShare = async () => {
     soundManager.playScanBeep();
-    if (Capacitor.isNativePlatform() || (window as any).Capacitor) {
+    const shareWithTimeout = <T,>(p: Promise<T>, ms = 10000) =>
+      Promise.race([
+        p,
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), ms)),
+      ]);
+
+    if (Capacitor.isNativePlatform()) {
       try {
-        await Share.share({
-          title: `تذكير مديونية - ${customer.name}`,
-          text: compiledMessage,
-          dialogTitle: 'تذكير مديونية عبر التطبيقات'
-        });
+        await shareWithTimeout(
+          Share.share({
+            title: `تذكير مديونية - ${customer.name}`,
+            text: compiledMessage,
+            dialogTitle: 'تذكير مديونية عبر التطبيقات',
+          })
+        );
         return;
-      } catch (err) {
-        console.log('Native share error or cancelled', err);
+      } catch (err: any) {
+        const msg = String(err?.message || err || '').toLowerCase();
+        if (msg.includes('cancel') || msg.includes('abort') || msg.includes('timeout')) {
+          return;
+        }
       }
     }
-    if (navigator.share) {
+
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       try {
-        await navigator.share({
-          title: `تذكير مديونية - ${customer.name}`,
-          text: compiledMessage
-        });
-      } catch (err) {
-        console.log('User cancelled share or not supported', err);
+        await shareWithTimeout(
+          navigator.share({
+            title: `تذكير مديونية - ${customer.name}`,
+            text: compiledMessage,
+          })
+        );
+        return;
+      } catch (err: any) {
+        const msg = String(err?.name || err?.message || '').toLowerCase();
+        if (msg.includes('abort') || msg.includes('cancel') || msg.includes('timeout')) {
+          return;
+        }
       }
-    } else {
-      handleCopy();
     }
+
+    handleCopy();
   };
 
   // Save template as default

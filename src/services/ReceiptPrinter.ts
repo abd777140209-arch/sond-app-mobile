@@ -774,14 +774,14 @@ export const generateSalesInvoiceThermalPDF = async (
       })
     );
 
-    // التقاط عالي الدقة scale: 3 مع الألوان الآمنة
+    const isMobileViewport = typeof window !== 'undefined' && window.innerWidth < 768;
     const canvas = await html2canvas(temporaryContainer, getSafeHtml2CanvasOptions({
-      scale: 3,
+      scale: isMobileViewport ? 2 : 3,
       useCORS: true,
       backgroundColor: '#ffffff'
     }));
 
-    const imgData = canvas.toDataURL('image/jpeg', 0.98);
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
     const imgHeightMm = (canvas.height * paperWidthMm) / canvas.width;
     const finalHeightMm = Math.max(imgHeightMm + 2, 45); // ضمان هامش أمان سفلي
 
@@ -793,13 +793,17 @@ export const generateSalesInvoiceThermalPDF = async (
 
     doc.addImage(imgData, 'JPEG', 0, 0, paperWidthMm, imgHeightMm, undefined, 'FAST');
 
-    const pdfBase64 = doc.output('datauristring').split(',')[1];
+    const { Capacitor } = await import('@capacitor/core');
+    const isNative = Capacitor.isNativePlatform();
+    const pdfBlob = !isNative ? doc.output('blob') : undefined;
+    const pdfBase64 = isNative ? doc.output('datauristring').split(',')[1] : '';
     const fileName = `smart_invoice_${invoiceData.invoiceNumber}.pdf`;
 
     return await saveAndShareFile({
       fileName,
       data: pdfBase64,
-      isBase64: true,
+      blob: pdfBlob,
+      isBase64: isNative,
       mimeType: 'application/pdf',
       title: `فاتورة مبيعات ${invoiceData.invoiceNumber}`,
       text: `فاتورة مبيعات رقم ${invoiceData.invoiceNumber} - ${shopName}`

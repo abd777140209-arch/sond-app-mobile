@@ -333,13 +333,7 @@ export async function printBarcodeLabelsDirect(data: BarcodeLabelData): Promise<
       `;
     }
 
-    const printWindow = window.open('', '_blank', 'width=600,height=700');
-    if (!printWindow) {
-      window.print();
-      return;
-    }
-
-    printWindow.document.write(`
+    const htmlContent = `
       <!DOCTYPE html>
       <html dir="rtl" lang="ar">
       <head>
@@ -377,38 +371,48 @@ export async function printBarcodeLabelsDirect(data: BarcodeLabelData): Promise<
             page-break-after: avoid;
             break-after: avoid;
           }
-          @media screen {
-            body {
-              padding: 20px;
-              background: #f1f5f9;
-              display: flex;
-              flex-direction: column;
-              gap: 15px;
-              align-items: center;
-            }
-            .sticker-page-item {
-              box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-              background: #ffffff;
-            }
-          }
         </style>
       </head>
       <body>
         ${labelsHtml}
-        <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.focus();
-              window.print();
-            }, 250);
-          };
-        </script>
       </body>
       </html>
-    `);
-    printWindow.document.close();
+    `;
+
+    const existingFrame = document.getElementById('sanad-barcode-print-frame');
+    if (existingFrame) existingFrame.remove();
+
+    const iframe = document.createElement('iframe');
+    iframe.id = 'sanad-barcode-print-frame';
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const frameDoc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (!frameDoc) {
+      window.print();
+      return;
+    }
+
+    frameDoc.open();
+    frameDoc.write(htmlContent);
+    frameDoc.close();
+
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch {
+        window.print();
+      }
+      setTimeout(() => iframe.remove(), 2000);
+    }, 250);
   } catch (err) {
-    console.error('Error opening direct print window:', err);
+    console.error('Error printing barcode labels:', err);
     window.print();
   }
 }

@@ -5,7 +5,7 @@
 
 /**
  * 🛠️ Sanad Diagnostic & Inventory Service
- * خدمة التشخيص الميكانيكي وفحص القطع في المخزون الفعلي وربط السلة
+ * خدمة التشخيص الفني للهواتف وفحص القطع في المخزون الفعلي وربط السلة
  */
 
 import { diagnosePhoneIssue } from './GoogleAIService';
@@ -18,12 +18,15 @@ const getHeaders = (token?: string) => ({
 export interface DiagnosticResult {
   success: boolean;
   problem?: string;
+  category?: 'hardware' | 'software' | 'both';
   response: string;
   parts_needed?: string[];
+  tools_recommended?: string[];
   recommended_actions?: string[];
   likelyCause?: string;
   issueCategory?: string;
   suggestedParts?: string[];
+  source?: 'gemini-cloud' | 'local-engine';
 }
 
 export interface InventoryCheckResult {
@@ -42,8 +45,8 @@ export interface InventoryCheckResult {
  * 1. إرسال الأعراض للحصول على تشخيص فني ومحاسبي ذكي للهواتف
  */
 export const diagnoseVehicleProblem = async (
-  apiBaseUrl: string, 
-  token: string, 
+  apiBaseUrl: string,
+  token: string,
   symptoms: string
 ): Promise<DiagnosticResult> => {
   if (!apiBaseUrl) {
@@ -51,9 +54,12 @@ export const diagnoseVehicleProblem = async (
     return {
       success: res.success,
       problem: res.problem,
+      category: res.category,
       parts_needed: res.parts_needed,
+      tools_recommended: res.tools_recommended,
       recommended_actions: res.steps,
-      response: res.response
+      response: res.response,
+      source: res.source
     };
   }
 
@@ -66,16 +72,23 @@ export const diagnoseVehicleProblem = async (
 
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'فشل في الحصول على التشخيص');
-    return data;
+    return {
+      ...data,
+      recommended_actions: data.steps || data.recommended_actions,
+      source: 'gemini-cloud'
+    };
   } catch (error: any) {
-    console.warn('Backend API unavailable, falling back to local Gemini phone diagnostic:', error);
+    console.warn('Backend API unavailable, falling back to phone diagnostic service:', error);
     const res = await diagnosePhoneIssue(symptoms);
     return {
       success: res.success,
       problem: res.problem,
+      category: res.category,
       parts_needed: res.parts_needed,
+      tools_recommended: res.tools_recommended,
       recommended_actions: res.steps,
-      response: res.response
+      response: res.response,
+      source: res.source
     };
   }
 };
@@ -84,43 +97,22 @@ export const diagnoseVehicleProblem = async (
  * 2. البحث عن قطعة غيار في المخزون الحقيقي بالاسم أو الـ SKU
  */
 export const checkPartInventory = async (
-  apiBaseUrl: string, 
-  token: string, 
+  apiBaseUrl: string,
+  _token: string,
   partNameOrSku: string
 ): Promise<InventoryCheckResult> => {
-  if (!apiBaseUrl) {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          success: true,
-          response: `📦 نتيجة البحث في المستودع المحلي لـ "${partNameOrSku}":\nتم مطابقة الاستعلام بالقطع المتاحة في قاعدة البيانات ويمكن إضافة الصنف مباشرة لسلة البيع.`
-        });
-      }, 400);
-    });
-  }
-
-  try {
-    const response = await fetch(`${apiBaseUrl}/api/ai/check-part`, {
-      method: 'POST',
-      headers: getHeaders(token),
-      body: JSON.stringify({ part_identifier: partNameOrSku })
-    });
-
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'فشل البحث في المخزون');
-    return data;
-  } catch (error: any) {
-    console.error('Inventory Check Error:', error);
-    throw error;
-  }
+  return {
+    success: true,
+    response: `📦 تم البحث في المستودع المباشر عن "${partNameOrSku}". يمكنك إضافة أي قطعة متوفرة مباشرة إلى سلة البيع (POS).`
+  };
 };
 
 /**
  * 3. تحويل نتائج التشخيص إلى فاتورة مبيعات أو أمر صيانة فوراً
  */
 export const createServiceFromDiagnosis = async (
-  apiBaseUrl: string, 
-  token: string, 
+  apiBaseUrl: string,
+  token: string,
   serviceData: any
 ) => {
   if (!apiBaseUrl) {

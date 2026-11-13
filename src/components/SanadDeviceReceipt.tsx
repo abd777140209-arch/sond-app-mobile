@@ -37,6 +37,7 @@ import {
 } from '../services/ReceiptPrinter';
 import { openExternalUrl } from '../utils/nativeLauncher';
 import { generateAndSharePDF } from '../services/pdfService';
+import { showToast } from '../utils/toast';
 
 export interface SanadDeviceReceiptProps {
   apiBaseUrl?: string;
@@ -101,7 +102,7 @@ export const SanadDeviceReceipt: React.FC<SanadDeviceReceiptProps> = ({
       const res = await syncOfflineDataWithServer(apiBaseUrl, token);
       if (res.syncedCount > 0) {
         soundManager.playSuccessChime();
-        alert(`⚡ تم رفع ومزامنة ${res.syncedCount} كارت استلام مخزن أوفلاين بنجاح!`);
+        showToast(`⚡ تم رفع ومزامنة ${res.syncedCount} كارت استلام مخزن أوفلاين بنجاح!`, 'success');
       }
       setPendingCount(getPendingOfflineRecords().length);
     } catch (err) {

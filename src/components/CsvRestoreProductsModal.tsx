@@ -23,6 +23,7 @@ import * as XLSX from 'xlsx';
 import { Product } from '../types';
 import { soundManager } from '../utils/sound';
 import { saveAndShareFile } from '../utils/fileExport';
+import { showToast } from '../utils/toast';
 
 export interface ParsedCsvProduct {
   id: string;
@@ -413,7 +414,7 @@ export default function CsvRestoreProductsModal({
     const itemsToProcess = parsedItems.filter(p => p.selected);
 
     if (itemsToProcess.length === 0) {
-      alert('⚠️ يرجى تحديد صنف واحد على الأقل للاستعادة أو الاستيراد.');
+      showToast('يرجى تحديد صنف واحد على الأقل للاستعادة أو الاستيراد.', 'warning');
       soundManager.playWarningBeep();
       return;
     }
@@ -422,12 +423,6 @@ export default function CsvRestoreProductsModal({
 
     try {
       if (restoreMode === 'full_replace') {
-        const confirmMsg = `⚠️ تحذير مهم:\nأنت على وشك استبدال كامل بضائع المخزون بـ (${itemsToProcess.length} صنف) من ملف CSV.\nهل تريد المتابعة واستبدال قاعدة بيانات المخزون؟`;
-        if (!confirm(confirmMsg)) {
-          setIsProcessing(false);
-          return;
-        }
-
         const newProductList: Product[] = itemsToProcess.map((item, idx) => ({
           id: `prod-restored-${Date.now()}-${idx}`,
           name: item.name.trim(),
@@ -455,7 +450,7 @@ export default function CsvRestoreProductsModal({
         }
 
         soundManager.playSuccessChime();
-        alert(`✓ تمت استعادة واستبدال المخزون بنجاح بـ ${newProductList.length} صنف (${totalStockPieces} قطعة)!`);
+        showToast(`تمت استعادة واستبدال المخزون بنجاح بـ ${newProductList.length} صنف (${totalStockPieces} قطعة)!`, 'success');
         onClose();
         return;
       }
@@ -515,17 +510,15 @@ export default function CsvRestoreProductsModal({
       }
 
       soundManager.playSuccessChime();
-      alert(
-        `✓ تم إتمام الاستيراد بنجاح!\n` +
-        `• تم إضافة أصناف جديدة: ${addedCount} صنف\n` +
-        (restoreMode === 'merge_update' ? `• تم تحديث سلع مسبقة: ${updatedCount} صنف\n` : '') +
-        `• إجمالي القطع المخزنية: ${totalStockPieces} قطعة.`
+      showToast(
+        `تم الاستيراد بنجاح: إضافة ${addedCount} صنف جديد${restoreMode === 'merge_update' ? ` وتحديث ${updatedCount} صنف` : ''}`,
+        'success'
       );
       onClose();
 
     } catch (err) {
       console.error('Execute CSV Restore Error:', err);
-      alert('حدث خطأ أثناء حفظ الأصناف. يرجى المحاولة مجدداً.');
+      showToast('حدث خطأ أثناء حفظ الأصناف. يرجى المحاولة مجدداً.', 'error');
       soundManager.playWarningBeep();
     } finally {
       setIsProcessing(false);

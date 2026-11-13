@@ -145,11 +145,10 @@ export default function MaintenanceStickerModal({
     }
   };
 
-  // 3. Direct Browser Print
+  // 3. Direct Browser Print (Iframe-safe for PWAs and Mobile WebViews)
   const handleBrowserPrint = () => {
     soundManager.playScanBeep();
-    const printWindow = window.open('', '_blank', 'width=500,height=500');
-    if (!printWindow || !stickerCardRef.current) {
+    if (!stickerCardRef.current) {
       window.print();
       return;
     }
@@ -160,7 +159,7 @@ export default function MaintenanceStickerModal({
       pagesHtml += `<div class="sticker-page">${cardHtml}</div>`;
     }
 
-    printWindow.document.write(`
+    const htmlContent = `
       <!DOCTYPE html>
       <html dir="rtl" lang="ar">
       <head>
@@ -176,15 +175,42 @@ export default function MaintenanceStickerModal({
       </head>
       <body>
         ${pagesHtml}
-        <script>
-          window.onload = function() {
-            setTimeout(function() { window.focus(); window.print(); }, 250);
-          };
-        </script>
       </body>
       </html>
-    `);
-    printWindow.document.close();
+    `;
+
+    const existingFrame = document.getElementById('sanad-maintenance-sticker-print-frame');
+    if (existingFrame) existingFrame.remove();
+
+    const iframe = document.createElement('iframe');
+    iframe.id = 'sanad-maintenance-sticker-print-frame';
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const frameDoc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (!frameDoc) {
+      window.print();
+      return;
+    }
+
+    frameDoc.open();
+    frameDoc.write(htmlContent);
+    frameDoc.close();
+
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch {
+        window.print();
+      }
+      setTimeout(() => iframe.remove(), 2000);
+    }, 250);
   };
 
   // 4. Bluetooth Print

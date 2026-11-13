@@ -45,10 +45,11 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // Bypass non-GET requests, extension requests, or external API endpoints
+  // Bypass non-GET requests, non-HTTP(S) schemes (blob:, data:, whatsapp:, sms:, tel:), API calls, or Firebase endpoints
   if (
     req.method !== 'GET' ||
-    url.protocol.startsWith('chrome-extension') ||
+    (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+    url.pathname.startsWith('/api/') ||
     url.hostname.includes('firestore.googleapis.com') ||
     url.hostname.includes('identitytoolkit.googleapis.com') ||
     url.hostname.includes('firebase')

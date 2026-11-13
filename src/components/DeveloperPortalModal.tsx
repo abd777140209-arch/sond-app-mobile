@@ -31,6 +31,7 @@ import {
 import { soundManager } from '../utils/sound';
 import { saveAndShareFile } from '../utils/fileExport';
 import { openWhatsApp, openPhoneCall } from '../utils/nativeLauncher';
+import { showToast } from '../utils/toast';
 import { LicenseInfo, generateLicenseKey, getExpiryDate } from '../utils/licensing';
 import { isFirebaseConfigured, checkLicenseOnCloud, activateLicenseOnCloud, createLicenseOnCloud, CloudLicense, getAllLicensesFromCloud, deleteLicenseFromCloud, updateLicenseHwidOnCloud, updateLicenseHwidsOnCloud, getLicenseHwidSlots, resetCloudData, resetClientCloudData, toggleLicenseSuspendOnCloud, renewLicenseOnCloud } from '../utils/firebase';
 
@@ -141,7 +142,7 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
   const handleCreateLicenseKey = async () => {
     if (!genCustomer.trim()) {
       soundManager.playWarningBeep();
-      alert('الرجاء إدخال اسم العميل/المحل لتسجيل الترخيص باسمه!');
+      showToast('الرجاء إدخال اسم العميل/المحل لتسجيل الترخيص باسمه', 'warning');
       return;
     }
 
@@ -248,11 +249,6 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
   // Developer action: Quick Clear All Linked Devices for a License Key
   const handleClearDevicesQuick = async (licenseToClear: CloudLicense) => {
     soundManager.playWarningBeep();
-    const customer = licenseToClear.customerName || licenseToClear.key;
-    if (!window.confirm(`هل أنت متأكد من رغبتك في مسح وتحرير جميع الأجهزة المربوطة بالكود (${licenseToClear.key}) للعميل (${customer})؟\n\nسيسمح هذا للعميل بإعادة تفعيل الكود على جهازين جديدين فوراً!`)) {
-      return;
-    }
-
     try {
       const success = await updateLicenseHwidsOnCloud(licenseToClear.key, '', '');
       if (success) {
@@ -653,7 +649,7 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                         onClick={() => {
                           soundManager.playSuccessChime();
                           navigator.clipboard.writeText(generatedKey);
-                          alert('تم نسخ كود التفعيل فقط!');
+                          showToast('تم نسخ كود التفعيل فقط!', 'success');
                         }}
                         className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-lg text-xs cursor-pointer transition flex items-center gap-1.5 border border-gray-700"
                       >
@@ -680,7 +676,7 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                             `شكراً لثقتكم بنا! 🌹\n` +
                             `م. عبدالمجيد المحواشي (هاتف: 777140209)\n`;
                           navigator.clipboard.writeText(message);
-                          alert('تم نسخ رسالة التفعيل الجاهزة لمشاركتها بالواتساب!');
+                          showToast('تم نسخ رسالة التفعيل الجاهزة لمشاركتها بالواتساب!', 'success');
                         }}
                         className="px-3 py-1.5 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#25D366] font-semibold rounded-lg text-xs cursor-pointer transition flex items-center gap-1.5 border border-[#25D366]/30"
                       >
@@ -753,7 +749,7 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                         onClick={() => {
                           soundManager.playSuccessChime();
                           navigator.clipboard.writeText("https://ais-pre-z5yeta6zliodlnrwazwoat-575351245128.europe-west2.run.app");
-                          alert('تم نسخ رابط تجربة النظام العام بنجاح!');
+                          showToast('تم نسخ رابط تجربة النظام العام بنجاح!', 'success');
                         }}
                         className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg cursor-pointer transition font-bold"
                         title="نسخ الرابط"
@@ -776,7 +772,7 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                         onClick={() => {
                           soundManager.playSuccessChime();
                           navigator.clipboard.writeText('MHTT-TRIAL-7DAY-FREE');
-                          alert('تم نسخ مفتاح التفعيل التجريبي الموحد!');
+                          showToast('تم نسخ مفتاح التفعيل التجريبي الموحد!', 'success');
                         }}
                         className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg cursor-pointer transition font-bold"
                         title="نسخ الكود"
@@ -803,7 +799,7 @@ export default function DeveloperPortalModal({ isOpen, onClose, currentHwid, onR
                         `شكراً لاهتمامكم وثقتكم بنا! 🌹\n` +
                         `م. عبدالمجيد المحواشي (هاتف: 777140209)\n`;
                       navigator.clipboard.writeText(message);
-                      alert('تم نسخ رسالة الدعوة ورابط التجربة العام للواتساب بنجاح! جاهزة للإرسال.');
+                      showToast('تم نسخ رسالة الدعوة ورابط التجربة للواتساب بنجاح!', 'success');
                     }}
                     className="px-4 py-2 bg-[#25D366]/15 hover:bg-[#25D366]/25 text-[#25D366] border border-[#25D366]/30 font-bold rounded-lg text-xs cursor-pointer transition flex items-center gap-1.5"
                   >

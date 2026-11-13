@@ -26,6 +26,7 @@ import {
   uploadToGoogleDrive,
   getBackupTimestamp 
 } from '../utils/fileExport';
+import { showToast } from '../utils/toast';
 
 export interface SanadEnterpriseDashboardProps {
   inventoryItems?: any[];
@@ -79,9 +80,9 @@ export const SanadEnterpriseDashboard: React.FC<SanadEnterpriseDashboardProps> =
       
       await uploadToGoogleDrive(fileName, backupsData, false, 'application/json');
       logOwnerAuditAction('GOOGLE_DRIVE_BACKUP', `تم تصدير النسخة الاحتياطية (${fileName}) بحساب Google Drive: ${googleAccount || 'معرف الهاتف'}`);
-      alert(`⚡ تم إعداد وتصدير ملف النسخة الاحتياطية لـ Google Drive بنجاح!\nالحساب: ${googleAccount || 'حساب أندرويد المرتبط بالهاتف'}`);
+      showToast(`تم إعداد وتصدير ملف النسخة الاحتياطية لـ Google Drive (${googleAccount || 'حساب الجهاز'}) بنجاح!`, 'success');
     } catch (err: any) {
-      alert(`⚠️ حدث خطأ أثناء المزامنة مع Google Drive: ${err?.message || 'خطأ غير معروف'}`);
+      showToast(`حدث خطأ أثناء المزامنة مع Google Drive: ${err?.message || 'خطأ غير معروف'}`, 'error');
     } finally {
       setUploadingDrive(false);
     }
@@ -256,7 +257,10 @@ export const SanadEnterpriseDashboard: React.FC<SanadEnterpriseDashboardProps> =
             <button
               onClick={() => {
                 const res = createAutoBackup();
-                if (res.success) alert(`✅ تم إنشاء النسخة الاحتياطية بمجلد (${customFolder}) بذاكرة الهاتف بنجاح!`);
+                if (res.success) {
+                  setBackupStatus(res);
+                  showToast(`تم إنشاء النسخة الاحتياطية بمجلد (${customFolder}) بنجاح!`, 'success');
+                }
               }}
               className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-3 rounded-xl flex items-center justify-center gap-1.5 shadow-md transition cursor-pointer active:scale-98"
             >

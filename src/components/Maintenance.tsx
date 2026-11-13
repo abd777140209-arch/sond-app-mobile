@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Capacitor } from '@capacitor/core';
@@ -41,6 +41,7 @@ import { MaintenanceOrder, DeviceChecklist, ChecklistStatus } from '../types';
 import { soundManager } from '../utils/sound';
 import { saveAndShareFile } from '../utils/fileExport';
 import { generateAndSharePDF } from '../services/pdfService';
+import { openWhatsApp } from '../utils/nativeLauncher';
 import MaintenanceStickerModal from './MaintenanceStickerModal';
 
 interface MaintenanceProps {
@@ -51,6 +52,8 @@ interface MaintenanceProps {
   onDeleteOrder: (id: string) => void;
   currency: string;
   storeName?: string;
+  prefilledProblem?: { deviceName?: string; issueDescription?: string; notes?: string } | null;
+  onClearPrefilledProblem?: () => void;
 }
 
 export default function Maintenance({
@@ -60,7 +63,9 @@ export default function Maintenance({
   onUpdateStatus,
   onDeleteOrder,
   currency,
-  storeName = 'سند المحاسبي للصيانة'
+  storeName = 'سند المحاسبي للصيانة',
+  prefilledProblem,
+  onClearPrefilledProblem
 }: MaintenanceProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'received' | 'repairing' | 'completed' | 'delivered'>('all');
@@ -77,6 +82,17 @@ export default function Maintenance({
   const [notes, setNotes] = useState('');
   const [formError, setFormError] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+
+  useEffect(() => {
+    if (prefilledProblem) {
+      setEditingOrder(null);
+      if (prefilledProblem.deviceName) setDeviceName(prefilledProblem.deviceName);
+      if (prefilledProblem.issueDescription) setIssueDescription(prefilledProblem.issueDescription);
+      if (prefilledProblem.notes) setNotes(prefilledProblem.notes);
+      setShowAddForm(true);
+      onClearPrefilledProblem?.();
+    }
+  }, [prefilledProblem]);
 
   // Device Quick Checklist State
   const [checklist, setChecklist] = useState<DeviceChecklist>({
@@ -229,7 +245,8 @@ export default function Maintenance({
     return `${origin}/?track=${order.orderNumber}`;
   };
 
-  const getWhatsAppStatusLink = (order: MaintenanceOrder) => {
+  const handleSendWhatsAppStatus = (order: MaintenanceOrder) => {
+    soundManager.playScanBeep();
     let statusHeader = '📥 تم استلام جهازك بنجاح في قسم الصيانة';
     let statusText = 'جهازك حالياً في مرحلة الفحص الأولي وتحديد الأعطال.';
     
@@ -257,13 +274,8 @@ export default function Maintenance({
       `📌 التفاصيل: ${statusText}\n\n` +
       `🔗 يمكنك تتبع حالة جهازك مباشرة عبر رمز QR أو هذا الرابط:\n${trackingUrl}\n\n` +
       `مع تحيات فريق *${storeName}* ❤️`;
-    
-    const cleanPhone = (order.customerPhone || '').replace(/[^0-9]/g, '');
-    const finalPhone = cleanPhone.startsWith('77') || cleanPhone.startsWith('73') || cleanPhone.startsWith('71') || cleanPhone.startsWith('70') 
-      ? '967' + cleanPhone
-      : cleanPhone;
 
-    return `https://api.whatsapp.com/send?phone=${finalPhone}&text=${encodeURIComponent(text)}`;
+    openWhatsApp(order.customerPhone || '', text);
   };
 
   const handleDeleteTicket = (order: MaintenanceOrder) => {
@@ -534,15 +546,14 @@ export default function Maintenance({
                     <span>تتبع QR</span>
                   </button>
 
-                  <a
-                    href={getWhatsAppStatusLink(order)}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => handleSendWhatsAppStatus(order)}
                     className="px-2.5 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white transition cursor-pointer text-xs font-bold flex items-center gap-1 border border-emerald-200"
                     title="إشعار واتساب"
                   >
                     <Send className="w-3.5 h-3.5" /> إشعار واتساب
-                  </a>
+                  </button>
 
                   <button
                     type="button"
@@ -663,15 +674,14 @@ export default function Maintenance({
                         <span className="text-[11px] font-bold">تتبع</span>
                       </button>
 
-                      <a
-                        href={getWhatsAppStatusLink(order)}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => handleSendWhatsAppStatus(order)}
                         className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition cursor-pointer"
                         title="إرسال إشعار وتحديث عبر واتساب"
                       >
                         <Send className="w-3.5 h-3.5" />
-                      </a>
+                      </button>
 
                       <button
                         type="button"
@@ -1033,15 +1043,14 @@ export default function Maintenance({
                 <span>{isCopied ? 'تم نسخ رابط التتبع!' : 'نسخ رابط التتبع للعميل'}</span>
               </button>
 
-              <a
-                href={getWhatsAppStatusLink(trackingOrder)}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => handleSendWhatsAppStatus(trackingOrder)}
                 className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-2 shadow-sm shadow-emerald-600/20"
               >
                 <Send className="w-4 h-4" />
                 <span>إرسال بطاقة التتبع عبر الواتساب</span>
-              </a>
+              </button>
             </div>
 
           </div>

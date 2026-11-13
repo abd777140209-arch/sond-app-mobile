@@ -43,6 +43,7 @@ import {
   Type,
   Bold
 } from 'lucide-react';
+import { showToast } from '../utils/toast';
 import { QRCodeSVG } from 'qrcode.react';
 import JsBarcode from 'jsbarcode';
 import { 
@@ -183,19 +184,25 @@ export default function PrinterInvoiceStudio({
     setTimeout(() => setSaveSuccessNotice(false), 3000);
   };
 
+  const [confirmingResetDefaults, setConfirmingResetDefaults] = useState(false);
+
   // Reset to Defaults
   const handleResetDefaults = () => {
     soundManager.playWarningBeep();
-    if (confirm('هل تريد بالتأكيد استعادة الإعدادات الافتراضية الأولية لجميع خيارات الطابعة وتصميم الفواتير؟')) {
-      setPrinterConfig(DEFAULT_PRINTER_SETTINGS);
-      setPreviewPaperSize(DEFAULT_PRINTER_SETTINGS.paperSize);
-      savePrinterSettingsLocally(DEFAULT_PRINTER_SETTINGS);
-      onSaveSettings({
-        ...settings,
-        printerSettings: DEFAULT_PRINTER_SETTINGS
-      });
-      soundManager.playSuccessChime();
+    if (!confirmingResetDefaults) {
+      setConfirmingResetDefaults(true);
+      return;
     }
+    setConfirmingResetDefaults(false);
+    setPrinterConfig(DEFAULT_PRINTER_SETTINGS);
+    setPreviewPaperSize(DEFAULT_PRINTER_SETTINGS.paperSize);
+    savePrinterSettingsLocally(DEFAULT_PRINTER_SETTINGS);
+    onSaveSettings({
+      ...settings,
+      printerSettings: DEFAULT_PRINTER_SETTINGS
+    });
+    soundManager.playSuccessChime();
+    showToast('تمت استعادة الإعدادات الافتراضية للطابعة بنجاح', 'success');
   };
 
   // Build Sample Print Payload for Testing
@@ -258,7 +265,7 @@ export default function PrinterInvoiceStudio({
       soundManager.playSuccessChime();
     } catch (err) {
       soundManager.playWarningBeep();
-      alert('تعذر إرسال أمر الطباعة التجريبية. يرجى التحقق من اتصال الطابعة أو السماح بالنوافذ المنبثقة.');
+      showToast('تعذر إرسال أمر الطباعة التجريبية. تحقق من اتصال الطابعة.', 'error');
     } finally {
       setIsTestPrinting(false);
     }
@@ -275,6 +282,7 @@ export default function PrinterInvoiceStudio({
     );
     if (ok) {
       soundManager.playSuccessChime();
+      showToast('تم تصدير نموذج الفاتورة PDF بنجاح', 'success');
     }
   };
 
@@ -295,7 +303,7 @@ export default function PrinterInvoiceStudio({
   const handleTestCashDrawer = () => {
     soundManager.playScanBeep();
     soundManager.playSuccessChime();
-    alert('✓ تم إرسال نبضة فتح درج النقد (ESC/POS: \\x1B\\x70\\x00) وأمر قطع الورق (GS V 65 0) بنجاح!');
+    showToast('تم إرسال نبضة فتح درج النقد (ESC/POS) وأمر قطع الورق بنجاح!', 'success');
   };
 
   return (
@@ -1703,19 +1711,41 @@ export default function PrinterInvoiceStudio({
                   </div>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={handleResetDefaults}
-                  className="p-4 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-right transition cursor-pointer flex items-center gap-3 active:scale-98 shadow-xs"
-                >
-                  <div className="p-3 rounded-xl bg-rose-600 text-white shadow-xs">
-                    <RefreshCw className="w-5 h-5" />
+                {!confirmingResetDefaults ? (
+                  <button
+                    type="button"
+                    onClick={handleResetDefaults}
+                    className="p-4 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-right transition cursor-pointer flex items-center gap-3 active:scale-98 shadow-xs"
+                  >
+                    <div className="p-3 rounded-xl bg-rose-600 text-white shadow-xs">
+                      <RefreshCw className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-extrabold text-rose-950">استعادة الإعدادات الافتراضية</div>
+                      <div className="text-[10px] text-rose-700/80">إعادة ضبط جميع خيارات الطابعة للمصنع</div>
+                    </div>
+                  </button>
+                ) : (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-300 flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-rose-900">تأكيد استعادة الافتراضي؟</span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={handleResetDefaults}
+                        className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-bold cursor-pointer"
+                      >
+                        تأكيد
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingResetDefaults(false)}
+                        className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                      >
+                        إلغاء
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-xs font-extrabold text-rose-950">استعادة الإعدادات الافتراضية</div>
-                    <div className="text-[10px] text-rose-700/80">إعادة ضبط جميع خيارات الطابعة للمصنع</div>
-                  </div>
-                </button>
+                )}
               </div>
 
               {/* Diagnostic Notes Card */}

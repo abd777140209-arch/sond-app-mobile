@@ -29,7 +29,8 @@ import {
   Smartphone,
   Bot,
   Printer,
-  Monitor
+  Monitor,
+  Bell
 } from 'lucide-react';
 import { SystemSettings, MaintenanceOrder, Product, UserAccount } from '../types';
 import { soundManager } from '../utils/sound';
@@ -109,7 +110,7 @@ export default function Navigation({
     if (role === 'admin') return true;
     if (role === 'cashier') return ['dashboard', 'pos', 'customers', 'transactions', 'maintenance', 'device_receipt'].includes(tabId);
     if (role === 'technician') return ['dashboard', 'maintenance', 'device_receipt', 'diagnostic', 'inventory'].includes(tabId);
-    if (role === 'accountant') return ['dashboard', 'customers', 'inventory', 'transactions', 'reports', 'stock_audit', 'phone_ledger', 'employees'].includes(tabId);
+    if (role === 'accountant') return ['dashboard', 'customers', 'inventory', 'transactions', 'reports', 'stock_audit', 'phone_ledger', 'employees', 'enterprise_dashboard'].includes(tabId);
     return true;
   };
 
@@ -240,6 +241,13 @@ export default function Navigation({
           sublabel: 'الأوامر الصوتية والاستعلام المحاسبي',
           icon: Bot,
           accent: 'blue'
+        },
+        {
+          id: 'enterprise_dashboard',
+          label: 'مركز التنبيهات والنسخ',
+          sublabel: 'مراقبة الورشة والنواقص والنسخ التلقائي لـ Drive',
+          icon: Bell,
+          accent: 'amber'
         },
         {
           id: 'settings',

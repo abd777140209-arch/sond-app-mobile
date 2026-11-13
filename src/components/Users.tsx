@@ -33,6 +33,7 @@ import {
 import { UserAccount, UserRole, AuditLog } from '../types';
 import { soundManager } from '../utils/sound';
 import { saveAndShareFile } from '../utils/fileExport';
+import { showToast } from '../utils/toast';
 
 interface UsersProps {
   users: UserAccount[];
@@ -93,6 +94,7 @@ export default function Users({
   const [activeTab, setActiveTab] = useState<'users' | 'audit'>('users');
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [confirmClearLogs, setConfirmClearLogs] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
 
@@ -139,7 +141,7 @@ export default function Users({
     e.preventDefault();
     if (!formName.trim() || !formUsername.trim()) {
       soundManager.playWarningBeep();
-      alert('يرجى كتابة الاسم واسم المستخدم بشكل صحيح');
+      showToast('يرجى كتابة الاسم واسم المستخدم بشكل صحيح', 'warning');
       return;
     }
 
@@ -181,13 +183,12 @@ export default function Users({
 
   const handleDelete = (id: string, name: string) => {
     if (id === currentUser.id) {
-      alert('لا يمكنك حذف المستخدم الحالي القائم بالعمل!');
+      showToast('لا يمكنك حذف المستخدم الحالي القائم بالعمل!', 'warning');
       return;
     }
-    if (window.confirm(`هل أنت تأكد من حذف مستخدم النظام (${name})؟`)) {
-      onDeleteUser(id);
-      soundManager.playScanBeep();
-    }
+    onDeleteUser(id);
+    soundManager.playScanBeep();
+    showToast(`تم حذف المستخدم (${name}) بنجاح`, 'info');
   };
 
   // Filtered Audit Logs
@@ -215,7 +216,7 @@ export default function Users({
       });
     } catch (err) {
       console.warn('Error exporting audit logs JSON:', err);
-      alert('⚠️ تعذر تصدير سجل الأنشطة.');
+      showToast('تعذر تصدير سجل الأنشطة.', 'error');
     }
   };
 
@@ -474,19 +475,37 @@ export default function Users({
                 <span>تصدير السجل</span>
               </button>
 
-              {onClearAuditLogs && (
+              {onClearAuditLogs && !confirmClearLogs && (
                 <button
-                  onClick={() => {
-                    if (window.confirm('هل أنت تأكد من مسح كافة سجلات الأنشطة الحالية؟')) {
-                      onClearAuditLogs();
-                      soundManager.playScanBeep();
-                    }
-                  }}
+                  onClick={() => setConfirmClearLogs(true)}
                   className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5 border border-rose-200"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>مسح السجل</span>
                 </button>
+              )}
+
+              {onClearAuditLogs && confirmClearLogs && (
+                <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-200 px-2.5 py-1.5 rounded-xl">
+                  <span className="text-[11px] font-bold text-rose-800">تأكيد المسح؟</span>
+                  <button
+                    onClick={() => {
+                      onClearAuditLogs();
+                      setConfirmClearLogs(false);
+                      soundManager.playScanBeep();
+                      showToast('تم مسح سجلات الأنشطة الحالية', 'info');
+                    }}
+                    className="px-2 py-0.5 rounded-lg bg-rose-600 text-white text-[11px] font-bold cursor-pointer"
+                  >
+                    نعم
+                  </button>
+                  <button
+                    onClick={() => setConfirmClearLogs(false)}
+                    className="px-2 py-0.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-[11px] font-bold cursor-pointer"
+                  >
+                    إلغاء
+                  </button>
+                </div>
               )}
             </div>
 

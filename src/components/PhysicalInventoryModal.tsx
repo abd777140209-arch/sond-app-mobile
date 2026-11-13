@@ -314,8 +314,7 @@ export function PhysicalInventoryModal({
     text += `-----------------------------------------\n`;
     text += `تم استخراج التقرير عبر نظام سند المحاسبي 🚀\n`;
 
-    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(waUrl, '_blank', 'noopener,noreferrer');
+    await openWhatsApp('', text);
   };
 
   const handlePhysicalCountChange = (productId: string, val: number) => {

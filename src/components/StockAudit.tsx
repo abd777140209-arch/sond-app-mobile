@@ -39,6 +39,7 @@ import * as XLSX from 'xlsx';
 import { soundManager } from '../utils/sound';
 import { saveAndShareFile, exportToCSV } from '../utils/fileExport';
 import { generateAndSharePDF } from '../services/pdfService';
+import { showToast } from '../utils/toast';
 
 interface ImportedAuditRow {
   productId?: string;
@@ -148,7 +149,7 @@ export default function StockAudit({
 
         const lines = text.split(/\r\n|\n/).map(l => l.trim()).filter(l => l.length > 0);
         if (lines.length <= 1) {
-          alert('ملف CSV فارغ أو لا يحتوي على بيانات جرد كافية.');
+          showToast('ملف CSV فارغ أو لا يحتوي على بيانات جرد كافية.', 'warning');
           return;
         }
 
@@ -204,7 +205,7 @@ export default function StockAudit({
         }
 
         if (rows.length === 0) {
-          alert('لم يتم العثور على أي منتجات مطابقة في ملف CSV المرفق.');
+          showToast('لم يتم العثور على أي منتجات مطابقة في ملف CSV المرفق.', 'warning');
           return;
         }
 
@@ -214,7 +215,7 @@ export default function StockAudit({
 
       } catch (err) {
         console.error('CSV Import Error:', err);
-        alert('حدث خطأ أثناء قراءة ملف CSV. يرجى التأكد من المنسق الصحيح.');
+        showToast('حدث خطأ أثناء قراءة ملف CSV. يرجى التأكد من التنسيق الصحيح.', 'error');
       } finally {
         if (fileInputRef.current) fileInputRef.current.value = '';
       }
@@ -234,26 +235,24 @@ export default function StockAudit({
     setPhysicalCounts(newCounts);
     setShowImportPreviewModal(false);
     soundManager.playSuccessChime();
-    alert(`✓ تم تحميل ${matched.length} كمية جرد إلى جدول المطابقة كمسودة للمراجعة والاعتماد.`);
+    showToast(`تم تحميل ${matched.length} كمية جرد إلى جدول المطابقة كمسودة للمراجعة والاعتماد.`, 'success');
   };
 
   const handleApplyImportDirectly = () => {
     const matched = importedRows.filter(r => r.status === 'matched' && r.productId);
     if (matched.length === 0) {
-      alert('لا توجد أصناف مطابقة للتحديث.');
+      showToast('لا توجد أصناف مطابقة للتحديث.', 'warning');
       return;
     }
-    if (confirm(`هل أنت متأكد من تحديث واعتماد المخزون فوراً لعدد ${matched.length} صنف في قاعدة البيانات؟`)) {
-      matched.forEach(r => {
-        if (r.productId) {
-          onUpdateProductStock(r.productId, r.importedPhysicalStock);
-          setAppliedReconciliations(prev => ({ ...prev, [r.productId]: true }));
-        }
-      });
-      setShowImportPreviewModal(false);
-      soundManager.playSuccessChime();
-      alert(`✓ تم تحديث واعتماد المخزون بنجاح لـ ${matched.length} صنف!`);
-    }
+    matched.forEach(r => {
+      if (r.productId) {
+        onUpdateProductStock(r.productId, r.importedPhysicalStock);
+        setAppliedReconciliations(prev => ({ ...prev, [r.productId]: true }));
+      }
+    });
+    setShowImportPreviewModal(false);
+    soundManager.playSuccessChime();
+    showToast(`تم تحديث واعتماد المخزون بنجاح لـ ${matched.length} صنف!`, 'success');
   };
 
   // Privacy Mode currency formatter
@@ -331,19 +330,17 @@ export default function StockAudit({
 
     if (itemsToUpdate.length === 0) {
       soundManager.playWarningBeep();
-      alert('لا توجد أي فروقات كميات معدلة لتطبيقها!');
+      showToast('لا توجد أي فروقات كميات معدلة لتطبيقها!', 'info');
       return;
     }
 
-    if (confirm(`هل أنت متأكد من تطبيق وتسوية الجرد لعدد ${itemsToUpdate.length} صنف بالمستودع؟`)) {
-      soundManager.playSuccessChime();
-      itemsToUpdate.forEach(p => {
-        const physical = physicalCounts[p.id];
-        onUpdateProductStock(p.id, physical);
-        setAppliedReconciliations(prev => ({ ...prev, [p.id]: true }));
-      });
-      alert('✓ تم اعتماد وتسوية الفروقات الميدانية للمستودع بنجاح!');
-    }
+    soundManager.playSuccessChime();
+    itemsToUpdate.forEach(p => {
+      const physical = physicalCounts[p.id];
+      onUpdateProductStock(p.id, physical);
+      setAppliedReconciliations(prev => ({ ...prev, [p.id]: true }));
+    });
+    showToast(`تم اعتماد وتسوية الفروقات الميدانية (${itemsToUpdate.length} صنف) بنجاح!`, 'success');
   };
 
   // Filtering products for Reconciliation Tab

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, 
@@ -60,6 +60,8 @@ interface CustomersProps {
   isPrivacyMode?: boolean;
   debtReminderTemplate?: string;
   onSaveReminderTemplate?: (template: string) => void;
+  initialCustomerId?: string | null;
+  onClearInitialCustomer?: () => void;
 }
 
 export default function Customers({
@@ -75,7 +77,9 @@ export default function Customers({
   storeLogoUrl,
   isPrivacyMode = false,
   debtReminderTemplate,
-  onSaveReminderTemplate
+  onSaveReminderTemplate,
+  initialCustomerId,
+  onClearInitialCustomer
 }: CustomersProps) {
   const fmtAmount = (num: number) => {
     if (isPrivacyMode) return '**** ' + currency;
@@ -123,6 +127,17 @@ export default function Customers({
   const [statementInitialFilter, setStatementInitialFilter] = useState<StatementFilterType>('all');
   const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
   const [customerNotice, setCustomerNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialCustomerId) {
+      const target = customers.find(c => c.id === initialCustomerId && c.isDeleted !== true);
+      if (target) {
+        setStatementInitialFilter('all');
+        setStatementCustomer(target);
+      }
+      onClearInitialCustomer?.();
+    }
+  }, [initialCustomerId, customers]);
 
   // Filter out soft-deleted customers
   const activeCustomers = customers.filter(c => c.isDeleted !== true && c.isActive !== false);

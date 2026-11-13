@@ -118,7 +118,7 @@ export interface PurchaseInvoiceItem {
 
 export interface Transaction {
   id: string;
-  type: 'sale' | 'payment' | 'expense' | 'refund' | 'maintenance_income';
+  type: 'sale' | 'payment' | 'expense' | 'refund' | 'maintenance_income' | 'maintenance';
   amount: number;
   date: string;
   description: string;
@@ -308,7 +308,7 @@ export interface PayrollRecord {
   id: string;
   employeeId: string;
   employeeName: string;
-  type: 'advance' | 'salary_payment';
+  type: 'advance' | 'salary_payment' | 'salary';
   amount: number;
   date: string;
   note: string;

@@ -480,16 +480,7 @@ export default function InvoiceModal({
     text += `برمجة وتطوير م.عبدالمجيد المحواشي\n`;
     text += `${printerConfig.footerGreeting || 'شكراً لزيارتكم وتعاملكم الراقي معنا! 🌸'}\n`;
 
-    try {
-      await openWhatsApp(cleanedPhone, text);
-    } catch (e) {
-      console.error('WhatsApp launch error:', e);
-      const encodedText = encodeURIComponent(text);
-      const waUrl = cleanedPhone 
-        ? `https://api.whatsapp.com/send?phone=${cleanedPhone}&text=${encodedText}`
-        : `https://api.whatsapp.com/send?text=${encodedText}`;
-      window.open(waUrl, '_blank', 'noopener,noreferrer');
-    }
+    await openWhatsApp(cleanedPhone, text);
   };
 
   const isWidePaper = paperSize === 'a4' || paperSize === 'a5';

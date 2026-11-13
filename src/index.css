@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Alexandria:wght@400;600;700;800;900&family=Almarai:wght@400;700;800&family=Amiri:wght@400;700&family=Cairo:wght@300;400;500;600;700;800;900&family=Changa:wght@400;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Tajawal:wght@400;500;700;800;900&display=swap');
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --font-sans: "Cairo", ui-sans-serif, system-ui, sans-serif;

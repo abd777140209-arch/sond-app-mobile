@@ -65,6 +65,7 @@ import { soundManager } from '../utils/sound';
 import { loadLicenseLocally, saveLicenseLocally, generateHWID, LicenseInfo } from '../utils/licensing';
 import { activateLicenseOnCloud } from '../utils/firebase';
 import { safeStorage } from '../utils/safeStorage';
+import { showToast } from '../utils/toast';
 
 interface SettingsProps {
   settings: SystemSettings;
@@ -259,6 +260,8 @@ export default function Settings({
   const [resetCompletedResult, setResetCompletedResult] = useState<{ deletedCount: number; resetTimestamp: string } | null>(null);
 
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [confirmingDeactivate, setConfirmingDeactivate] = useState(false);
+  const [confirmingDeleteLogo, setConfirmingDeleteLogo] = useState(false);
   const [currentLicense, setCurrentLicense] = useState<LicenseInfo>(() => loadLicenseLocally());
 
   // Refs
@@ -268,7 +271,7 @@ export default function Settings({
   const handleUpgradeLicense = async () => {
     if (!upgradeKey.trim()) {
       soundManager.playWarningBeep();
-      alert('⚠️ يرجى إدخال كود التفعيل أولاً!');
+      showToast('يرجى إدخال كود التفعيل أولاً!', 'warning');
       return;
     }
 
@@ -284,7 +287,7 @@ export default function Settings({
 
       if (res.success && res.data) {
         soundManager.playSuccessChime();
-        alert('🎉 تم ترقية اشتراكك وتفعيل الترخيص الجديد بنجاح!');
+        showToast('تم ترقية اشتراكك وتفعيل الترخيص الجديد بنجاح!', 'success');
         const updatedLicense: LicenseInfo = {
           licenseKey: res.data.key,
           status: (res.data.status === 'suspended' ? 'expired' : res.data.status) as any,
@@ -297,14 +300,14 @@ export default function Settings({
         saveLicenseLocally(updatedLicense);
         setCurrentLicense(updatedLicense);
         setUpgradeKey('');
-        window.location.reload();
+        setTimeout(() => window.location.reload(), 600);
       } else {
         soundManager.playWarningBeep();
-        alert(`❌ فشل التفعيل: ${res.message || 'الكود غير صالح أو مستخدم'}`);
+        showToast(`فشل التفعيل: ${res.message || 'الكود غير صالح أو مستخدم'}`, 'error');
       }
     } catch (err) {
       soundManager.playWarningBeep();
-      alert('❌ حدث خطأ أثناء الاتصال بالخادم، يرجى المحاولة لاحقاً');
+      showToast('حدث خطأ أثناء الاتصال بالخادم، يرجى المحاولة لاحقاً', 'error');
     } finally {
       setIsUpgrading(false);
     }
@@ -312,20 +315,22 @@ export default function Settings({
 
   const handleDeactivate = () => {
     soundManager.playWarningBeep();
-    if (confirm('🚨 تنبيه أمني شديد: هل أنت متأكد من إلغاء تفعيل الرخصة على هذا الجهاز وتسجيل الخروج؟ سيتم قفل البرنامج فوراً ومطالبتك بإدخال مفتاح تفعيل جديد للوصول لبياناتك.')) {
-      const unlicensed: LicenseInfo = {
-        licenseKey: '',
-        status: 'unlicensed',
-        activatedAt: '',
-        expiresAt: '',
-        hwid: generateHWID(),
-        subscriptionType: 'trial'
-      };
-      saveLicenseLocally(unlicensed);
-      soundManager.playSuccessChime();
-      alert('✓ تم إلغاء تفعيل الجهاز بنجاح! سيتم إعادة تحميل الصفحة لقفل البرنامج.');
-      window.location.reload();
+    if (!confirmingDeactivate) {
+      setConfirmingDeactivate(true);
+      return;
     }
+    const unlicensed: LicenseInfo = {
+      licenseKey: '',
+      status: 'unlicensed',
+      activatedAt: '',
+      expiresAt: '',
+      hwid: generateHWID(),
+      subscriptionType: 'trial'
+    };
+    saveLicenseLocally(unlicensed);
+    soundManager.playSuccessChime();
+    showToast('تم إلغاء تفعيل الجهاز بنجاح! سيتم إعادة تحميل الصفحة.', 'info');
+    setTimeout(() => window.location.reload(), 700);
   };
 
   // Currencies state
@@ -375,7 +380,7 @@ export default function Settings({
     soundManager.playWarningBeep();
     const target = currenciesList.find(c => c.id === id);
     if (target?.isBase) {
-      alert('⚠️ لا يمكن حذف العملة الأساسية للنظام.');
+      showToast('لا يمكن حذف العملة الأساسية للنظام.', 'warning');
       return;
     }
     setCurrenciesList(prev => prev.filter(c => c.id !== id));
@@ -534,7 +539,7 @@ export default function Settings({
     if (!file) return;
 
     if (file.size > 3 * 1024 * 1024) {
-      alert('حجم الصورة كبير جداً، يرجى اختيار صورة بحجم أقل من 3 ميجابايت.');
+      showToast('حجم الصورة كبير جداً، يرجى اختيار صورة بحجم أقل من 3 ميجابايت.', 'warning');
       return;
     }
 
@@ -630,11 +635,6 @@ export default function Settings({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!confirm('⚠️ تنبيه هام: استعادة النسخة الاحتياطية ستقوم باستبدال البيانات الحالية بالبيانات الموجودة بداخل الملف المختار. هل أنت متأكد من الاستمرار؟')) {
-      e.target.value = '';
-      return;
-    }
-
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
@@ -644,11 +644,11 @@ export default function Settings({
         const handleResult = (ok: boolean) => {
           if (ok) {
             soundManager.playSuccessChime();
-            alert('✓ تم استعادة النسخة الاحتياطية وإعادة تشغيل النظام بنجاح تام!');
-            window.location.reload();
+            showToast('تمت استعادة النسخة الاحتياطية بنجاح! جاري تحديث النظام...', 'success');
+            setTimeout(() => window.location.reload(), 700);
           } else {
             soundManager.playWarningBeep();
-            alert('❌ فشل استعادة البيانات: الملف المرفق لا يحتوي على بنية بيانات محاسبية صحيحة.');
+            showToast('فشل استعادة البيانات: الملف المرفق لا يحتوي على بنية بيانات صحيحة.', 'error');
           }
         };
 
@@ -656,7 +656,7 @@ export default function Settings({
           result.then(handleResult).catch((err) => {
             soundManager.playWarningBeep();
             console.error("Backup Restore Error: ", err);
-            alert('❌ عذراً، حدث خطأ أثناء تطبيق النسخة الاحتياطية.');
+            showToast('حدث خطأ أثناء تطبيق النسخة الاحتياطية.', 'error');
           });
         } else {
           handleResult(result);
@@ -664,7 +664,7 @@ export default function Settings({
 
       } catch (err) {
         soundManager.playWarningBeep();
-        alert('❌ صيغة الملف غير مدعومة أو تالفة. يرجى اختيار ملف بصيغة JSON.');
+        showToast('صيغة الملف غير مدعومة أو تالفة. يرجى اختيار ملف JSON صحيح.', 'error');
       } finally {
         e.target.value = '';
       }
@@ -723,20 +723,17 @@ export default function Settings({
           }
 
           if (jsonContent) {
-            if (!confirm('⚠️ تنبيه هام: استعادة النسخة الاحتياطية ستقوم باستبدال البيانات الحالية بالبيانات الموجودة بداخل الملف المختار. هل أنت متأكد من الاستمرار؟')) {
-              return;
-            }
             try {
               const json = JSON.parse(jsonContent);
               const restoreRes = onRestoreData(json);
               const handleResult = (ok: boolean) => {
                 if (ok) {
                   soundManager.playSuccessChime();
-                  alert('✓ تم استعادة النسخة الاحتياطية وإعادة تشغيل النظام بنجاح تام!');
-                  window.location.reload();
+                  showToast('تمت استعادة النسخة الاحتياطية بنجاح! جاري تحديث النظام...', 'success');
+                  setTimeout(() => window.location.reload(), 700);
                 } else {
                   soundManager.playWarningBeep();
-                  alert('❌ فشل استعادة البيانات: الملف المرفق لا يحتوي على بنية بيانات محاسبية صحيحة.');
+                  showToast('فشل استعادة البيانات: الملف المرفق غير صالح.', 'error');
                 }
               };
 
@@ -744,7 +741,7 @@ export default function Settings({
                 restoreRes.then(handleResult).catch((err) => {
                   soundManager.playWarningBeep();
                   console.error("Backup Restore Error: ", err);
-                  alert('❌ عذراً، حدث خطأ أثناء تطبيق النسخة الاحتياطية.');
+                  showToast('حدث خطأ أثناء تطبيق النسخة الاحتياطية.', 'error');
                 });
               } else {
                 handleResult(restoreRes);
@@ -752,7 +749,7 @@ export default function Settings({
               return;
             } catch (jsonParseErr) {
               console.error('Invalid JSON content parsed:', jsonParseErr);
-              alert('❌ صيغة الملف المختار غير صحيحة. يرجى اختيار ملف نسخة احتياطية بصيغة JSON.');
+              showToast('صيغة الملف المختار غير صحيحة. يرجى اختيار ملف نسخة احتياطية JSON.', 'error');
               return;
             }
           }
@@ -818,7 +815,7 @@ export default function Settings({
       }
     } catch (err) {
       console.error('Backup creation error:', err);
-      alert('⚠️ حدث خطأ أثناء إعداد أو حفظ ملف النسخة الاحتياطية.');
+      showToast('حدث خطأ أثناء إعداد أو حفظ ملف النسخة الاحتياطية.', 'error');
     }
   };
 
@@ -851,47 +848,17 @@ export default function Settings({
       const jsonStr = JSON.stringify(fullBackupData, null, 2);
       const fileName = `Sanad_Share_Backup_${new Date().toISOString().slice(0, 10)}_${Date.now().toString().slice(-4)}.json`;
 
-      if (Capacitor.isNativePlatform()) {
-        try {
-          await ensureStoragePermissions();
-
-          const writeResult = await Filesystem.writeFile({
-            path: fileName,
-            data: jsonStr,
-            directory: Directory.Cache,
-            recursive: true,
-            encoding: Encoding.UTF8
-          });
-
-          if (writeResult && writeResult.uri) {
-            await Share.share({
-              title: 'مشاركة نسخة البيانات - نظام سند المحاسبي',
-              text: `ملف النسخة الاحتياطية الشاملة لنظام سند المحاسبي بتاريخ ${new Date().toLocaleDateString('ar-YE')}`,
-              url: writeResult.uri,
-              dialogTitle: 'اختر التطبيق لمشاركة النسخة الاحتياطية (WhatsApp, Drive, Telegram...)'
-            });
-            return;
-          }
-        } catch (nativeErr: any) {
-          const errStr = String(nativeErr || '').toLowerCase();
-          if (errStr.includes('cancel') || errStr.includes('dismiss') || errStr.includes('abort')) {
-            return;
-          }
-          console.warn('Native Share attempt error:', nativeErr);
-        }
-      }
-
       await saveAndShareFile({
         fileName,
         data: jsonStr,
         mimeType: 'application/json',
         title: 'مشاركة نسخة البيانات - نظام سند المحاسبي',
-        text: 'ملف قاعدة البيانات والنسخة الاحتياطية لنظام سند المحاسبي'
+        text: `ملف النسخة الاحتياطية الشاملة لنظام سند المحاسبي بتاريخ ${new Date().toLocaleDateString('ar-YE')}`
       });
 
     } catch (err) {
       console.error('Share backup error:', err);
-      alert('⚠️ تعذر إتمام مشاركة ملف النسخة الاحتياطية.');
+      showToast('تعذر إتمام مشاركة ملف النسخة الاحتياطية.', 'error');
     }
   };
 
@@ -1051,13 +1018,33 @@ export default function Settings({
               <span>👨‍💻 معلومات المطور واللوحة (/admin)</span>
             </button>
 
-            <button
-              onClick={handleDeactivate}
-              className="py-2.5 px-4 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              <ShieldAlert className="w-4 h-4" />
-              <span>إلغاء التفعيل الخروج</span>
-            </button>
+            {!confirmingDeactivate ? (
+              <button
+                onClick={handleDeactivate}
+                className="py-2.5 px-4 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <ShieldAlert className="w-4 h-4" />
+                <span>إلغاء التفعيل الخروج</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-300 px-3 py-1.5 rounded-xl">
+                <span className="text-[11px] font-bold text-rose-800">تأكيد إلغاء التفعيل؟</span>
+                <button
+                  type="button"
+                  onClick={handleDeactivate}
+                  className="px-2.5 py-1 rounded-lg bg-rose-600 text-white text-[11px] font-bold cursor-pointer"
+                >
+                  تأكيد
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDeactivate(false)}
+                  className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-[11px] font-bold cursor-pointer"
+                >
+                  إلغاء
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1614,21 +1601,43 @@ export default function Settings({
                       <span>{storeLogoUrl ? 'تغيير الشعار' : 'رفع شعار جديد'}</span>
                     </button>
 
-                    {storeLogoUrl && (
+                    {storeLogoUrl && !confirmingDeleteLogo && (
                       <button
                         type="button"
                         onClick={() => {
                           soundManager.playWarningBeep();
-                          if (confirm('هل أنت متأكد من حذف شعار المنشأة العائد للترخيص الحالي؟')) {
-                            setStoreLogoUrl('');
-                            localStorage.removeItem('smart_accounting_company_logo');
-                          }
+                          setConfirmingDeleteLogo(true);
                         }}
                         className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-rose-200"
                       >
                         <Trash2 className="w-4 h-4" />
                         <span>حذف الشعار</span>
                       </button>
+                    )}
+
+                    {storeLogoUrl && confirmingDeleteLogo && (
+                      <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-200 px-2.5 py-1.5 rounded-xl">
+                        <span className="text-[11px] font-bold text-rose-800">حذف الشعار؟</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStoreLogoUrl('');
+                            localStorage.removeItem('smart_accounting_company_logo');
+                            setConfirmingDeleteLogo(false);
+                            showToast('تم حذف شعار المنشأة', 'info');
+                          }}
+                          className="px-2 py-1 rounded-lg bg-rose-600 text-white text-[11px] font-bold cursor-pointer"
+                        >
+                          نعم
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmingDeleteLogo(false)}
+                          className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-[11px] font-bold cursor-pointer"
+                        >
+                          إلغاء
+                        </button>
+                      </div>
                     )}
                   </div>
 

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Home, 
@@ -23,7 +23,14 @@ import {
   Database,
   Download,
   Upload,
-  Calculator
+  Calculator,
+  Sun,
+  Moon,
+  Search,
+  CheckCircle2,
+  AlertTriangle,
+  Info,
+  X
 } from 'lucide-react';
 
 import { Product, Customer, Invoice, Payment, Transaction, SystemSettings, MaintenanceOrder, Employee, PayrollRecord, UserAccount, AuditLog } from './types';
@@ -80,6 +87,8 @@ import {
 } from './utils/firebaseSync';
 import { listenToLicenseOnCloud, checkLicenseOnCloud, CloudLicense } from './utils/firebase';
 import { safeStorage, cleanUpStorageQuota } from './utils/safeStorage';
+import { subscribeToasts, ToastMessage, showToast } from './utils/toast';
+import type { StoreAIContext } from './services/GoogleAIService';
 
 export default function App() {
   // 1. All Component State Initializations
@@ -324,6 +333,87 @@ export default function App() {
   const [activeInvoice, setActiveInvoice] = useState<Invoice | null>(null);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState<boolean>(false);
   const [showHeaderLogoutConfirm, setShowHeaderLogoutConfirm] = useState<boolean>(false);
+
+  // Cross-module navigation transfer states
+  const [preloadedPosItems, setPreloadedPosItems] = useState<Array<{ product: Product; quantity: number }>>([]);
+  const [prefilledMaintenanceProblem, setPrefilledMaintenanceProblem] = useState<{ deviceName?: string; issueDescription?: string; notes?: string } | null>(null);
+  const [initialStatementCustomerId, setInitialStatementCustomerId] = useState<string | null>(null);
+
+  // Global Toasts & Quick Command Palette (Ctrl+K)
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [quickSearchOpen, setQuickSearchOpen] = useState(false);
+  const [quickSearchQuery, setQuickSearchQuery] = useState('');
+
+  useEffect(() => {
+    return subscribeToasts((toast) => {
+      setToasts((prev) => [...prev.slice(-4), toast]);
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((item) => item.id !== toast.id));
+      }, toast.durationMs ?? 3800);
+    });
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setQuickSearchOpen(prev => !prev);
+      } else if (e.key === 'Escape') {
+        setQuickSearchOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Live store summary fed into Sanad AI Assistant
+  const storeAIContext: StoreAIContext = useMemo(() => {
+    const activeProds = products.filter(p => p.isDeleted !== true);
+    const activeCusts = customers.filter(c => c.isDeleted !== true && c.isActive !== false);
+    const todayPrefix = new Date().toISOString().split('T')[0];
+
+    const inflows = transactions
+      .filter(t => t.type === 'sale' || t.type === 'payment' || t.type === 'maintenance_income' || t.type === 'maintenance')
+      .reduce((s, t) => s + (t.amount || 0), 0);
+    const outflows = transactions
+      .filter(t => t.type === 'expense' || t.type === 'refund')
+      .reduce((s, t) => s + (t.amount || 0), 0);
+
+    const salesInvoices = invoices.filter(inv => inv.status !== 'refunded');
+    const totalSales = salesInvoices.reduce((s, inv) => s + (inv.finalAmount || inv.totalAmount || 0), 0);
+    const todaySales = salesInvoices
+      .filter(inv => (inv.date || '').startsWith(todayPrefix))
+      .reduce((s, inv) => s + (inv.finalAmount || inv.totalAmount || 0), 0);
+
+    const totalDebts = activeCusts.reduce((s, c) => s + (c.totalDebt || 0), 0);
+    const lowStockProducts = activeProds
+      .filter(p => p.stock <= p.minStock)
+      .slice(0, 10)
+      .map(p => ({ name: p.name, stock: p.stock, minStock: p.minStock }));
+    const topDebtors = [...activeCusts]
+      .filter(c => (c.totalDebt || 0) > 0)
+      .sort((a, b) => (b.totalDebt || 0) - (a.totalDebt || 0))
+      .slice(0, 6)
+      .map(c => ({ name: c.name, totalDebt: c.totalDebt || 0, phone: c.phone }));
+    const activeMaintenanceOrders = maintenanceOrders
+      .filter(o => o.status === 'received' || o.status === 'repairing')
+      .slice(0, 8)
+      .map(o => ({ orderNumber: o.orderNumber, deviceName: o.deviceName, customerName: o.customerName, status: o.status }));
+
+    return {
+      storeName: settings.storeName || license.customerName || 'نظام سند المحاسبي',
+      currency: settings.currency || 'ر.ي',
+      cashboxBalance: inflows - outflows,
+      totalSales,
+      todaySales,
+      totalDebts,
+      lowStockProducts,
+      topDebtors,
+      activeMaintenanceOrders,
+      productsCount: activeProds.length,
+      customersCount: activeCusts.length
+    };
+  }, [products, customers, invoices, transactions, maintenanceOrders, settings.storeName, settings.currency, license.customerName]);
 
   // 2. Helper Handlers
   const addAuditLog = (actionType: string, actionLabel: string, details?: string) => {
@@ -1529,7 +1619,7 @@ export default function App() {
     if (isRevenueActive) {
       const maintTx: Transaction = {
         id: txId,
-        type: 'maintenance',
+        type: 'maintenance_income',
         amount: order.cost || 0,
         date: new Date().toISOString(),
         paymentMethod: 'cash',
@@ -1963,9 +2053,20 @@ export default function App() {
       case 'employees': return 'إدارة العمال والرواتب';
       case 'users': return 'المستخدمين والصلاحيات والرقابة';
       case 'printer_settings': return 'ضبط الطابعة وتخصيص الفواتير';
+      case 'enterprise_dashboard':
+      case 'alerts': return 'مركز التنبيهات والنسخ والتدقيق';
       case 'settings': return 'إعدادات النظام والنسخ الاحتياطي';
       default: return settings.storeName || license.customerName || 'نظام سند المحاسبي';
     }
+  };
+
+  const handleToggleLightDarkTheme = () => {
+    soundManager.playScanBeep();
+    const isCurrentlyLight = settings.appTheme === 'light-clean';
+    const nextTheme = isCurrentlyLight ? 'dark-luxury' : 'light-clean';
+    const updatedSettings: SystemSettings = { ...settings, appTheme: nextTheme };
+    handleSaveSettings(updatedSettings);
+    showToast(isCurrentlyLight ? 'تم التفعيل: المظهر الداكن الفخم' : 'تم التفعيل: المظهر النهاري المضيء', 'info');
   };
 
   const isDesktopMode = (settings.deviceMode || 'mobile') === 'desktop';
@@ -2027,6 +2128,29 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Quick Search / Command Palette (Ctrl+K) */}
+          <button
+            onClick={() => {
+              soundManager.playScanBeep();
+              setQuickSearchOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-bold transition cursor-pointer"
+            title="بحث والانتقال السريع (Ctrl+K)"
+          >
+            <Search className="w-3.5 h-3.5 text-blue-600" />
+            <span className="hidden md:inline font-bold">بحث سريع</span>
+            <kbd className="hidden xl:inline text-[9px] font-mono px-1.5 py-0.5 rounded bg-white border border-slate-300 text-slate-500">Ctrl+K</kbd>
+          </button>
+
+          {/* 1-Click Light / Dark Mode Switcher */}
+          <button
+            onClick={handleToggleLightDarkTheme}
+            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition cursor-pointer"
+            title={resolvedTheme === 'light-clean' ? 'التبديل للوضع الداكن' : 'التبديل للوضع الفاتح'}
+          >
+            {resolvedTheme === 'light-clean' ? <Moon className="w-4 h-4 text-indigo-600" /> : <Sun className="w-4 h-4 text-amber-400" />}
+          </button>
+
           {/* Quick Device Layout Mode Switcher (Mobile <-> Desktop) */}
           <button
             onClick={handleToggleDeviceMode}
@@ -2210,6 +2334,8 @@ export default function App() {
                 currency={settings.currency}
                 storeName={settings.storeName}
                 settings={settings}
+                preloadedItems={preloadedPosItems}
+                onClearPreloadedItems={() => setPreloadedPosItems([])}
               />
             )}
 
@@ -2232,6 +2358,8 @@ export default function App() {
                   setSettings(updated);
                   if (license.licenseKey) saveStoreSettings(license.licenseKey, updated);
                 }}
+                initialCustomerId={initialStatementCustomerId}
+                onClearInitialCustomer={() => setInitialStatementCustomerId(null)}
               />
             )}
 
@@ -2302,6 +2430,8 @@ export default function App() {
                 onDeleteOrder={handleDeleteMaintenanceOrder}
                 currency={settings.currency}
                 storeName={settings.storeName}
+                prefilledProblem={prefilledMaintenanceProblem}
+                onClearPrefilledProblem={() => setPrefilledMaintenanceProblem(null)}
               />
             )}
 
@@ -2309,11 +2439,19 @@ export default function App() {
               <SanadDiagnosticScreen
                 products={products}
                 currency={settings.currency}
-                onNavigateToPOSWithItems={() => {
+                storeName={settings.storeName}
+                onNavigateToPOSWithItems={(items) => {
+                  if (items && items.length > 0) {
+                    setPreloadedPosItems(items);
+                  }
                   setActiveTab('pos');
                   soundManager.playSuccessChime();
                 }}
-                onNavigateToMaintenanceWithProblem={() => {
+                onNavigateToMaintenanceWithProblem={(problem, notes) => {
+                  setPrefilledMaintenanceProblem({
+                    issueDescription: problem,
+                    notes: notes ? `الأعراض المبلغ عنها: ${notes}` : undefined
+                  });
                   setActiveTab('maintenance');
                   soundManager.playSuccessChime();
                 }}
@@ -2325,7 +2463,8 @@ export default function App() {
                 customers={customers}
                 transactions={transactions}
                 settings={settings}
-                onSelectCustomerStatement={() => {
+                onSelectCustomerStatement={(customer) => {
+                  setInitialStatementCustomerId(customer.id);
                   setActiveTab('customers');
                   soundManager.playSuccessChime();
                 }}
@@ -2342,8 +2481,9 @@ export default function App() {
             )}
 
             {activeTab === 'assistant' && (
-              <div className="max-w-2xl mx-auto h-[78vh] bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="max-w-2xl mx-auto h-[78vh] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
                 <SanadVoiceAssistant
+                  storeContext={storeAIContext}
                   onClose={() => setActiveTab('dashboard')}
                 />
               </div>
@@ -2454,8 +2594,9 @@ export default function App() {
       {/* 🎙️ Sanad AI Voice Assistant Modal */}
       {showSanadAssistant && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-3 sm:p-6 animate-fadeIn no-print">
-          <div className="w-full max-w-lg h-[80vh] bg-white rounded-2xl shadow-2xl overflow-hidden relative border border-slate-200">
+          <div className="w-full max-w-lg h-[80vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden relative border border-slate-200 dark:border-slate-700">
             <SanadVoiceAssistant 
+              storeContext={storeAIContext}
               onClose={() => setShowSanadAssistant(false)}
             />
           </div>
@@ -2543,6 +2684,163 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* ⚡ Quick Command & Search Palette (Ctrl+K) */}
+      <AnimatePresence>
+        {quickSearchOpen && (
+          <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 p-4 bg-slate-950/75 backdrop-blur-sm no-print" dir="rtl">
+            <div className="absolute inset-0" onClick={() => setQuickSearchOpen(false)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: -12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: -12 }}
+              className="relative z-10 w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2.5">
+                <Search className="w-5 h-5 text-blue-500 shrink-0" />
+                <input
+                  type="text"
+                  autoFocus
+                  value={quickSearchQuery}
+                  onChange={(e) => setQuickSearchQuery(e.target.value)}
+                  placeholder="ابحث عن شاشة، عميل لفتح كشف حسابه، أو صنف لإضافته للبيع..."
+                  className="flex-1 bg-transparent text-sm font-bold text-slate-900 dark:text-white focus:outline-none"
+                />
+                <button
+                  onClick={() => setQuickSearchOpen(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="max-h-80 overflow-y-auto p-3 space-y-3 text-right">
+                {/* Screens Quick Jump */}
+                <div className="space-y-1">
+                  <span className="text-[11px] font-extrabold text-slate-400 px-1.5">الأقسام والشاشات</span>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                    {[
+                      { id: 'dashboard', label: 'الرئيسية والملخص' },
+                      { id: 'pos', label: 'نقطة البيع (POS)' },
+                      { id: 'transactions', label: 'اليومية والسندات' },
+                      { id: 'customers', label: 'العملاء والديون' },
+                      { id: 'inventory', label: 'المخزن والأصناف' },
+                      { id: 'maintenance', label: 'قسم الصيانة' },
+                      { id: 'diagnostic', label: 'التشخيص الذكي' },
+                      { id: 'phone_ledger', label: 'دفتر العملات' },
+                      { id: 'reports', label: 'الأرباح والتقارير' },
+                      { id: 'enterprise_dashboard', label: 'التنبيهات والنسخ' },
+                      { id: 'assistant', label: 'المساعد الذكي AI' },
+                      { id: 'settings', label: 'الإعدادات' }
+                    ]
+                      .filter(s => !quickSearchQuery.trim() || s.label.includes(quickSearchQuery.trim()))
+                      .map(screen => (
+                        <button
+                          key={screen.id}
+                          onClick={() => {
+                            setQuickSearchOpen(false);
+                            setQuickSearchQuery('');
+                            handleTabSelect(screen.id);
+                          }}
+                          className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/40 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-100 text-right transition cursor-pointer"
+                        >
+                          {screen.label}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+
+                {/* Matching Customers */}
+                {quickSearchQuery.trim() && customers.some(c => !c.isDeleted && (c.name.toLowerCase().includes(quickSearchQuery.toLowerCase()) || c.phone.includes(quickSearchQuery))) && (
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-extrabold text-slate-400 px-1.5">العملاء المطابقون (فتح كشف الحساب)</span>
+                    <div className="space-y-1">
+                      {customers
+                        .filter(c => !c.isDeleted && (c.name.toLowerCase().includes(quickSearchQuery.toLowerCase()) || c.phone.includes(quickSearchQuery)))
+                        .slice(0, 5)
+                        .map(cust => (
+                          <button
+                            key={cust.id}
+                            onClick={() => {
+                              setQuickSearchOpen(false);
+                              setQuickSearchQuery('');
+                              setInitialStatementCustomerId(cust.id);
+                              setActiveTab('customers');
+                            }}
+                            className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-sky-900/30 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs transition cursor-pointer"
+                          >
+                            <span className="font-bold text-slate-900 dark:text-white">👤 {cust.name} ({cust.phone})</span>
+                            <span className="font-mono font-black text-rose-600 dark:text-rose-400">
+                              {(cust.totalDebt || 0).toLocaleString()} {settings.currency}
+                            </span>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Matching Products */}
+                {quickSearchQuery.trim() && products.some(p => !p.isDeleted && (p.name.toLowerCase().includes(quickSearchQuery.toLowerCase()) || p.barcode.includes(quickSearchQuery))) && (
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-extrabold text-slate-400 px-1.5">الأصناف المطابقة (إضافة لنقطة البيع)</span>
+                    <div className="space-y-1">
+                      {products
+                        .filter(p => !p.isDeleted && (p.name.toLowerCase().includes(quickSearchQuery.toLowerCase()) || p.barcode.includes(quickSearchQuery)))
+                        .slice(0, 5)
+                        .map(prod => (
+                          <button
+                            key={prod.id}
+                            onClick={() => {
+                              setQuickSearchOpen(false);
+                              setQuickSearchQuery('');
+                              setPreloadedPosItems([{ product: prod, quantity: 1 }]);
+                              setActiveTab('pos');
+                            }}
+                            className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs transition cursor-pointer"
+                          >
+                            <span className="font-bold text-slate-900 dark:text-white">📦 {prod.name} (متوفر: {prod.stock})</span>
+                            <span className="font-mono font-black text-emerald-600 dark:text-emerald-400">
+                              {prod.sellingPrice.toLocaleString()} {settings.currency}
+                            </span>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 🔔 Global Non-Blocking Toast Stack */}
+      <div className="fixed top-16 left-4 z-[60] flex flex-col gap-2 max-w-sm w-full pointer-events-none no-print" dir="rtl">
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, x: -30, scale: 0.95 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: -30, scale: 0.95 }}
+              className={`pointer-events-auto px-4 py-3 rounded-2xl shadow-xl border backdrop-blur-md flex items-center gap-2.5 text-xs font-bold ${
+                toast.type === 'success'
+                  ? 'bg-emerald-950/95 border-emerald-500/60 text-emerald-100'
+                  : toast.type === 'error'
+                  ? 'bg-rose-950/95 border-rose-500/60 text-rose-100'
+                  : toast.type === 'warning'
+                  ? 'bg-amber-950/95 border-amber-500/60 text-amber-100'
+                  : 'bg-slate-900/95 border-blue-500/60 text-slate-100'
+              }`}
+            >
+              {toast.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+              {toast.type === 'error' && <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />}
+              {toast.type === 'warning' && <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />}
+              {toast.type === 'info' && <Info className="w-4 h-4 text-blue-400 shrink-0" />}
+              <span className="leading-relaxed">{toast.message}</span>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
 
     </div>
   );

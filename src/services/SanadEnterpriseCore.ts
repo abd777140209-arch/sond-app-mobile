@@ -9,6 +9,7 @@
  */
 
 import { getBackupTimestamp, saveAndShareFile } from '../utils/fileExport';
+import { showToast } from '../utils/toast';
 
 export interface EnterpriseAlert {
   id: string;
@@ -105,7 +106,7 @@ export const createAutoBackup = () => {
 export const downloadBackupFile = async () => {
   const backups = localStorage.getItem(STORAGE_BACKUP_KEY);
   if (!backups) {
-    alert('لا توجد نسخ احتياطية صادرة بعد.');
+    showToast('لا توجد نسخ احتياطية صادرة بعد. أنشئ نسخة احتياطية أولاً.', 'info');
     return;
   }
 

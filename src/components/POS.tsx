@@ -41,6 +41,7 @@ import BarcodeScannerModal from './BarcodeScannerModal';
 import BarcodeLabelPrinterModal from './BarcodeLabelPrinterModal';
 import TypoGuardModal, { TypoGuardDetails } from './TypoGuardModal';
 import { findProductByScannedBarcode, cleanBarcode } from '../utils/barcodeMatcher';
+import { showToast } from '../utils/toast';
 
 interface POSProps {
   products: Product[];
@@ -49,9 +50,11 @@ interface POSProps {
   currency: string;
   storeName?: string;
   settings?: SystemSettings;
+  preloadedItems?: Array<{ product: Product; quantity: number }>;
+  onClearPreloadedItems?: () => void;
 }
 
-export default function POS({ products, customers, onCompleteSale, currency, storeName = 'سند', settings }: POSProps) {
+export default function POS({ products, customers, onCompleteSale, currency, storeName = 'سند', settings, preloadedItems, onClearPreloadedItems }: POSProps) {
   const [barcodeInput, setBarcodeInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<InvoiceItem[]>([]);
@@ -155,6 +158,23 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
       barcodeInputRef.current.focus();
     }
   }, []);
+
+  // Load items transferred from Diagnostic / external screens
+  useEffect(() => {
+    if (preloadedItems && preloadedItems.length > 0) {
+      let addedCount = 0;
+      preloadedItems.forEach(({ product, quantity }) => {
+        if (product && product.stock > 0) {
+          addProductToCart(product, Math.min(quantity || 1, product.stock));
+          addedCount++;
+        }
+      });
+      if (addedCount > 0) {
+        showToast(`تم إدراج (${addedCount}) صنف إلى سلة المبيعات مباشرة`, 'success');
+      }
+      onClearPreloadedItems?.();
+    }
+  }, [preloadedItems]);
 
   // Handle manual or scanned barcode submission
   const handleBarcodeSubmit = (e?: React.FormEvent) => {
@@ -439,9 +459,8 @@ export default function POS({ products, customers, onCompleteSale, currency, sto
           setTypoGuardModalOpen(false);
         } else if (cart.length > 0) {
           soundManager.playWarningBeep();
-          if (window.confirm('هل تريد إلغاء وإفراغ سلة المبيعات الحالية؟ (ESC)')) {
-            clearCart();
-          }
+          clearCart();
+          showToast('تم تفريغ سلة المبيعات (ESC)', 'info');
         }
       }
     };

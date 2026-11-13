@@ -4,7 +4,9 @@
  */
 
 import { jsPDF } from 'jspdf';
+import { Capacitor } from '@capacitor/core';
 import { saveAndShareFile } from '../utils/fileExport';
+import { showToast } from '../utils/toast';
 
 export interface PDFItem {
   description: string;
@@ -314,6 +316,7 @@ export const generateAndSharePDF = async (data: PDFData) => {
       const pageInfo = pagesPlan[pageIdx];
 
       if (pageIdx > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
         doc.addPage();
       }
 
@@ -672,15 +675,19 @@ export const generateAndSharePDF = async (data: PDFData) => {
       doc.addImage(pageImgData, 'JPEG', 0, 0, pdfPageWidthMm, pdfPageHeightMm, undefined, 'FAST');
     }
 
-    // تصدير وحفظ الملف فوراً
-    const pdfBase64 = doc.output('datauristring').split(',')[1];
+    // تصدير وحفظ الملف فوراً دون استهلاك الذاكرة على الهواتف
     const cleanFileName = (data.title || 'كشف_سند').replace(/[^\w\u0600-\u06FF]/g, '_');
     const fileName = `${cleanFileName}_${data.invoiceNumber || Date.now()}.pdf`;
+
+    const isNative = Capacitor.isNativePlatform();
+    const pdfBlob = !isNative ? doc.output('blob') : undefined;
+    const pdfBase64 = isNative ? doc.output('datauristring').split(',')[1] : '';
 
     await saveAndShareFile({
       fileName,
       data: pdfBase64,
-      isBase64: true,
+      blob: pdfBlob,
+      isBase64: isNative,
       mimeType: 'application/pdf',
       title: data.title || 'كشف حساب',
       text: `${data.title || 'كشف حساب'} - نظام سند`
@@ -688,6 +695,7 @@ export const generateAndSharePDF = async (data: PDFData) => {
 
   } catch (error) {
     console.error('Error generating PDF:', error);
+    showToast('تعذر تجهيز ملف PDF على هذا الجهاز، يرجى المحاولة مرة أخرى', 'error');
   } finally {
     isPdfGenerating = false;
   }
