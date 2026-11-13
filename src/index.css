@@ -289,6 +289,12 @@ aside#desktop_navigation_rail button.border-r-4 span {
   color: #FFFFFF !important;
 }
 
+/* Tabular Numerals for Financial Precision */
+.font-mono,
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
 /* Form Inputs, Selects & Textareas */
 html.dark input:not([type="checkbox"]):not([type="radio"]),
 html.dark select,
@@ -296,6 +302,11 @@ html.dark textarea {
   background-color: var(--t-canvas) !important;
   border-color: var(--t-border) !important;
   color: #FFFFFF !important;
+}
+
+html.dark select option {
+  background-color: var(--t-surface) !important;
+  color: var(--t-text) !important;
 }
 
 html:not(.dark) input:not([type="checkbox"]):not([type="radio"]),

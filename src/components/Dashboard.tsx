@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   TrendingUp, 
   Users, 
@@ -13,7 +13,6 @@ import {
   AlertCircle, 
   Phone, 
   BarChart3, 
-  ArrowLeft, 
   Bell, 
   AlertTriangle, 
   ShieldAlert, 
@@ -27,12 +26,20 @@ import {
   Briefcase,
   ClipboardCheck,
   History,
-  Settings as SettingsIcon,
   Printer,
   Coins,
   Smartphone,
   Shield
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid
+} from 'recharts';
 import { Product, Customer, Invoice, Payment, Transaction, SystemSettings, Employee } from '../types';
 import { soundManager } from '../utils/sound';
 
@@ -45,6 +52,7 @@ interface DashboardProps {
   settings: SystemSettings;
   employees?: Employee[];
   setActiveTab: (tab: string) => void;
+  onOpenCustomerStatement?: (customerId: string) => void;
   isPrivacyMode?: boolean;
 }
 
@@ -57,10 +65,12 @@ export default function Dashboard({
   settings,
   employees = [],
   setActiveTab,
+  onOpenCustomerStatement,
   isPrivacyMode = false
 }: DashboardProps) {
 
   const [showZaraModal, setShowZaraModal] = useState(false);
+  const [chartRange, setChartRange] = useState<'7d' | '30d'>('7d');
 
   useEffect(() => {
     const handleBack = () => {
@@ -158,6 +168,59 @@ export default function Dashboard({
 
   const maxDebtorVal = topDebtors[0]?.totalDebt || 1;
 
+  // Live Sales & Expenses Chart Series (7d or 30d)
+  const cashflowChartData = useMemo(() => {
+    const days = chartRange === '7d' ? 7 : 30;
+    const buckets: Record<string, { label: string; sales: number; expenses: number }> = {};
+    const now = new Date();
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      const isoKey = d.toISOString().split('T')[0];
+      const shortLabel = d.toLocaleDateString('ar-YE', { day: 'numeric', month: 'numeric' });
+      buckets[isoKey] = { label: shortLabel, sales: 0, expenses: 0 };
+    }
+
+    activeInvoices.forEach((inv) => {
+      const key = (inv.date || '').split('T')[0];
+      if (buckets[key]) {
+        const val = selectedCurr?.isBase ? inv.finalAmount : inv.finalAmount / currRate;
+        buckets[key].sales += Number(val.toFixed(2));
+      }
+    });
+
+    transactions.forEach((t) => {
+      const key = (t.date || '').split('T')[0];
+      if (!buckets[key]) return;
+      const val = selectedCurr?.isBase ? t.amount : t.amount / currRate;
+      if (t.type === 'expense' || t.type === 'refund') {
+        buckets[key].expenses += Number(val.toFixed(2));
+      } else if (t.type === 'maintenance_income' || t.type === 'maintenance' || t.type === 'payment') {
+        buckets[key].sales += Number(val.toFixed(2));
+      }
+    });
+
+    return Object.values(buckets);
+  }, [activeInvoices, transactions, chartRange, selectedCurr, currRate]);
+
+  // Top Moving Products by Revenue
+  const topMovingProducts = useMemo(() => {
+    const agg: Record<string, { name: string; qty: number; revenue: number }> = {};
+    activeInvoices.forEach((inv) => {
+      (inv.items || []).forEach((it) => {
+        const key = it.productId || it.name;
+        if (!agg[key]) {
+          agg[key] = { name: it.name, qty: 0, revenue: 0 };
+        }
+        agg[key].qty += it.quantity || 0;
+        agg[key].revenue += it.total || 0;
+      });
+    });
+    return Object.values(agg)
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+  }, [activeInvoices]);
+
   return (
     <div id="dashboard_tab_view" className="space-y-5 pb-20">
       
@@ -176,17 +239,16 @@ export default function Dashboard({
             </div>
           )}
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg md:text-xl font-black text-slate-900">
-                {settings.storeName && settings.storeName.trim() ? settings.storeName : 'نظام سند المحاسبي المتكامل'}
-              </h1>
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                متصل ونشط
-              </span>
+            <h1 className="text-lg md:text-xl font-black text-slate-900">
+              {settings.storeName && settings.storeName.trim() ? settings.storeName : 'نظام سند المحاسبي المتكامل'}
+            </h1>
+            <div className="flex flex-wrap items-center gap-2 text-slate-500 text-xs mt-0.5">
+              <span>لوحة القيادة المالية</span>
+              <span aria-hidden="true">·</span>
+              <span className="font-mono tabular-nums">{activeProducts.length} صنف</span>
+              <span aria-hidden="true">·</span>
+              <span className="font-mono tabular-nums">{activeCustomers.length} عميل</span>
             </div>
-            <p className="text-slate-500 text-xs mt-0.5">
-              لوحة القيادة المالية • متابعة المبيعات، الصندوق، المخزون، وذمم العملاء
-            </p>
           </div>
         </div>
 
@@ -421,7 +483,137 @@ export default function Dashboard({
         </div>
       </div>
 
-      {/* 4. Organized Quick Access Directory (All System Modules) */}
+      {/* 4. Interactive Financial Analytics & Top Products */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Live Cashflow Trend Chart */}
+        <div className="lg:col-span-2 p-5 rounded-2xl bg-white border border-slate-200 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-sm font-black text-slate-900">مؤشر التدفق النقدي والمبيعات</h3>
+              <p className="text-[11px] text-slate-500">
+                مقارنة يومية بين إجمالي الإيرادات (مبيعات وتحصيلات) والمصروفات ({selectedCurr?.symbol || settings.currency})
+              </p>
+            </div>
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setChartRange('7d')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  chartRange === '7d' ? 'bg-blue-600 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                آخر 7 أيام
+              </button>
+              <button
+                type="button"
+                onClick={() => setChartRange('30d')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  chartRange === '30d' ? 'bg-blue-600 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                آخر 30 يوم
+              </button>
+            </div>
+          </div>
+
+          <div className="h-56 w-full" dir="ltr">
+            {isPrivacyMode ? (
+              <div className="h-full flex items-center justify-center text-xs font-bold text-slate-400">
+                الرسوم البيانية مخفية حالياً لتفعيل وضع الخصوصية
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={cashflowChartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="sanadSalesGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="sanadExpenseGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#F43F5E" stopOpacity={0.28} />
+                      <stop offset="95%" stopColor="#F43F5E" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.18)" />
+                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} width={48} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#0F172A',
+                      border: '1px solid #334155',
+                      borderRadius: '12px',
+                      fontSize: '11px',
+                      color: '#F8FAFC',
+                      direction: 'rtl',
+                    }}
+                    formatter={(value: any, name: any) => [
+                      `${Number(value || 0).toLocaleString()} ${selectedCurr?.symbol || settings.currency}`,
+                      name === 'sales' ? 'الإيرادات والمبيعات' : 'المصاريف والمرتجعات',
+                    ]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="sales"
+                    stroke="#10B981"
+                    strokeWidth={2.2}
+                    fillOpacity={1}
+                    fill="url(#sanadSalesGrad)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="expenses"
+                    stroke="#F43F5E"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#sanadExpenseGrad)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        {/* Top Moving Products */}
+        <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-3.5">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+            <h3 className="text-sm font-black text-slate-900">الأصناف الأكثر مبيعاً</h3>
+            <button
+              onClick={() => setActiveTab('inventory')}
+              className="text-xs text-blue-600 hover:underline font-bold cursor-pointer"
+            >
+              المستودع ←
+            </button>
+          </div>
+          {topMovingProducts.length === 0 ? (
+            <div className="py-12 text-center text-xs text-slate-400">
+              ستظهر هنا الأصناف الأعلى مبيعاً بعد إصدار فواتير
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {topMovingProducts.map((item, i) => (
+                <div
+                  key={`${item.name}-${i}`}
+                  className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-slate-900 truncate">
+                      {i + 1}. {item.name}
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-mono tabular-nums">
+                      الكمية المباعة: {item.qty}
+                    </div>
+                  </div>
+                  <div className="text-xs font-black font-mono tabular-nums text-emerald-600 shrink-0">
+                    {fmt(item.revenue)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 5. Organized Quick Access Directory (All System Modules) */}
       <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
@@ -501,7 +693,13 @@ export default function Dashboard({
                 return (
                   <div 
                     key={cust.id} 
-                    onClick={() => setActiveTab('customers')}
+                    onClick={() => {
+                      if (onOpenCustomerStatement) {
+                        onOpenCustomerStatement(cust.id);
+                      } else {
+                        setActiveTab('customers');
+                      }
+                    }}
                     className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 hover:border-rose-300 transition cursor-pointer space-y-2"
                   >
                     <div className="flex justify-between items-center">

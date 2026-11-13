@@ -579,9 +579,9 @@ export default function Maintenance({
 
         {/* DESKTOP TABLE VIEW (hidden md:block) */}
         <div className="hidden md:block overflow-x-auto max-h-[450px] overflow-y-auto">
-          <table className="w-full text-right text-xs">
+          <table className="w-full min-w-[780px] text-right text-xs">
             <thead>
-              <tr className="border-b border-slate-200 text-slate-400 font-bold text-xs">
+              <tr className="border-b border-slate-200 text-slate-400 font-bold text-xs whitespace-nowrap">
                 <th className="pb-3 pr-2">رقم الكرت</th>
                 <th className="pb-3">العميل والهاتف</th>
                 <th className="pb-3">الجهاز والمشكلة</th>
@@ -604,25 +604,25 @@ export default function Maintenance({
                   const labor = order.laborFee ?? Math.max(0, (order.cost || 0) - spareCost);
                   return (
                   <tr key={order.id} className="hover:bg-slate-50 transition">
-                    <td className="py-3 pr-2 font-mono font-bold text-slate-900">
+                    <td className="py-3 pr-2 font-mono font-bold text-slate-900 whitespace-nowrap tabular-nums">
                       #{order.orderNumber || ''}
                     </td>
-                    <td className="py-3">
+                    <td className="py-3 whitespace-nowrap">
                       <div className="font-bold text-slate-900">{order.customerName || 'عميل'}</div>
-                      <div className="text-[10px] text-slate-400 font-mono">{order.customerPhone || ''}</div>
+                      <div className="text-[10px] text-slate-400 font-mono tabular-nums">{order.customerPhone || ''}</div>
                     </td>
-                    <td className="py-3">
+                    <td className="py-3 min-w-[180px]">
                       <div className="font-bold text-slate-800">{order.deviceName || 'جهاز صيانة'}</div>
                       <div className="text-[10px] text-slate-400">{order.issueDescription || ''}</div>
                       {renderChecklistBadges(order.checklist)}
                     </td>
-                    <td className="py-3">
+                    <td className="py-3 whitespace-nowrap">
                       <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-900 border border-purple-200 text-[11px] font-bold">
                         <User className="w-3 h-3 text-purple-600" />
                         <span>{order.technicianName || 'مهندس الورشة'}</span>
                       </div>
                     </td>
-                    <td className="py-3 text-center font-mono">
+                    <td className="py-3 text-center font-mono whitespace-nowrap tabular-nums">
                       <div className="font-bold text-blue-600 text-xs">
                         {(order.cost || 0).toLocaleString()} {currency}
                       </div>
@@ -646,7 +646,8 @@ export default function Maintenance({
                         <option value="delivered">تم التسليم النهائي</option>
                       </select>
                     </td>
-                    <td className="py-3 pl-2 text-left flex justify-end gap-1.5">
+                    <td className="py-3 pl-2 text-left whitespace-nowrap">
+                      <div className="flex justify-end gap-1.5">
                       <button
                         type="button"
                         onClick={() => {
@@ -699,6 +700,7 @@ export default function Maintenance({
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
+                      </div>
                     </td>
                   </tr>
                 );

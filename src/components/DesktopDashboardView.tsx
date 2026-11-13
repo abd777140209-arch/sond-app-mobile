@@ -16,6 +16,7 @@ interface DesktopDashboardViewProps {
   settings: SystemSettings;
   employees?: Employee[];
   setActiveTab: (tab: string) => void;
+  onOpenCustomerStatement?: (customerId: string) => void;
   isPrivacyMode?: boolean;
 }
 
@@ -28,6 +29,7 @@ export default function DesktopDashboardView({
   settings,
   employees = [],
   setActiveTab,
+  onOpenCustomerStatement,
   isPrivacyMode = false
 }: DesktopDashboardViewProps) {
   return (
@@ -41,6 +43,7 @@ export default function DesktopDashboardView({
         settings={settings}
         employees={employees}
         setActiveTab={setActiveTab}
+        onOpenCustomerStatement={onOpenCustomerStatement}
         isPrivacyMode={isPrivacyMode}
       />
     </div>

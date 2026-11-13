@@ -30,7 +30,14 @@ import {
   CheckCircle2,
   AlertTriangle,
   Info,
-  X
+  X,
+  ChevronDown,
+  Smartphone,
+  Monitor,
+  Bell,
+  Wrench,
+  Receipt,
+  Bot
 } from 'lucide-react';
 
 import { Product, Customer, Invoice, Payment, Transaction, SystemSettings, MaintenanceOrder, Employee, PayrollRecord, UserAccount, AuditLog } from './types';
@@ -339,10 +346,11 @@ export default function App() {
   const [prefilledMaintenanceProblem, setPrefilledMaintenanceProblem] = useState<{ deviceName?: string; issueDescription?: string; notes?: string } | null>(null);
   const [initialStatementCustomerId, setInitialStatementCustomerId] = useState<string | null>(null);
 
-  // Global Toasts & Quick Command Palette (Ctrl+K)
+  // Global Toasts, User Menu & Quick Command Palette (Ctrl+K)
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [quickSearchOpen, setQuickSearchOpen] = useState(false);
   const [quickSearchQuery, setQuickSearchQuery] = useState('');
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   useEffect(() => {
     return subscribeToasts((toast) => {
@@ -2091,8 +2099,9 @@ export default function App() {
   return (
     <div className={`flex flex-col h-screen w-full bg-slate-100 text-slate-900 select-none overflow-hidden font-sans dir-rtl ${isDesktopMode ? 'mode-desktop' : 'mode-mobile'} ${themeClass} ${shapeClass} ${densityClass}`} dir="rtl">
       
-      {/* 1. UNIFIED TOP BAR */}
-      <header className="h-14 bg-white border-b border-slate-200 px-3 sm:px-4 flex items-center justify-between sticky top-0 z-30 shadow-2xs shrink-0">
+      {/* 1. UNIFIED EXECUTIVE TOP BAR (3-Zone Clean Layout) */}
+      <header className="h-14 bg-white border-b border-slate-200 px-3 sm:px-5 flex items-center justify-between gap-3 sticky top-0 z-30 shadow-2xs shrink-0">
+        {/* Zone 1: Context & Screen Title */}
         <div className="flex items-center gap-2.5 min-w-0">
           {activeTab !== 'dashboard' ? (
             <button 
@@ -2122,27 +2131,51 @@ export default function App() {
             </button>
           )}
 
-          <h1 className="text-sm sm:text-base font-black text-slate-800 tracking-wide truncate">
-            {getScreenTitle()}
-          </h1>
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className="text-sm sm:text-base font-black text-slate-800 tracking-wide truncate">
+              {getScreenTitle()}
+            </h1>
+            {activeTab !== 'dashboard' && settings.storeName && (
+              <span className="hidden xl:inline text-xs text-slate-400 font-medium whitespace-nowrap truncate max-w-[180px]">
+                · {settings.storeName}
+              </span>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          {/* Quick Search / Command Palette (Ctrl+K) */}
+        {/* Zone 2: Global Command Search Trigger (Ctrl+K) */}
+        <div className="flex-1 max-w-md hidden sm:flex justify-center">
           <button
             onClick={() => {
               soundManager.playScanBeep();
               setQuickSearchOpen(true);
             }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-bold transition cursor-pointer"
-            title="بحث والانتقال السريع (Ctrl+K)"
+            className="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-500 border border-slate-200 text-xs font-medium transition cursor-pointer"
+            title="بحث شامل أو انتقال سريع (Ctrl+K)"
           >
-            <Search className="w-3.5 h-3.5 text-blue-600" />
-            <span className="hidden md:inline font-bold">بحث سريع</span>
-            <kbd className="hidden xl:inline text-[9px] font-mono px-1.5 py-0.5 rounded bg-white border border-slate-300 text-slate-500">Ctrl+K</kbd>
+            <span className="flex items-center gap-2 truncate">
+              <Search className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              <span className="truncate">ابحث عن عميل، فاتورة، كرت صيانة، أو شاشة...</span>
+            </span>
+            <kbd className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white border border-slate-300 text-slate-500 shrink-0">
+              Ctrl+K
+            </kbd>
+          </button>
+        </div>
+
+        {/* Zone 3: Quick Utilities & User Account Dropdown */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => {
+              soundManager.playScanBeep();
+              setQuickSearchOpen(true);
+            }}
+            className="sm:hidden p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition cursor-pointer"
+            title="بحث سريع"
+          >
+            <Search className="w-4 h-4 text-blue-600" />
           </button>
 
-          {/* 1-Click Light / Dark Mode Switcher */}
           <button
             onClick={handleToggleLightDarkTheme}
             className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition cursor-pointer"
@@ -2151,54 +2184,15 @@ export default function App() {
             {resolvedTheme === 'light-clean' ? <Moon className="w-4 h-4 text-indigo-600" /> : <Sun className="w-4 h-4 text-amber-400" />}
           </button>
 
-          {/* Quick Device Layout Mode Switcher (Mobile <-> Desktop) */}
-          <button
-            onClick={handleToggleDeviceMode}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs font-bold transition cursor-pointer"
-            title={isDesktopMode ? 'التبديل لواجهة الجوال' : 'التبديل لواجهة الكمبيوتر'}
-          >
-            <span>{isDesktopMode ? '📱' : '💻'}</span>
-            <span className="hidden md:inline font-bold">
-              {isDesktopMode ? 'واجهة الجوال' : 'واجهة الكمبيوتر'}
-            </span>
-          </button>
-
-          {/* Calculator Button */}
           <button
             onClick={() => {
               soundManager.playScanBeep();
               setShowCalculator(true);
             }}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-200 text-xs font-bold transition cursor-pointer"
-            title="فتح الآلة الحاسبة السريعة"
+            className="p-2 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-200 transition cursor-pointer"
+            title="فتح الآلة الحاسبة"
           >
-            <Calculator className="w-3.5 h-3.5 text-sky-600" />
-            <span className="hidden sm:inline font-bold">الحاسبة</span>
-          </button>
-
-          {/* Developer Modal Button */}
-          <button
-            onClick={() => setShowDeveloperModal(true)}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold transition cursor-pointer"
-            title="معلومات المطور والترخيص"
-          >
-            <span>👨‍💻</span>
-            <span className="hidden lg:inline font-bold">المطور</span>
-          </button>
-
-          {/* Active User Badge & Switcher Trigger */}
-          <button
-            onClick={() => handleTabSelect('users')}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-purple-50 text-purple-900 border border-purple-200 text-xs font-bold hover:bg-purple-100 transition cursor-pointer"
-            title="إدارة المستخدمين أو التبديل بين الحسابات"
-          >
-            <Shield className="w-3.5 h-3.5 text-purple-600" />
-            <span className="hidden sm:inline font-bold">{currentUser?.name}</span>
-            <span className="text-[10px] px-1.5 py-0.5 bg-purple-200 text-purple-950 rounded-md font-bold">
-              {currentUser?.role === 'admin' ? 'مدير' :
-               currentUser?.role === 'cashier' ? 'كاشير' :
-               currentUser?.role === 'technician' ? 'فني' : 'محاسب'}
-            </span>
+            <Calculator className="w-4 h-4 text-sky-600" />
           </button>
 
           <button
@@ -2208,7 +2202,7 @@ export default function App() {
                 else setIsPrivacyMode(false);
               } else setIsPrivacyMode(true);
             }}
-            className="p-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+            className="p-2 rounded-xl text-slate-600 hover:bg-slate-100 border border-transparent hover:border-slate-200 transition-colors cursor-pointer"
             title={isPrivacyMode ? 'إظهار المبالغ المالية' : 'إخفاء المبالغ المالية'}
           >
             {isPrivacyMode ? <EyeOff className="w-4 h-4 text-amber-600" /> : <Eye className="w-4 h-4" />}
@@ -2219,39 +2213,133 @@ export default function App() {
               if (isCashierMode) setShowPinCheckModal(true);
               else setIsCashierMode(true);
             }}
-            className="p-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
-            title={isCashierMode ? 'وضع الكاشير مفعل (انقر لفتح القفل)' : 'تفعيل وضع الكاشير'}
+            className="p-2 rounded-xl text-slate-600 hover:bg-slate-100 border border-transparent hover:border-slate-200 transition-colors cursor-pointer"
+            title={isCashierMode ? 'وضع الكاشير مقفل (انقر للفتح)' : 'قفل وضع الكاشير'}
           >
             {isCashierMode ? <Lock className="w-4 h-4 text-amber-600" /> : <Unlock className="w-4 h-4 text-emerald-600" />}
           </button>
 
-          {!showHeaderLogoutConfirm ? (
+          {/* Unified User & Workspace Menu */}
+          <div className="relative">
             <button
-              onClick={() => setShowHeaderLogoutConfirm(true)}
-              className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
-              title="تسجيل الخروج"
+              type="button"
+              onClick={() => setUserMenuOpen((prev) => !prev)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs font-bold transition cursor-pointer whitespace-nowrap"
+              title="حساب المستخدم وخيارات النظام"
             >
-              <LogOut className="w-4 h-4" />
+              <Shield className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              <span className="hidden md:inline max-w-[110px] truncate">{currentUser?.name}</span>
+              <span className="hidden lg:inline text-[10px] text-slate-500">
+                · {currentUser?.role === 'admin' ? 'مدير' :
+                   currentUser?.role === 'cashier' ? 'كاشير' :
+                   currentUser?.role === 'technician' ? 'فني' : 'محاسب'}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             </button>
-          ) : (
-            <div className="flex items-center gap-1 bg-rose-50 border border-rose-200 px-2 py-1 rounded-xl">
-              <button
-                onClick={() => {
-                  setShowHeaderLogoutConfirm(false);
-                  handleLogout();
-                }}
-                className="px-2 py-0.5 bg-rose-600 text-white rounded-lg text-[10px] font-bold cursor-pointer"
-              >
-                خروج
-              </button>
-              <button
-                onClick={() => setShowHeaderLogoutConfirm(false)}
-                className="px-1.5 py-0.5 text-slate-600 text-[10px] font-bold cursor-pointer"
-              >
-                إلغاء
-              </button>
-            </div>
-          )}
+
+            {userMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => { setUserMenuOpen(false); setShowHeaderLogoutConfirm(false); }} />
+                <div className="absolute left-0 mt-2 w-60 rounded-2xl bg-white border border-slate-200 shadow-2xl p-2 z-50 text-right space-y-1">
+                  <div className="px-3 py-2 border-b border-slate-100">
+                    <div className="text-xs font-black text-slate-900 truncate">{currentUser?.name}</div>
+                    <div className="text-[11px] text-slate-500">
+                      {currentUser?.role === 'admin' ? 'مدير النظام الكامل' :
+                       currentUser?.role === 'cashier' ? 'صلاحية كاشير مبيعات' :
+                       currentUser?.role === 'technician' ? 'مهندس / فني صيانة' : 'محاسب مالي'}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      handleToggleDeviceMode();
+                    }}
+                    className="w-full px-3 py-2 rounded-xl hover:bg-slate-100 text-xs font-bold text-slate-700 flex items-center justify-between cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      {isDesktopMode ? <Smartphone className="w-4 h-4 text-blue-600" /> : <Monitor className="w-4 h-4 text-blue-600" />}
+                      <span>{isDesktopMode ? 'التبديل لواجهة الجوال' : 'التبديل لواجهة الكمبيوتر'}</span>
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      handleTabSelect('enterprise_dashboard');
+                    }}
+                    className="w-full px-3 py-2 rounded-xl hover:bg-slate-100 text-xs font-bold text-slate-700 flex items-center gap-2 cursor-pointer"
+                  >
+                    <Bell className="w-4 h-4 text-amber-500" />
+                    <span>مركز التنبيهات والنسخ</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      handleTabSelect('users');
+                    }}
+                    className="w-full px-3 py-2 rounded-xl hover:bg-slate-100 text-xs font-bold text-slate-700 flex items-center gap-2 cursor-pointer"
+                  >
+                    <Shield className="w-4 h-4 text-purple-600" />
+                    <span>إدارة المستخدمين والصلاحيات</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      setShowDeveloperModal(true);
+                    }}
+                    className="w-full px-3 py-2 rounded-xl hover:bg-slate-100 text-xs font-bold text-slate-700 flex items-center gap-2 cursor-pointer"
+                  >
+                    <Info className="w-4 h-4 text-sky-600" />
+                    <span>بوابة المطور والترخيص</span>
+                  </button>
+
+                  <div className="pt-1 border-t border-slate-100">
+                    {!showHeaderLogoutConfirm ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowHeaderLogoutConfirm(true)}
+                        className="w-full px-3 py-2 rounded-xl hover:bg-rose-50 text-xs font-bold text-rose-600 flex items-center gap-2 cursor-pointer"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span>تسجيل الخروج</span>
+                      </button>
+                    ) : (
+                      <div className="p-2 rounded-xl bg-rose-50 border border-rose-200 space-y-1.5">
+                        <div className="text-[11px] font-bold text-rose-800 text-center">تأكيد الخروج من الجلسة؟</div>
+                        <div className="flex gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowHeaderLogoutConfirm(false);
+                              setUserMenuOpen(false);
+                              handleLogout();
+                            }}
+                            className="flex-1 py-1 bg-rose-600 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                          >
+                            خروج
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowHeaderLogoutConfirm(false)}
+                            className="flex-1 py-1 bg-white border border-slate-200 text-slate-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                          >
+                            إلغاء
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
@@ -2301,6 +2389,10 @@ export default function App() {
                     settings={settings}
                     employees={employees}
                     setActiveTab={handleTabSelect}
+                    onOpenCustomerStatement={(custId) => {
+                      setInitialStatementCustomerId(custId);
+                      setActiveTab('customers');
+                    }}
                     isPrivacyMode={isPrivacyMode}
                   />
                 ) : (
@@ -2685,7 +2777,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ⚡ Quick Command & Search Palette (Ctrl+K) */}
+      {/* ⚡ Quick Command & Omni-Search Palette (Ctrl+K) */}
       <AnimatePresence>
         {quickSearchOpen && (
           <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 p-4 bg-slate-950/75 backdrop-blur-sm no-print" dir="rtl">
@@ -2703,7 +2795,7 @@ export default function App() {
                   autoFocus
                   value={quickSearchQuery}
                   onChange={(e) => setQuickSearchQuery(e.target.value)}
-                  placeholder="ابحث عن شاشة، عميل لفتح كشف حسابه، أو صنف لإضافته للبيع..."
+                  placeholder="ابحث عن شاشة، عميل، صنف، رقم فاتورة، أو كرت صيانة..."
                   className="flex-1 bg-transparent text-sm font-bold text-slate-900 dark:text-white focus:outline-none"
                 />
                 <button
@@ -2714,7 +2806,44 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="max-h-80 overflow-y-auto p-3 space-y-3 text-right">
+              <div className="max-h-96 overflow-y-auto p-3 space-y-3 text-right">
+                {/* 1-Click Quick Actions (when search empty) */}
+                {!quickSearchQuery.trim() && (
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-extrabold text-slate-400 px-1.5">إجراءات سريعة</span>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                      <button
+                        onClick={() => { setQuickSearchOpen(false); handleTabSelect('pos'); }}
+                        className="px-2.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700 text-[11px] font-bold text-emerald-800 dark:text-emerald-200 flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <ShoppingCart className="w-3.5 h-3.5 shrink-0" />
+                        <span>فاتورة جديدة</span>
+                      </button>
+                      <button
+                        onClick={() => { setQuickSearchOpen(false); handleTabSelect('device_receipt'); }}
+                        className="px-2.5 py-2 rounded-xl bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-700 text-[11px] font-bold text-orange-800 dark:text-orange-200 flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Wrench className="w-3.5 h-3.5 shrink-0" />
+                        <span>استلام جهاز</span>
+                      </button>
+                      <button
+                        onClick={() => { setQuickSearchOpen(false); handleTabSelect('assistant'); }}
+                        className="px-2.5 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-[11px] font-bold text-blue-800 dark:text-blue-200 flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Bot className="w-3.5 h-3.5 shrink-0" />
+                        <span>اسأل سند AI</span>
+                      </button>
+                      <button
+                        onClick={() => { setQuickSearchOpen(false); handleBackupData(); }}
+                        className="px-2.5 py-2 rounded-xl bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700 text-[11px] font-bold text-purple-800 dark:text-purple-200 flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5 shrink-0" />
+                        <span>نسخة احتياطية</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Screens Quick Jump */}
                 <div className="space-y-1">
                   <span className="text-[11px] font-extrabold text-slate-400 px-1.5">الأقسام والشاشات</span>
@@ -2769,8 +2898,11 @@ export default function App() {
                             }}
                             className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-sky-900/30 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs transition cursor-pointer"
                           >
-                            <span className="font-bold text-slate-900 dark:text-white">👤 {cust.name} ({cust.phone})</span>
-                            <span className="font-mono font-black text-rose-600 dark:text-rose-400">
+                            <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                              <Users className="w-3.5 h-3.5 text-sky-500" />
+                              <span>{cust.name} ({cust.phone})</span>
+                            </span>
+                            <span className="font-mono font-black text-rose-600 dark:text-rose-400 tabular-nums">
                               {(cust.totalDebt || 0).toLocaleString()} {settings.currency}
                             </span>
                           </button>
@@ -2798,9 +2930,90 @@ export default function App() {
                             }}
                             className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs transition cursor-pointer"
                           >
-                            <span className="font-bold text-slate-900 dark:text-white">📦 {prod.name} (متوفر: {prod.stock})</span>
-                            <span className="font-mono font-black text-emerald-600 dark:text-emerald-400">
+                            <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                              <Package className="w-3.5 h-3.5 text-emerald-500" />
+                              <span>{prod.name} (متوفر: {prod.stock})</span>
+                            </span>
+                            <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
                               {prod.sellingPrice.toLocaleString()} {settings.currency}
+                            </span>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Matching Maintenance Orders */}
+                {quickSearchQuery.trim() && maintenanceOrders.some(m =>
+                  m.orderNumber.toLowerCase().includes(quickSearchQuery.toLowerCase()) ||
+                  m.deviceName.toLowerCase().includes(quickSearchQuery.toLowerCase()) ||
+                  m.customerName.toLowerCase().includes(quickSearchQuery.toLowerCase()) ||
+                  (m.customerPhone || '').includes(quickSearchQuery)
+                ) && (
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-extrabold text-slate-400 px-1.5">كروت الصيانة المطابقة</span>
+                    <div className="space-y-1">
+                      {maintenanceOrders
+                        .filter(m =>
+                          m.orderNumber.toLowerCase().includes(quickSearchQuery.toLowerCase()) ||
+                          m.deviceName.toLowerCase().includes(quickSearchQuery.toLowerCase()) ||
+                          m.customerName.toLowerCase().includes(quickSearchQuery.toLowerCase()) ||
+                          (m.customerPhone || '').includes(quickSearchQuery)
+                        )
+                        .slice(0, 5)
+                        .map(order => (
+                          <button
+                            key={order.id}
+                            onClick={() => {
+                              setQuickSearchOpen(false);
+                              setQuickSearchQuery('');
+                              handleTabSelect('maintenance');
+                            }}
+                            className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-orange-50 dark:hover:bg-orange-900/30 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs transition cursor-pointer"
+                          >
+                            <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                              <Wrench className="w-3.5 h-3.5 text-orange-500" />
+                              <span>#{order.orderNumber} · {order.deviceName} ({order.customerName})</span>
+                            </span>
+                            <span className="font-mono font-black text-orange-600 dark:text-orange-400 tabular-nums">
+                              {(order.cost || 0).toLocaleString()} {settings.currency}
+                            </span>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Matching Invoices */}
+                {quickSearchQuery.trim() && invoices.some(inv =>
+                  inv.invoiceNumber.toLowerCase().includes(quickSearchQuery.toLowerCase()) ||
+                  inv.customerName.toLowerCase().includes(quickSearchQuery.toLowerCase())
+                ) && (
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-extrabold text-slate-400 px-1.5">الفواتير المطابقة</span>
+                    <div className="space-y-1">
+                      {invoices
+                        .filter(inv =>
+                          inv.invoiceNumber.toLowerCase().includes(quickSearchQuery.toLowerCase()) ||
+                          inv.customerName.toLowerCase().includes(quickSearchQuery.toLowerCase())
+                        )
+                        .slice(0, 5)
+                        .map(inv => (
+                          <button
+                            key={inv.id}
+                            onClick={() => {
+                              setQuickSearchOpen(false);
+                              setQuickSearchQuery('');
+                              handleTabSelect('transactions');
+                            }}
+                            className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs transition cursor-pointer"
+                          >
+                            <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                              <Receipt className="w-3.5 h-3.5 text-blue-500" />
+                              <span>فاتورة #{inv.invoiceNumber} · {inv.customerName}</span>
+                            </span>
+                            <span className="font-mono font-black text-blue-600 dark:text-blue-400 tabular-nums">
+                              {(inv.finalAmount || 0).toLocaleString()} {settings.currency}
                             </span>
                           </button>
                         ))}

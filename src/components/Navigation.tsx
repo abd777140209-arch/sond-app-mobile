@@ -353,10 +353,11 @@ export default function Navigation({
               >
                 <span className="flex items-center gap-2">
                   <Monitor className="w-4 h-4 text-blue-600" />
-                  <span>وضع الكمبيوتر نشط</span>
+                  <span>وضع الكمبيوتر</span>
                 </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-md bg-white border border-slate-200 text-blue-600 font-bold">
-                  تبديل للجوال 📱
+                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-white border border-slate-200 text-blue-600 font-bold whitespace-nowrap">
+                  <Smartphone className="w-3 h-3" />
+                  <span>للجوال</span>
                 </span>
               </button>
             </div>
@@ -613,8 +614,9 @@ export default function Navigation({
                     <Monitor className="w-4 h-4 text-blue-600" />
                     <span>التبديل إلى واجهة الكمبيوتر (القائمة الجانبية)</span>
                   </span>
-                  <span className="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-[10px] font-bold">
-                    وضع الكمبيوتر 💻
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-600 text-white text-[10px] font-bold whitespace-nowrap">
+                    <Monitor className="w-3 h-3" />
+                    <span>الكمبيوتر</span>
                   </span>
                 </button>
               )}
@@ -658,7 +660,7 @@ export default function Navigation({
 
                             <div className="flex items-center gap-1 shrink-0">
                               {item.badgeCount !== undefined && item.badgeCount > 0 && (
-                                <span className="px-2 py-0.5 text-[10px] font-black font-mono tabular-nums bg-amber-500 text-white rounded-full">
+                                <span className="px-1.5 py-0.5 text-[10px] font-black font-mono tabular-nums bg-amber-500 text-white rounded-md">
                                   {item.badgeCount}
                                 </span>
                               )}
